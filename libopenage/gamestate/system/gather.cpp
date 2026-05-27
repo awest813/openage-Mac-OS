@@ -2,6 +2,8 @@
 
 #include "gather.h"
 
+#include <unordered_map>
+
 #include <nyan/nyan.h>
 
 #include "log/log.h"
@@ -27,6 +29,89 @@ namespace openage::gamestate::system {
 
 // nyan attribute fqon used to store current amount in a resource entity's Live component.
 static constexpr const char *RESOURCE_AMOUNT_ATTRIBUTE = "engine.ability.type.Live.AttributeAmount";
+static constexpr double DROPOFF_RANGE = 1.5;
+
+namespace {
+
+struct carried_resource_t {
+	nyan::fqon_t resource_type;
+	int64_t amount;
+};
+
+std::unordered_map<entity_id_t, carried_resource_t> carried_resources{};
+
+bool is_valid_dropoff_entity(const std::shared_ptr<gamestate::GameEntity> &entity,
+                             player_id_t owner_id,
+                             const std::shared_ptr<component::Position> &gatherer_pos_comp,
+                             const time::time_t &time) {
+	if (not entity->has_component(component::component_t::OWNERSHIP)
+	    || not entity->has_component(component::component_t::POSITION)) {
+		return false;
+	}
+
+	// For now, treat static owned entities as drop-off buildings.
+	if (entity->has_component(component::component_t::MOVE)
+	    || entity->has_component(component::component_t::GATHER)) {
+		return false;
+	}
+
+	auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+		entity->get_component(component::component_t::OWNERSHIP));
+	if (ownership->get_owners().get(time) != owner_id) {
+		return false;
+	}
+
+	auto dropoff_pos_comp = std::dynamic_pointer_cast<component::Position>(
+		entity->get_component(component::component_t::POSITION));
+	auto gatherer_pos = gatherer_pos_comp->get_positions().get(time);
+	auto dropoff_pos = dropoff_pos_comp->get_positions().get(time);
+	auto delta = dropoff_pos - gatherer_pos;
+
+	return delta.length() <= DROPOFF_RANGE;
+}
+
+bool try_drop_off(const std::shared_ptr<gamestate::GameEntity> &entity,
+                  const std::shared_ptr<openage::gamestate::GameState> &state,
+                  const time::time_t &time) {
+	auto cargo_it = carried_resources.find(entity->get_id());
+	if (cargo_it == carried_resources.end()) {
+		return false;
+	}
+
+	if (not entity->has_component(component::component_t::OWNERSHIP)
+	    || not entity->has_component(component::component_t::POSITION)) {
+		return false;
+	}
+
+	auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+		entity->get_component(component::component_t::OWNERSHIP));
+	auto owner_id = ownership->get_owners().get(time);
+	auto gatherer_pos_comp = std::dynamic_pointer_cast<component::Position>(
+		entity->get_component(component::component_t::POSITION));
+
+	for (const auto &[id, candidate] : state->get_game_entities()) {
+		if (id == entity->get_id()) {
+			continue;
+		}
+		if (not is_valid_dropoff_entity(candidate, owner_id, gatherer_pos_comp, time)) {
+			continue;
+		}
+
+		auto &player = state->get_player(owner_id);
+		player->add_resource(time, cargo_it->second.resource_type, cargo_it->second.amount);
+
+		log::log(MSG(info) << "Entity " << entity->get_id()
+		                   << " dropped off " << cargo_it->second.amount
+		                   << " of " << cargo_it->second.resource_type
+		                   << " at entity " << id << ".");
+		carried_resources.erase(cargo_it);
+		return true;
+	}
+
+	return false;
+}
+
+} // namespace
 
 
 const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameEntity> &entity,
@@ -44,6 +129,17 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 
 	if (not entity->has_component(component::component_t::GATHER)) [[unlikely]] {
 		log::log(WARN << "Entity " << entity->get_id() << " has no gather component.");
+		return time::time_t::from_int(0);
+	}
+
+	// Gatherers carrying resources must first return to a drop-off building.
+	if (carried_resources.contains(entity->get_id())) {
+		if (try_drop_off(entity, state, start_time)) {
+			return time::time_t::from_int(0);
+		}
+
+		log::log(MSG(dbg) << "Entity " << entity->get_id()
+		                  << " is carrying resources and must return to a drop-off building.");
 		return time::time_t::from_int(0);
 	}
 
@@ -111,18 +207,15 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 	int64_t new_amount = current_amount - gathered;
 	live_component->set_attribute(start_time, RESOURCE_AMOUNT_ATTRIBUTE, new_amount);
 
-	// Credit gathered resources to the owner player
+	// Store gathered resources as carried cargo.
 	if (gathered > 0 && entity->has_component(component::component_t::OWNERSHIP)) {
 		auto ownership = std::dynamic_pointer_cast<component::Ownership>(
 			entity->get_component(component::component_t::OWNERSHIP));
-		auto owner_id = ownership->get_owners().get(start_time);
-
-		auto &player = state->get_player(owner_id);
 		auto resource_fqon = resource_type->get_name();
-		player->add_resource(start_time, resource_fqon, gathered);
+		carried_resources[entity->get_id()] = {resource_fqon, gathered};
 
 		log::log(MSG(dbg) << "Entity " << entity->get_id()
-		                  << " gathered " << gathered << " of " << resource_fqon
+		                  << " gathered and is carrying " << gathered << " of " << resource_fqon
 		                  << " from entity " << target_id
 		                  << " (remaining=" << new_amount << ").");
 	}
