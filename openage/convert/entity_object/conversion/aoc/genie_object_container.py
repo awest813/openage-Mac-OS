@@ -145,7 +145,7 @@ class GenieObjectContainer(ConverterObjectContainer):
         """
         Validate that conversion steps are executed in the expected order.
         """
-        if self.phase is not phase:
+        if self.phase != phase:
             raise RuntimeError(
                 f"{action} requires conversion phase '{phase.value}', "
                 f"got '{self.phase.value}'"
