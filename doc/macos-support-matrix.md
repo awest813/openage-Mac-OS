@@ -155,4 +155,5 @@ coverage.  `macos-latest` is **not used** in CI to prevent silent drift.
 
 | Date       | Change                                                    |
 | ---------- | --------------------------------------------------------- |
-| 2024-xx-xx | Initial support matrix for Apple Silicon + Intel fork     |
+| 2026-05-27 | Phase H: native macOS Steam paths, default_dirs tests, release ccache |
+| 2026-05-27 | Initial support matrix for Apple Silicon + Intel fork     |

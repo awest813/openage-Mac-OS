@@ -33,6 +33,8 @@ def tests_py():
            "tests the interface for C++'s util::Enum class")
     yield ("openage.util.fslike.test.test",
            "test the filesystem abstraction subsystem")
+    yield ("openage.default_dirs.test",
+           "test macOS/platform directory resolution")
     yield "openage.util.threading.test_concurrent_chain"
 
 
