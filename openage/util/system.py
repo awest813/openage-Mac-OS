@@ -67,7 +67,7 @@ def _free_memory_macos() -> int:
     # Sum the page counts that represent usable free memory.
     free_pages = 0
     for key in ("Pages free", "Pages speculative"):
-        match = re.search(rf'^{key}:\s+(\d+)\.$', output, re.MULTILINE)
+        match = re.search(rf'^{re.escape(key)}:\s+(\d+)\.$', output, re.MULTILINE)
         if match:
             free_pages += int(match.group(1))
 
