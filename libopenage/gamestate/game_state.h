@@ -63,6 +63,15 @@ public:
 	void add_game_entity(const std::shared_ptr<GameEntity> &entity);
 
 	/**
+	 * Remove a game entity from the index.
+	 *
+	 * Called when an entity is destroyed (e.g. HP reaches 0).
+	 *
+	 * @param id ID of the game entity to remove.
+	 */
+	void remove_game_entity(entity_id_t id);
+
+	/**
 	 * Add a new player to the index.
 	 *
 	 * @param player New player.

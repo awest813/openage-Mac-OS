@@ -21,6 +21,7 @@
 #include "gamestate/game_entity.h"
 #include "gamestate/system/idle.h"
 #include "gamestate/system/move.h"
+#include "gamestate/system/attack.h"
 #include "util/fixed_point.h"
 
 
@@ -134,6 +135,13 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
 	case system_id_t::MOVE_DEFAULT:
 		// TODO: replace destination value with a parameter
 		return Move::move_default(entity, state, {1, 1, 1}, start_time);
+		break;
+	case system_id_t::ATTACK_COMMAND:
+		return Attack::attack_command(entity, state, start_time);
+		break;
+	case system_id_t::ATTACK_DEFAULT:
+		// ATTACK_DEFAULT requires explicit target — not dispatched via activity
+		return time::time_t::from_int(0);
 		break;
 	default:
 		throw Error{ERR << "Unhandled subsystem " << static_cast<int>(system_id)};

@@ -21,6 +21,17 @@ public:
 	component_t get_type() const override;
 
 	/**
+	 * Get the current value of an attribute.
+	 *
+	 * @param time The time at which to read the attribute value.
+	 * @param attribute Attribute identifier (fqon of the nyan object).
+	 *
+	 * @return Current attribute value, or 0 if the attribute does not exist.
+	 */
+	int64_t get_attribute(const time::time_t &time,
+	                      const nyan::fqon_t &attribute) const;
+
+	/**
 	 * Add a new attribute to the component attributes.
 	 *
 	 * @param time The time at which the attribute is added.
