@@ -26,10 +26,10 @@ What is missing is the act of dealing damage.
 - [x] Create `AttackCommand` — carries the target entity ID
 - [x] Create `Attack` API component — wraps the nyan `Attack` ability (damage, range, reload time)
 - [x] Create `Attack` system — resolves attack commands, applies damage via `Live::set_attribute`
-- [ ] Integrate `Attack` system into the activity graph (new task node / event triggers)
-- [ ] Death detection: when HP reaches 0, remove the entity from the world
-- [ ] Range check: only deal damage when the attacker is within attack range
-- [ ] Animation: switch to attack animation via `render_update` while attacking
+- [x] Integrate `Attack` system into the activity graph (new task node / command-type branch)
+- [x] Death detection: when HP reaches 0, remove the entity from the world
+- [x] Range check: only deal damage when the attacker is within attack range
+- [x] Animation: switch to attack animation via `render_update` while attacking
 
 ### 1.2 Resource Gathering
 

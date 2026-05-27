@@ -30,6 +30,10 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 	this->game_entities[entity->get_id()] = entity;
 }
 
+void GameState::remove_game_entity(entity_id_t id) {
+	this->game_entities.erase(id);
+}
+
 void GameState::add_player(const std::shared_ptr<Player> &player) {
 	if (this->players.contains(player->get_id())) [[unlikely]] {
 		throw Error(MSG(err) << "Player with ID " << player->get_id() << " already exists");

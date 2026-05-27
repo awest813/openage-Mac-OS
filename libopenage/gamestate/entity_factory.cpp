@@ -15,6 +15,7 @@
 #include "event/event_loop.h"
 #include "gamestate/activity/activity.h"
 #include "gamestate/activity/condition/command_in_queue.h"
+#include "gamestate/activity/condition/next_command.h"
 #include "gamestate/activity/end_node.h"
 #include "gamestate/activity/event/command_in_queue.h"
 #include "gamestate/activity/event/wait.h"
@@ -24,6 +25,7 @@
 #include "gamestate/activity/xor_gate.h"
 #include "gamestate/api/activity.h"
 #include "gamestate/component/api/idle.h"
+#include "gamestate/component/api/attack.h"
 #include "gamestate/component/api/live.h"
 #include "gamestate/component/api/move.h"
 #include "gamestate/component/api/selectable.h"
@@ -49,58 +51,70 @@ namespace openage::gamestate {
  * Create a simple test activity for the game entity.
  *
  * The activity is as follows:
- *                      |------------------------------------------------------|
- *                      |                                                      v
- * Start -> Idle -> Condition -> Condition -> Wait for command -> Move -> Wait for move -> End
- *            ^                                                                |
- *            |----------------------------------------------------------------|
+ *
+ *                              |----------------------------(new cmd)-----|
+ *                              |                                          v
+ * Start -> Idle -> Capable? -> Command? -> CmdType? -> Move -> WaitMove -> (loop to idle)
+ *                    |           |            |
+ *                    |           |            +-> Attack -> Idle (loop)
+ *                    |           |
+ *                    |           +-> WaitForCmd -> CmdType?
+ *                    |
+ *                    +-> (neither MOVE nor ATTACK) -> End
  *
  * TODO: Replace with config
  */
 std::shared_ptr<activity::Activity> create_test_activity() {
+	// Node IDs
 	auto start = std::make_shared<activity::StartNode>(0);
 	auto idle = std::make_shared<activity::TaskSystemNode>(1, "Idle");
-	auto condition_moveable = std::make_shared<activity::XorGate>(2);
+	auto condition_capable = std::make_shared<activity::XorGate>(2);
 	auto condition_command = std::make_shared<activity::XorGate>(3);
-	auto wait_for_command = std::make_shared<activity::XorEventGate>(4);
-	auto move = std::make_shared<activity::TaskSystemNode>(5, "Move");
-	auto wait_for_move = std::make_shared<activity::XorEventGate>(6);
-	auto end = std::make_shared<activity::EndNode>(7);
+	auto condition_cmd_type = std::make_shared<activity::XorGate>(4);
+	auto wait_for_command = std::make_shared<activity::XorEventGate>(5);
+	auto move = std::make_shared<activity::TaskSystemNode>(6, "Move");
+	auto wait_for_move = std::make_shared<activity::XorEventGate>(7);
+	auto attack = std::make_shared<activity::TaskSystemNode>(8, "Attack");
+	auto end = std::make_shared<activity::EndNode>(9);
 
 	start->add_output(idle);
 
 	// idle after start
-	idle->add_output(condition_moveable);
+	idle->add_output(condition_capable);
 	idle->set_system_id(system::system_id_t::IDLE);
 
-	// branch 1: check if the entity is moveable
-	activity::condition_t command_branch = [&](const time::time_t & /* time */,
-	                                           const std::shared_ptr<gamestate::GameEntity> &entity) {
-		return entity->has_component(component::component_t::MOVE);
+	// Check if entity can move or attack; end if neither
+	activity::condition_t capable_branch = [](const time::time_t & /* time */,
+	                                          const std::shared_ptr<gamestate::GameEntity> &entity) {
+		return entity->has_component(component::component_t::MOVE)
+		       || entity->has_component(component::component_t::ATTACK);
 	};
-	condition_moveable->add_output(condition_command, command_branch);
+	condition_capable->add_output(condition_command, capable_branch);
+	condition_capable->set_default(end);
 
-	// default: if it's not moveable, go straight to the end
-	condition_moveable->set_default(end);
-
-	// branch 1: check if there is already a command in the queue
-	condition_command->add_output(move, gamestate::activity::command_in_queue);
-
-	// default: if there is no command, wait for a command
+	// Check if there is already a command in the queue
+	condition_command->add_output(condition_cmd_type, gamestate::activity::command_in_queue);
 	condition_command->set_default(wait_for_command);
 
-	// wait for a command event
-	wait_for_command->add_output(move, gamestate::activity::primer_command_in_queue);
+	// Wait for a command, then check its type
+	wait_for_command->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
-	// move
+	// Route to attack or move based on next command type
+	condition_cmd_type->add_output(attack, gamestate::activity::next_command_attack);
+	condition_cmd_type->set_default(move);
+
+	// Move system node
 	move->add_output(wait_for_move);
 	move->set_system_id(system::system_id_t::MOVE_COMMAND);
 
-	// branch 1: wait for move event to finish
+	// After move: wait for completion, then loop back to idle;
+	// interrupt on a new command to re-evaluate command type
 	wait_for_move->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_move->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
-	// branch 2: wait for a new command event
-	wait_for_move->add_output(move, gamestate::activity::primer_command_in_queue);
+	// Attack system node: one attack per pass, then back to idle
+	attack->add_output(idle);
+	attack->set_system_id(system::system_id_t::ATTACK_COMMAND);
 
 	return std::make_shared<activity::Activity>(0, start, "test");
 }
@@ -203,6 +217,10 @@ void EntityFactory::init_components(const std::shared_ptr<openage::event::EventL
 		}
 		else if (ability_parent == "engine.ability.type.Activity") {
 			activity_ability = ability_obj;
+		}
+		else if (ability_parent == "engine.ability.type.Attack") {
+			auto attack_comp = std::make_shared<component::Attack>(loop, ability_obj);
+			entity->add_component(attack_comp);
 		}
 		else if (ability_parent == "engine.ability.type.Selectable") {
 			auto selectable = std::make_shared<component::Selectable>(loop, ability_obj);

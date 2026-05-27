@@ -34,4 +34,17 @@ bool next_command_move(const time::time_t &time,
 	return command->get_type() == component::command::command_t::MOVE;
 }
 
+bool next_command_attack(const time::time_t &time,
+                         const std::shared_ptr<gamestate::GameEntity> &entity) {
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+
+	if (command_queue->get_queue().empty(time)) {
+		return false;
+	}
+
+	auto command = command_queue->get_queue().front(time);
+	return command->get_type() == component::command::command_t::ATTACK;
+}
+
 } // namespace openage::gamestate::activity
