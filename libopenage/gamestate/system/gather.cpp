@@ -2,6 +2,8 @@
 
 #include "gather.h"
 
+#include <optional>
+#include <mutex>
 #include <unordered_map>
 
 #include <nyan/nyan.h>
@@ -29,6 +31,7 @@ namespace openage::gamestate::system {
 
 // nyan attribute fqon used to store current amount in a resource entity's Live component.
 static constexpr const char *RESOURCE_AMOUNT_ATTRIBUTE = "engine.ability.type.Live.AttributeAmount";
+// Distance in world-position units used for drop-off proximity checks.
 static constexpr double DROPOFF_RANGE = 1.5;
 
 namespace {
@@ -39,6 +42,32 @@ struct carried_resource_t {
 };
 
 std::unordered_map<entity_id_t, carried_resource_t> carried_resources{};
+std::mutex carried_resources_mutex{};
+
+bool is_carrying_resources(entity_id_t entity_id) {
+	std::scoped_lock lock{carried_resources_mutex};
+	return carried_resources.contains(entity_id);
+}
+
+std::optional<carried_resource_t> get_carried_resource(entity_id_t entity_id) {
+	std::scoped_lock lock{carried_resources_mutex};
+	auto cargo_it = carried_resources.find(entity_id);
+	if (cargo_it == carried_resources.end()) {
+		return std::nullopt;
+	}
+
+	return cargo_it->second;
+}
+
+void set_carried_resource(entity_id_t entity_id, const carried_resource_t &cargo) {
+	std::scoped_lock lock{carried_resources_mutex};
+	carried_resources[entity_id] = cargo;
+}
+
+void clear_carried_resource(entity_id_t entity_id) {
+	std::scoped_lock lock{carried_resources_mutex};
+	carried_resources.erase(entity_id);
+}
 
 bool is_valid_dropoff_entity(const std::shared_ptr<gamestate::GameEntity> &entity,
                              player_id_t owner_id,
@@ -73,8 +102,8 @@ bool is_valid_dropoff_entity(const std::shared_ptr<gamestate::GameEntity> &entit
 bool try_drop_off(const std::shared_ptr<gamestate::GameEntity> &entity,
                   const std::shared_ptr<openage::gamestate::GameState> &state,
                   const time::time_t &time) {
-	auto cargo_it = carried_resources.find(entity->get_id());
-	if (cargo_it == carried_resources.end()) {
+	auto cargo = get_carried_resource(entity->get_id());
+	if (not cargo.has_value()) {
 		return false;
 	}
 
@@ -98,13 +127,13 @@ bool try_drop_off(const std::shared_ptr<gamestate::GameEntity> &entity,
 		}
 
 		auto &player = state->get_player(owner_id);
-		player->add_resource(time, cargo_it->second.resource_type, cargo_it->second.amount);
+		player->add_resource(time, cargo->resource_type, cargo->amount);
 
 		log::log(MSG(info) << "Entity " << entity->get_id()
-		                   << " dropped off " << cargo_it->second.amount
-		                   << " of " << cargo_it->second.resource_type
+		                   << " dropped off " << cargo->amount
+		                   << " of " << cargo->resource_type
 		                   << " at entity " << id << ".");
-		carried_resources.erase(cargo_it);
+		clear_carried_resource(entity->get_id());
 		return true;
 	}
 
@@ -133,7 +162,7 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 	}
 
 	// Gatherers carrying resources must first return to a drop-off building.
-	if (carried_resources.contains(entity->get_id())) {
+	if (is_carrying_resources(entity->get_id())) {
 		if (try_drop_off(entity, state, start_time)) {
 			return time::time_t::from_int(0);
 		}
@@ -212,10 +241,10 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 		auto ownership = std::dynamic_pointer_cast<component::Ownership>(
 			entity->get_component(component::component_t::OWNERSHIP));
 		auto resource_fqon = resource_type->get_name();
-		carried_resources[entity->get_id()] = {resource_fqon, gathered};
+		set_carried_resource(entity->get_id(), {resource_fqon, gathered});
 
 		log::log(MSG(dbg) << "Entity " << entity->get_id()
-		                  << " gathered and is carrying " << gathered << " of " << resource_fqon
+		                  << " gathered and is now carrying " << gathered << " of " << resource_fqon
 		                  << " from entity " << target_id
 		                  << " (remaining=" << new_amount << ").");
 	}
