@@ -43,6 +43,11 @@ if typing.TYPE_CHECKING:
 class ConversionPhase(Enum):
     """
     Ordered stages of the AoC conversion pipeline.
+
+    INITIALIZED is the freshly created container before raw extraction.
+    GENIE_OBJECTS means phase 1 raw Genie structures have been populated.
+    API_OBJECTS means phase 2 grouping/linking has produced nyan-ready objects.
+    EXPORT_OBJECTS means phase 3 nyan/media export requests have been generated.
     """
 
     INITIALIZED = "initialized"
