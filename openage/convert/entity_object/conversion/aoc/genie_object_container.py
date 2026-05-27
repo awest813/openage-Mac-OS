@@ -7,6 +7,7 @@ Object for comparing and passing around data from a dataset.
 """
 from __future__ import annotations
 import typing
+from enum import Enum
 
 
 from ..converter_object import ConverterObjectContainer
@@ -39,10 +40,24 @@ if typing.TYPE_CHECKING:
     from openage.nyan.nyan_structs import NyanObject
 
 
+class ConversionPhase(Enum):
+    """
+    Ordered stages of the AoC conversion pipeline.
+    """
+
+    INITIALIZED = "initialized"
+    GENIE_OBJECTS = "genie_objects"
+    API_OBJECTS = "api_objects"
+    EXPORT_OBJECTS = "export_objects"
+
+
 class GenieObjectContainer(ConverterObjectContainer):
     """
-    Contains everything from the dat file, sorted into several
-    categories.
+    Contains everything from the dat file, sorted into conversion phases.
+
+    Phase 1 stores extracted Genie data structures from the original dataset.
+    Phase 2 groups that data into API-like objects that become nyan content.
+    Phase 3 stores generated media/export requests derived from phase 2 output.
     """
 
     def __init__(self):
@@ -60,6 +75,7 @@ class GenieObjectContainer(ConverterObjectContainer):
         # Auxiliary
         self.strings: StringResource = None
         self.existing_graphics: set[str] = None
+        self.phase = ConversionPhase.INITIALIZED
 
         # Phase 1: Genie-like objects
         # ConverterObject types (the data from the game)
@@ -124,3 +140,25 @@ class GenieObjectContainer(ConverterObjectContainer):
 
     def __repr__(self):
         return "GenieObjectContainer"
+
+    def require_phase(self, phase: ConversionPhase, action: str) -> None:
+        """
+        Validate that conversion steps are executed in the expected order.
+        """
+        if self.phase is not phase:
+            raise RuntimeError(
+                f"{action} requires conversion phase '{phase.value}', "
+                f"got '{self.phase.value}'"
+            )
+
+    def advance_phase(
+        self,
+        expected_phase: ConversionPhase,
+        next_phase: ConversionPhase,
+        action: str,
+    ) -> None:
+        """
+        Move the container to the next conversion phase.
+        """
+        self.require_phase(expected_phase, action)
+        self.phase = next_phase
