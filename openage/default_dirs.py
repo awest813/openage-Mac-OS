@@ -1,4 +1,4 @@
-# Copyright 2017-2023 the openage authors. See copying.md for legal info.
+# Copyright 2017-2024 the openage authors. See copying.md for legal info.
 
 """
 
@@ -34,6 +34,29 @@ LINUX_DIRS = {
 }
 
 
+# macOS-specific dirs following Apple's file-system layout conventions.
+# Preference is given to XDG env vars when set, so power users can override.
+# Default paths:
+#   ~/Library/Application Support  - config and data (per Apple HIG)
+#   /Library/Application Support   - system-wide read-only data / config
+#   ~/Library/Caches               - cache (purge-safe)
+#   ~/Library/Caches               - runtime state (closest macOS equivalent)
+MACOS_DIRS = {
+    "config_home": ("XDG_CONFIG_HOME",
+                    ("{HOME}/Library/Application Support", {"HOME"})),
+    "data_home": ("XDG_DATA_HOME",
+                  ("{HOME}/Library/Application Support", {"HOME"})),
+    "data_dirs": ("XDG_DATA_DIRS",
+                  ("/Library/Application Support", {})),
+    "config_dirs": ("XDG_CONFIG_DIRS",
+                    ("/Library/Application Support", {})),
+    "cache_home": ("XDG_CACHE_HOME",
+                   ("{HOME}/Library/Caches", {"HOME"})),
+    "runtime_dir": ("XDG_RUNTIME_DIR",
+                    ("{HOME}/Library/Caches", {"HOME"})),
+}
+
+
 # Windows-specific paths
 WINDOWS_DIRS = {
     "config_home": ("APPDATA", (False, None)),
@@ -55,7 +78,7 @@ def get_dir(which):
         platform_table = LINUX_DIRS
 
     elif sys.platform.startswith("darwin"):
-        raise RuntimeError("macOS not really supported")
+        platform_table = MACOS_DIRS
 
     elif sys.platform.startswith("win32"):
         platform_table = WINDOWS_DIRS

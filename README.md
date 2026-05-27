@@ -89,7 +89,8 @@ If you're interested, we wrote detailed explanations on our blog: [Part 1](https
 | :-----------------: | :-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 |     Debian Sid      | [![Kevin CI status](https://cidata.sft.lol/openage/branches/master/status.svg)](/kevinfile) |
 |  Ubuntu 24.04 LTS   |           [![Ubuntu 24.04 build status](https://github.com/SFTTech/openage/actions/workflows/ubuntu-24.04.yml/badge.svg?branch=master)](https://github.com/SFTtech/openage/actions/workflows/ubuntu-24.04.yml)            |
-|        macOS        |                              [![macOS build status](https://github.com/SFTtech/openage/workflows/macOS-CI/badge.svg)](https://github.com/SFTtech/openage/actions?query=workflow%3AmacOS-CI)                               |
+| macOS arm64 (Apple Silicon) | [![macOS arm64 build status](https://github.com/awest813/openage-Mac-OS/actions/workflows/macosx-ci.yml/badge.svg)](https://github.com/awest813/openage-Mac-OS/actions/workflows/macosx-ci.yml) |
+| macOS x86_64 (Intel)        | [![macOS x86_64 build status](https://github.com/awest813/openage-Mac-OS/actions/workflows/macosx-ci.yml/badge.svg)](https://github.com/awest813/openage-Mac-OS/actions/workflows/macosx-ci.yml) |
 | Windows Server 2019 | [![Windows Server 2019 build status](https://github.com/SFTtech/openage/actions/workflows/windows-server-2019.yml/badge.svg?branch=master)](https://github.com/SFTtech/openage/actions/workflows/windows-server-2019.yml) |
 | Windows Server 2022 | [![Windows Server 2022 build status](https://github.com/SFTtech/openage/actions/workflows/windows-server-2022.yml/badge.svg?branch=master)](https://github.com/SFTtech/openage/actions/workflows/windows-server-2022.yml) |
 
@@ -110,7 +111,11 @@ We strongly recommend building the program from source to get the latest, greate
 * For **Windows** check our [release page](https://github.com/SFTtech/openage/releases) for the latest installer.
   Otherwise, you need to build from the source.
 
-* For **macOS** we currently don't have any packages, you need to build from source.
+* For **macOS** (Apple Silicon and Intel) this fork provides first-class support.
+  See the [macOS support matrix](/doc/macos-support-matrix.md) for the full
+  compatibility policy and the [macOS build instructions](/doc/build_instructions/macos.md)
+  for step-by-step setup.  Release tarballs for each architecture are published
+  on the [release page](https://github.com/awest813/openage-Mac-OS/releases).
 
 If you need help, maybe our [troubleshooting guide](/doc/troubleshooting.md) helps you.
 

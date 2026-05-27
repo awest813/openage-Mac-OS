@@ -1,0 +1,101 @@
+name: macOS-Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+jobs:
+  # Build a release artifact for each supported macOS architecture.
+  # See doc/macos-support-matrix.md for the architecture and runner policy.
+  macos-release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15    # Apple Silicon (arm64)
+            arch: arm64
+          - runner: macos-13    # Intel (x86_64)
+            arch: x86_64
+    name: Release macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # full history needed for version string
+
+      # ------------------------------------------------------------------ #
+      # Dependency installation
+      # ------------------------------------------------------------------ #
+      - name: Brew update-reset
+        run: brew update-reset
+      - name: Brew update
+        run: brew update
+      - name: Brew install DeJaVu fonts
+        run: brew install --cask font-dejavu
+      - name: Install LLVM with homebrew
+        run: brew install llvm
+      - name: Install openage dependencies with homebrew
+        run: brew install cmake python3 libepoxy freetype fontconfig harfbuzz opus opusfile qt6 libogg libpng toml11 eigen
+      - name: Install nyan dependencies with homebrew
+        run: brew install flex make
+      - name: Install python3 packages
+        run: pip3 install --upgrade --break-system-packages cython numpy mako lz4 pillow pygments setuptools toml
+
+      # ------------------------------------------------------------------ #
+      # Build
+      # ------------------------------------------------------------------ #
+      - name: Configure
+        run: >
+          ./configure
+          --compiler="$(brew --prefix llvm)/bin/clang++"
+          --mode=release
+          --download-nyan
+          --target-arch=${{ matrix.arch }}
+          --macos-deployment-target=13.0
+          --prefix=/usr/local
+
+      - name: Build
+        run: make -j$(sysctl -n hw.logicalcpu) VERBOSE=1
+
+      - name: Test
+        run: make test
+
+      # ------------------------------------------------------------------ #
+      # Package
+      # ------------------------------------------------------------------ #
+      - name: Determine version string
+        id: version
+        run: |
+          VERSION=$(git describe --tags --always)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create tarball
+        run: |
+          ARTIFACT="openage-${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}"
+          mkdir -p "dist/${ARTIFACT}"
+          # copy the run launcher and the libopenage shared library
+          cp -R bin/. "dist/${ARTIFACT}/"
+          tar -czf "${ARTIFACT}.tar.gz" -C dist "${ARTIFACT}"
+          echo "ARTIFACT_NAME=${ARTIFACT}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_FILE=${ARTIFACT}.tar.gz" >> "$GITHUB_ENV"
+
+      # ------------------------------------------------------------------ #
+      # Upload to GitHub Release
+      # ------------------------------------------------------------------ #
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_FILE }}
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ env.ARTIFACT_FILE }}
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
