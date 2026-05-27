@@ -13,6 +13,7 @@ enum class ability_t {
 	LIVE,
 	MOVE,
 	TURN,
+	ATTACK,
 
 	// TODO
 };
