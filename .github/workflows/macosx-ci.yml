@@ -1,6 +1,9 @@
 name: macOS-CI
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   # https://docs.github.com/en/actions/reference/software-installed-on-github-hosted-runners
   # we install stuff not already there.
