@@ -219,6 +219,80 @@ def test_append(root_path):
         assert_value(fil.read(), b"overwrittenest")
 
 
+def test_directory_resolve(root_path, root_dir):
+    """
+    Phase G – regression tests for directory resolution.
+
+    Validates that Directory.resolve() and CaseIgnoringDirectory.resolve()
+    produce correct native paths for a variety of edge-case inputs,
+    including empty parts, nested subdirectories, Unicode names,
+    names with embedded spaces, and names that differ only in case.
+    """
+
+    # Ensure root_dir is bytes (Directory stores self.path as bytes)
+    if isinstance(root_dir, str):
+        root_dir_b = root_dir.encode()
+    else:
+        root_dir_b = root_dir
+
+    # --- Directory.resolve() regression tests ---
+    directory = Directory(root_dir, create_if_missing=True)
+
+    # G-1: empty parts tuple resolves to the root itself
+    assert_value(directory.resolve(()), root_dir_b)
+
+    # G-2: single-element parts
+    assert_value(directory.resolve((b"alpha",)),
+                 os.path.join(root_dir_b, b"alpha"))
+
+    # G-3: multi-level nested parts
+    assert_value(directory.resolve((b"a", b"b", b"c")),
+                 os.path.join(root_dir_b, b"a", b"b", b"c"))
+
+    # G-4: parts containing spaces
+    assert_value(directory.resolve((b"my folder", b"sub dir")),
+                 os.path.join(root_dir_b, b"my folder", b"sub dir"))
+
+    # G-5: Unicode directory names (encoded to bytes)
+    assert_value(directory.resolve(("données".encode(), "日本語".encode())),
+                 os.path.join(root_dir_b, "données".encode(), "日本語".encode()))
+
+    # --- CaseIgnoringDirectory.resolve() regression tests ---
+    # Create files with known mixed-case names via the underlying path
+    root_path["ResolveTarget"].touch()
+
+    # G-9 setup: create nested structure before CaseIgnoringDirectory caches
+    nested_dir = os.path.join(root_dir, "SubDir")
+    os.makedirs(nested_dir, exist_ok=True)
+    nested_file = os.path.join(nested_dir, "DeepFile")
+    with open(nested_file, "wb") as fobj:
+        fobj.write(b"deep")
+
+    ci_dir = CaseIgnoringDirectory(root_dir)
+
+    # G-6: lowercase input finds original mixed-case file
+    resolved = ci_dir.resolve((b"resolvetarget",))
+    assert_value(os.path.isfile(resolved), True)
+
+    # G-7: repeated resolve of the same path is cache-consistent
+    first = ci_dir.resolve((b"resolvetarget",))
+    second = ci_dir.resolve((b"resolvetarget",))
+    assert_value(first, second)
+
+    # G-8: resolve of a non-existent name returns best-effort path (no crash)
+    non_existent = ci_dir.resolve((b"no_such_file_xyz",))
+    # Should not raise; the returned path simply won't exist on disk
+    assert_value(isinstance(non_existent, (str, bytes)), True)
+
+    # G-9: nested case-insensitive resolution
+    resolved_nested = ci_dir.resolve((b"subdir", b"deepfile"))
+    assert_value(os.path.isfile(resolved_nested), True)
+
+    # cleanup helpers
+    os.unlink(nested_file)
+    os.rmdir(nested_dir)
+
+
 def test():
     """
     Perform functionality tests for the filesystem abstraction interface.
@@ -240,6 +314,9 @@ def test():
 
     # test appending content
     test_append(root_path)
+
+    # Phase G: regression tests for directory resolution
+    test_directory_resolve(root_path, root_dir)
 
     # and remove all the things we just created
     assert_value(root_path.is_dir(), True)
