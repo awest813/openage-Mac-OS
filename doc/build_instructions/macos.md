@@ -130,7 +130,7 @@ Try `./run --help` for available options.
 ```bash
 make doc
 ```
-For more options and details, refer to [doc/README.md](/doc/README.md)
+For more options and details, refer to [doc/README.md](../README.md)
 
 ## Troubleshooting
 
