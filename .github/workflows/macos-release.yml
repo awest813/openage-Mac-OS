@@ -30,6 +30,32 @@ jobs:
           fetch-depth: 0      # full history needed for version string
 
       # ------------------------------------------------------------------ #
+      # Caching
+      # ------------------------------------------------------------------ #
+      - name: Get timestamp
+        id: timestamp
+        shell: cmake -P {0}
+        run: |
+          string(TIMESTAMP current_date "%Y-%m-%d-%H:%M:%S" UTC)
+          file(APPEND "$ENV{GITHUB_OUTPUT}" "timestamp=${current_date}\n")
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pip
+            ~/Library/Caches/Homebrew
+          key: '${{ runner.os }}-${{ matrix.arch }}-release-deps-${{ steps.timestamp.outputs.timestamp }}'
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-release-deps-
+      - name: Cache ccache dir
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: '${{ runner.os }}-${{ matrix.arch }}-release-ccache-${{ steps.timestamp.outputs.timestamp }}'
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-release-ccache-
+
+      # ------------------------------------------------------------------ #
       # Dependency installation
       # ------------------------------------------------------------------ #
       - name: Brew update-reset
@@ -38,6 +64,8 @@ jobs:
         run: brew update
       - name: Brew install DeJaVu fonts
         run: brew install --cask font-dejavu
+      - name: Install environment helpers with homebrew
+        run: brew install --force ccache
       - name: Install LLVM with homebrew
         run: brew install llvm
       - name: Install openage dependencies with homebrew
@@ -55,6 +83,7 @@ jobs:
           ./configure
           --compiler="$(brew --prefix llvm)/bin/clang++"
           --mode=release
+          --ccache
           --download-nyan
           --target-arch=${{ matrix.arch }}
           --macos-deployment-target=13.0
