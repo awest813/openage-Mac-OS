@@ -40,7 +40,7 @@ What is missing is the act of dealing damage.
 - [x] Add resource storage to `Player` (time-indexed curves per resource type)
 - [x] Create `Gather` system — checks range, extracts from resource entity's Live component, credits player resources
 - [x] Deplete resources: remove resource entity when exhausted
-- [ ] Drop-off: unit must return to a drop-off building before gathering again
+- [x] Drop-off: unit must return to a drop-off building before gathering again
 
 ### 1.3 Unit Production
 
