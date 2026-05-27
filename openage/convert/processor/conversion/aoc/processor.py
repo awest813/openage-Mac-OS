@@ -17,7 +17,8 @@ from ....entity_object.conversion.aoc.genie_connection import GenieAgeConnection
 from ....entity_object.conversion.aoc.genie_effect import GenieEffectObject, \
     GenieEffectBundle
 from ....entity_object.conversion.aoc.genie_graphic import GenieGraphic
-from ....entity_object.conversion.aoc.genie_object_container import GenieObjectContainer
+from ....entity_object.conversion.aoc.genie_object_container import ConversionPhase, \
+    GenieObjectContainer
 from ....entity_object.conversion.aoc.genie_sound import GenieSound
 from ....entity_object.conversion.aoc.genie_tech import AgeUpgrade, \
     UnitUnlock, UnitLineUpgrade, CivBonus
@@ -120,7 +121,7 @@ class AoCProcessor:
         dataset.strings = string_resources
         dataset.existing_graphics = existing_graphics
 
-        info("Extracting Genie data...")
+        info("Extracting Genie data (phase 1/3)...")
 
         cls.extract_genie_units(gamespec, dataset)
         cls.extract_genie_techs(gamespec, dataset)
@@ -135,6 +136,11 @@ class AoCProcessor:
         cls.extract_genie_sounds(gamespec, dataset)
         cls.extract_genie_terrains(gamespec, dataset)
         cls.extract_genie_restrictions(gamespec, dataset)
+        dataset.advance_phase(
+            ConversionPhase.INITIALIZED,
+            ConversionPhase.GENIE_OBJECTS,
+            "AoCProcessor._pre_processor",
+        )
 
         return dataset
 
@@ -149,8 +155,12 @@ class AoCProcessor:
                               process.
         :type full_data_set: ...dataformat.aoc.genie_object_container.GenieObjectContainer
         """
+        full_data_set.require_phase(
+            ConversionPhase.GENIE_OBJECTS,
+            "AoCProcessor._processor",
+        )
 
-        info("Creating API-like objects...")
+        info("Creating API-like objects (phase 2/3)...")
 
         cls.create_unit_lines(full_data_set)
         cls.create_extra_unit_lines(full_data_set)
@@ -176,6 +186,11 @@ class AoCProcessor:
         info("Generating auxiliary objects...")
 
         AoCPregenSubprocessor.generate(full_data_set)
+        full_data_set.advance_phase(
+            ConversionPhase.GENIE_OBJECTS,
+            ConversionPhase.API_OBJECTS,
+            "AoCProcessor._processor",
+        )
 
         return full_data_set
 
@@ -189,14 +204,23 @@ class AoCProcessor:
                               process.
         :type full_data_set: ...dataformat.aoc.genie_object_container.GenieObjectContainer
         """
+        full_data_set.require_phase(
+            ConversionPhase.API_OBJECTS,
+            "AoCProcessor._post_processor",
+        )
 
-        info("Creating nyan objects...")
+        info("Creating nyan objects (phase 3/3)...")
 
         AoCNyanSubprocessor.convert(full_data_set)
 
         info("Creating requests for media export...")
 
         AoCMediaSubprocessor.convert(full_data_set)
+        full_data_set.advance_phase(
+            ConversionPhase.API_OBJECTS,
+            ConversionPhase.EXPORT_OBJECTS,
+            "AoCProcessor._post_processor",
+        )
 
         return AoCModpackSubprocessor.get_modpacks(full_data_set)
 
