@@ -84,11 +84,11 @@ jobs:
       - name: Install environment helpers with homebrew
         run: brew install --force ccache
       - name: Install LLVM with homebrew
-        run: brew install --force llvm
+        run: brew install llvm
       - name: Install openage dependencies with homebrew
-        run: brew install --force cmake python3 libepoxy freetype fontconfig harfbuzz opus opusfile qt6 libogg libpng toml11 eigen
+        run: brew install cmake python3 libepoxy freetype fontconfig harfbuzz opus opusfile qt6 libogg libpng toml11 eigen
       - name: Install nyan dependencies with homebrew
-        run: brew install --force flex make
+        run: brew install flex make
       - name: Install python3 packages
         run: pip3 install --upgrade --break-system-packages cython numpy mako lz4 pillow pygments setuptools toml
 
@@ -160,8 +160,8 @@ jobs:
         run: |
           set -euo pipefail
           ls -l release-artifacts
-          mapfile -t bundles < <(find release-artifacts -maxdepth 1 -type f -name '*.tar.gz' | sort)
-          if [[ "${#bundles[@]}" -eq 0 ]]; then
+          count=$(find release-artifacts -maxdepth 1 -type f -name '*.tar.gz' | wc -l)
+          if [[ "${count}" -eq 0 ]]; then
             echo "No release bundles were downloaded" >&2
             exit 1
           fi
