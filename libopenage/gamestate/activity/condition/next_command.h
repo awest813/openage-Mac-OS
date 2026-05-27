@@ -46,5 +46,16 @@ bool next_command_move(const time::time_t &time,
 bool next_command_attack(const time::time_t &time,
                          const std::shared_ptr<gamestate::GameEntity> &entity);
 
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
+ * @return true if the entity has a gather command next in the queue, false otherwise.
+ */
+bool next_command_gather(const time::time_t &time,
+                         const std::shared_ptr<gamestate::GameEntity> &entity);
+
 } // namespace activity
 } // namespace openage::gamestate

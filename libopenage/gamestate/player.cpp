@@ -1,7 +1,9 @@
-// Copyright 2018-2023 the openage authors. See copying.md for legal info.
+// Copyright 2018-2024 the openage authors. See copying.md for legal info.
 
 #include "player.h"
 
+#include "curve/discrete.h"
+#include "event/event_loop.h"
 #include "nyan/nyan.h"
 
 
@@ -26,6 +28,37 @@ player_id_t Player::get_id() const {
 
 const std::shared_ptr<nyan::View> &Player::get_db_view() const {
 	return this->db_view;
+}
+
+void Player::init_resource(const time::time_t &time,
+                           const std::shared_ptr<openage::event::EventLoop> &loop,
+                           const nyan::fqon_t &resource,
+                           int64_t amount) {
+	if (this->resources.contains(resource)) {
+		return;
+	}
+	this->resources.emplace(resource,
+	                        std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, amount));
+	this->resources.at(resource)->set_last(time, amount);
+}
+
+int64_t Player::get_resource(const time::time_t &time, const nyan::fqon_t &resource) const {
+	auto it = this->resources.find(resource);
+	if (it == this->resources.end()) {
+		return 0;
+	}
+	return it->second->get(time);
+}
+
+void Player::add_resource(const time::time_t &time,
+                          const nyan::fqon_t &resource,
+                          int64_t amount) {
+	auto it = this->resources.find(resource);
+	if (it == this->resources.end()) {
+		return;
+	}
+	int64_t current = it->second->get(time);
+	it->second->set_last(time, current + amount);
 }
 
 void Player::set_id(entity_id_t id) {
