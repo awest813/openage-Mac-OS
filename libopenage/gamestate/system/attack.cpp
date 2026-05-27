@@ -72,7 +72,7 @@ const time::time_t Attack::attack_default(const std::shared_ptr<gamestate::GameE
 
 	const auto &target = it->second;
 
-	// Apply damage to target's HP (via the Live component)
+	// Apply damage to target's HP via the Live component
 	if (not target->has_component(component::component_t::LIVE)) [[unlikely]] {
 		log::log(MSG(warn) << "Attack target " << target_id << " has no live component.");
 		return time::time_t::from_int(0);
@@ -81,15 +81,13 @@ const time::time_t Attack::attack_default(const std::shared_ptr<gamestate::GameE
 	auto live_component = std::dynamic_pointer_cast<component::Live>(
 		target->get_component(component::component_t::LIVE));
 
-	// Read current HP and subtract damage
-	// The HP attribute is stored under the nyan fqon HP_ATTRIBUTE.
-	// set_attribute writes a new keyframe at start_time.
-	// TODO: read current HP value, clamp to 0, then write it back.
-	//       For now we call set_attribute with a placeholder delta to show
-	//       the interface; actual value reading requires the curve iterator API.
-	live_component->set_attribute(start_time,
-	                              HP_ATTRIBUTE,
-	                              -damage->get()); // negative delta recorded as new absolute value placeholder
+	// Read current HP and subtract damage, clamping to 0
+	int64_t current_hp = live_component->get_attribute(start_time, HP_ATTRIBUTE);
+	int64_t new_hp = current_hp - damage->get();
+	if (new_hp < 0) {
+		new_hp = 0;
+	}
+	live_component->set_attribute(start_time, HP_ATTRIBUTE, new_hp);
 
 	// Play attack animation if the ability has an ANIMATED property
 	if (api::APIAbility::check_property(attack_ability, api::ability_property_t::ANIMATED)) {
