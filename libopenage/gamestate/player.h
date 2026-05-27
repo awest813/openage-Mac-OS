@@ -2,16 +2,27 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
+#include <unordered_map>
 
+#include <nyan/nyan.h>
+
+#include "curve/discrete.h"
 #include "gamestate/types.h"
+#include "time/time.h"
 
 
 namespace nyan {
 class View;
 } // namespace nyan
 
-namespace openage::gamestate {
+namespace openage {
+namespace event {
+class EventLoop;
+}
+
+namespace gamestate {
 
 /**
  * Entity for managing a player inside the game world.
@@ -55,6 +66,42 @@ public:
 	 */
 	const std::shared_ptr<nyan::View> &get_db_view() const;
 
+	/**
+	 * Initialize a resource type for this player (called during setup).
+	 *
+	 * @param time       Time at which the resource is initialised.
+	 * @param loop       Event loop used for the curve.
+	 * @param resource   Resource type identifier (nyan fqon).
+	 * @param amount     Starting amount.
+	 */
+	void init_resource(const time::time_t &time,
+	                   const std::shared_ptr<openage::event::EventLoop> &loop,
+	                   const nyan::fqon_t &resource,
+	                   int64_t amount = 0);
+
+	/**
+	 * Get the current amount of a resource.
+	 *
+	 * @param time     Time at which to read.
+	 * @param resource Resource type identifier (nyan fqon).
+	 *
+	 * @return Current resource amount, or 0 if the resource is unknown.
+	 */
+	int64_t get_resource(const time::time_t &time, const nyan::fqon_t &resource) const;
+
+	/**
+	 * Add an amount to a resource.
+	 *
+	 * If the resource type is not yet tracked it is silently ignored.
+	 *
+	 * @param time     Simulation time of the change.
+	 * @param resource Resource type identifier (nyan fqon).
+	 * @param amount   Amount to add (may be negative to subtract).
+	 */
+	void add_resource(const time::time_t &time,
+	                  const nyan::fqon_t &resource,
+	                  int64_t amount);
+
 protected:
 	/**
 	 * A player cannot be default copied because of their unique ID.
@@ -83,6 +130,14 @@ private:
 	 * Player view of the nyan game data database.
 	 */
 	std::shared_ptr<nyan::View> db_view;
+
+	/**
+	 * Resource amounts per resource type (keyed by nyan fqon).
+	 * Each entry is a time-indexed discrete curve so that resource changes
+	 * are recorded deterministically.
+	 */
+	std::unordered_map<nyan::fqon_t, std::shared_ptr<curve::Discrete<int64_t>>> resources;
 };
 
-} // namespace openage::gamestate
+} // namespace gamestate
+} // namespace openage

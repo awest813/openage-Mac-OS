@@ -34,7 +34,9 @@ static const auto ABILITY_DEFS = datastructure::create_const_map<ability_t, nyan
 	std::pair(ability_t::TURN,
               nyan::ValueHolder(std::make_shared<nyan::ObjectValue>("engine.ability.type.Turn"))),
 	std::pair(ability_t::ATTACK,
-              nyan::ValueHolder(std::make_shared<nyan::ObjectValue>("engine.ability.type.Attack"))));
+              nyan::ValueHolder(std::make_shared<nyan::ObjectValue>("engine.ability.type.Attack"))),
+	std::pair(ability_t::GATHER,
+              nyan::ValueHolder(std::make_shared<nyan::ObjectValue>("engine.ability.type.Gather"))));
 
 /**
  * Maps internal property types to nyan API values.
@@ -79,7 +81,9 @@ static const auto ACTIVITY_TASK_SYSTEM_DEFS = datastructure::create_const_map<st
 	std::pair("engine.ability.type.Move",
               system::system_id_t::MOVE_COMMAND),
 	std::pair("engine.ability.type.Attack",
-              system::system_id_t::ATTACK_COMMAND));
+              system::system_id_t::ATTACK_COMMAND),
+	std::pair("engine.ability.type.Gather",
+              system::system_id_t::GATHER_COMMAND));
 
 /**
  * Maps API activity condition types to engine condition types.

@@ -14,6 +14,7 @@ enum class ability_t {
 	MOVE,
 	TURN,
 	ATTACK,
+	GATHER,
 
 	// TODO
 };

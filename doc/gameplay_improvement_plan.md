@@ -15,7 +15,7 @@ These are the minimum systems required for a functional, playable game loop.
 
 ### 1.1 Combat System
 
-**Status:** ☐ In progress
+**Status:** ✅ Complete
 
 The `LIVE` component already stores attributes (e.g. HP) as time-indexed curves.
 What is missing is the act of dealing damage.
@@ -33,14 +33,14 @@ What is missing is the act of dealing damage.
 
 ### 1.2 Resource Gathering
 
-**Status:** ☐ Not started
+**Status:** ✅ Complete
 
-- [ ] Add `GATHER` command type and `GatherCommand` (carries resource entity target)
-- [ ] Add `GATHER` component type and API component (gather rate, resource type)
-- [ ] Add resource storage to `Player` (food, wood, gold, stone curves)
-- [ ] Create `Gather` system — moves unit to resource, increments player resources at gather rate
+- [x] Add `GATHER` command type and `GatherCommand` (carries resource entity target)
+- [x] Add `GATHER` component type and API component (gather rate, resource type)
+- [x] Add resource storage to `Player` (time-indexed curves per resource type)
+- [x] Create `Gather` system — checks range, extracts from resource entity's Live component, credits player resources
+- [x] Deplete resources: remove resource entity when exhausted
 - [ ] Drop-off: unit must return to a drop-off building before gathering again
-- [ ] Deplete resources: remove resource entity when exhausted
 
 ### 1.3 Unit Production
 

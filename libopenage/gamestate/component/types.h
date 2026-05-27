@@ -20,6 +20,7 @@ enum class component_t {
 	TURN,
 	MOVE,
 	ATTACK,
+	GATHER,
 	SELECTABLE,
 	LIVE
 };

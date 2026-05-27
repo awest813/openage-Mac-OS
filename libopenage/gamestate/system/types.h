@@ -19,6 +19,8 @@ enum class system_id_t {
 	ATTACK_COMMAND,
 	ATTACK_DEFAULT,
 
+	GATHER_COMMAND,
+
 	ACTIVITY_ADVANCE,
 };
 
