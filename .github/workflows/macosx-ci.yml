@@ -1,11 +1,25 @@
 name: macOS-CI
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   # https://docs.github.com/en/actions/reference/software-installed-on-github-hosted-runners
-  # we install stuff not already there
+  # we install stuff not already there.
+  # Runner labels are pinned to specific macOS versions to guarantee
+  # architecture coverage (see doc/macos-support-matrix.md).
   macos-build:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15    # Apple Silicon (arm64)
+            arch: arm64
+          - runner: macos-13    # Intel (x86_64)
+            arch: x86_64
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -25,17 +39,17 @@ jobs:
           path: |
             ~/Library/Caches/pip
             ~/Library/Caches/Homebrew
-          key: '${{ runner.os }}-deps-${{ steps.timestamp.outputs.timestamp }}'
+          key: '${{ runner.os }}-${{ matrix.arch }}-deps-${{ steps.timestamp.outputs.timestamp }}'
           restore-keys: |
-            ${{ runner.os }}-deps-
+            ${{ runner.os }}-${{ matrix.arch }}-deps-
       - name: Cache ccache dir
         uses: actions/cache@v4
         id: cache-ccache
         with:
           path: ~/Library/Caches/ccache
-          key: '${{ runner.os }}-ccache-${{ steps.timestamp.outputs.timestamp }}'
+          key: '${{ runner.os }}-${{ matrix.arch }}-ccache-${{ steps.timestamp.outputs.timestamp }}'
           restore-keys: |
-            ${{ runner.os }}-ccache-
+            ${{ runner.os }}-${{ matrix.arch }}-ccache-
       - name: Brew update-reset
         run: brew update-reset
       - name: Brew update
@@ -56,8 +70,23 @@ jobs:
         # numpy pulls gcc as dep? and pygments doesn't work.
         run: pip3 install --upgrade --break-system-packages cython numpy mako lz4 pillow pygments setuptools toml
       - name: Configure
-        run: ./configure --compiler="$(brew --prefix llvm)/bin/clang++" --mode=release --ccache --download-nyan
+        run: >
+          ./configure
+          --compiler="$(brew --prefix llvm)/bin/clang++"
+          --mode=release
+          --ccache
+          --download-nyan
+          --target-arch=${{ matrix.arch }}
+          --macos-deployment-target=13.0
       - name: Build
         run: make -j$(sysctl -n hw.logicalcpu) VERBOSE=1
       - name: Test
         run: make test
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: openage-macos-${{ matrix.arch }}-ci
+          path: |
+            bin/run
+          retention-days: 7

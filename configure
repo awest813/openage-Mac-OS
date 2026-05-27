@@ -183,6 +183,37 @@ def get_install_prefixes(args):
     return ret
 
 
+def get_macos_options(args):
+    """
+    Build macOS-specific cmake options for architecture and deployment target.
+    Returns a list of -D flags to append to the cmake invocation.
+    Only meaningful on macOS; returns an empty list on other platforms.
+    """
+    if not sys.platform.startswith('darwin'):
+        return []
+
+    extra_flags = []
+
+    # Map the user-friendly arch name to CMAKE_OSX_ARCHITECTURES
+    arch_map = {
+        'native':    None,               # let cmake detect host arch
+        'arm64':     'arm64',
+        'x86_64':    'x86_64',
+        'universal2': 'arm64;x86_64',
+    }
+
+    arch_value = arch_map.get(args.target_arch)
+    if arch_value is not None:
+        extra_flags.append(f'-DCMAKE_OSX_ARCHITECTURES={arch_value}')
+
+    # Deployment target
+    extra_flags.append(
+        f'-DMACOSX_DEPLOYMENT_TARGET={args.macos_deployment_target}'
+    )
+
+    return extra_flags
+
+
 def bindir_creation(args, defines):
     """
     configuration for the sanitizer addons for gcc and clang.
@@ -236,7 +267,7 @@ def bindir_creation(args, defines):
     return bindir
 
 
-def invoke_cmake(args, bindir, defines, options):
+def invoke_cmake(args, bindir, defines, options, extra_cmake_flags=None):
     """
     run cmake.
     """
@@ -270,6 +301,10 @@ def invoke_cmake(args, bindir, defines, options):
 
     if args.download_nyan:
         invocation.append("-DDOWNLOAD_NYAN=YES")
+
+    # inject platform-specific flags (e.g. macOS arch / deployment target)
+    if extra_cmake_flags:
+        invocation.extend(extra_cmake_flags)
 
     cxx_options = dict()
     if args.iwyu:
@@ -346,8 +381,10 @@ def main(args, parser):
     defines.update(get_compiler(args, parser))
     defines.update(get_install_prefixes(args))
 
+    extra_cmake_flags = get_macos_options(args)
+
     bindir = bindir_creation(args, defines)
-    invoke_cmake(args, bindir, defines, options)
+    invoke_cmake(args, bindir, defines, options, extra_cmake_flags)
 
 
 def parse_args():
@@ -417,6 +454,20 @@ def parse_args():
                      help="emit clang-tidy analysis messages")
     cli.add_argument("--download-nyan", action="store_true",
                      help="enable automatic download of the nyan project")
+    cli.add_argument("--target-arch",
+                     choices=["native", "arm64", "x86_64", "universal2"],
+                     default=getenv("TARGET_ARCH", default="native"),
+                     help=("(macOS only) target CPU architecture. "
+                           "'native' builds for the host machine arch. "
+                           "'arm64' targets Apple Silicon. "
+                           "'x86_64' targets Intel. "
+                           "'universal2' produces a fat binary for both."))
+    cli.add_argument("--macos-deployment-target",
+                     default=getenv("MACOSX_DEPLOYMENT_TARGET", default="13.0"),
+                     metavar="VERSION",
+                     help=("(macOS only) minimum macOS version to target. "
+                           "Passed as MACOSX_DEPLOYMENT_TARGET to cmake. "
+                           "Default: 13.0 (Ventura)."))
 
     # arguments after -- are used as raw cmake args
     cli.add_argument('raw_cmake_args', nargs=argparse.REMAINDER, default=[],
