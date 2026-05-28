@@ -106,7 +106,9 @@ def tests_cpp():
     yield "openage::curve::tests::container"
     yield "openage::curve::tests::curve_types"
     yield "openage::event::tests::eventtrigger"
+    yield "openage::gamestate::tests::next_command_conditions"
     yield "openage::gamestate::tests::player_resources"
+    yield "openage::gamestate::tests::send_command_variants"
 
 
 def demos_cpp():

@@ -94,7 +94,11 @@ static const auto ACTIVITY_CONDITIONS = datastructure::create_const_map<std::str
 	std::pair("engine.util.activity.condition.type.NextCommandIdle",
               std::function(gamestate::activity::next_command_idle)),
 	std::pair("engine.util.activity.condition.type.NextCommandMove",
-              std::function(gamestate::activity::next_command_move)));
+              std::function(gamestate::activity::next_command_move)),
+	std::pair("engine.util.activity.condition.type.NextCommandAttack",
+              std::function(gamestate::activity::next_command_attack)),
+	std::pair("engine.util.activity.condition.type.NextCommandGather",
+              std::function(gamestate::activity::next_command_gather)));
 
 static const auto ACTIVITY_EVENT_PRIMERS = datastructure::create_const_map<std::string, activity::event_primer_t>(
 	std::pair("engine.util.activity.event.type.CommandInQueue",
