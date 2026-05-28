@@ -1,10 +1,13 @@
 add_sources(libopenage
     base_command.cpp
     attack.cpp
+    attack_move.cpp
     custom.cpp
     gather.cpp
+    guard.cpp
     idle.cpp
     move.cpp
+    patrol.cpp
     train.cpp
     types.cpp
 )

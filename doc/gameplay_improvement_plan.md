@@ -114,11 +114,32 @@ These improve the experience once Phase 1 is functional.
 
 ### 2.1 Unit Behaviour
 
-- [ ] Attack-move command: move toward target, attack enemies encountered along the path
-- [ ] Guard / follow command: stay near a target unit and attack threats
-- [ ] Attack stances: aggressive, defensive, stand-ground, no-attack
-- [ ] Auto-attack: units in aggressive stance automatically target nearby enemies
-- [ ] Patrol: cycle between two or more waypoints, auto-attack enemies in range
+**Status:** ✅ Complete
+
+Design: all behaviours follow the existing command+system+activity pattern. A new `Stance`
+internal component (`component_t::STANCE`, `curve::Discrete<stance_t>`) stores the unit's
+combat stance over time; default is AGGRESSIVE. The `Idle` system was extended to accept
+`GameState` and performs an auto-attack scan when the stance permits it.
+
+- [x] **Attack stances** — `stance_t` enum (AGGRESSIVE / DEFENSIVE / STAND_GROUND / NO_ATTACK).
+  `Stance` internal component holds a `curve::Discrete<stance_t>`; all entities get one (default
+  AGGRESSIVE) in `init_components`. `SET_STANCE` command handled directly in `SendCommandHandler`.
+- [x] **Auto-attack** — `Idle::idle` now receives `GameState`; scans for enemies in `max_range × 5`
+  (AGGRESSIVE) or `max_range × 1` (DEFENSIVE / STAND_GROUND) and pushes an `AttackCommand` if one
+  is found. STAND_GROUND and NO_ATTACK are respected.
+- [x] **Attack-move command** — `command_t::ATTACK_MOVE` / `AttackMoveCommand(coord::phys3)` /
+  `AttackMove::attack_move_command` system. Scans for enemies in attack range on each tick;
+  if found pushes `AttackCommand + AttackMoveCommand` (self-re-enqueue); otherwise calls
+  `Move::move_default` and re-enqueues. Activity wires `wait_for_attack_move` the same way as
+  move/gather.
+- [x] **Patrol** — `command_t::PATROL` / `PatrolCommand(from, to)` / `Patrol::patrol_command`.
+  Moves toward `waypoint_to`, swaps waypoints on arrival, scans for enemies on each leg;
+  always self-re-enqueues (until an explicit new command interrupts via the XorEventGate).
+- [x] **Guard / follow** — `command_t::GUARD` / `GuardCommand(entity_id_t)` / `Guard::guard_command`.
+  Follows the target if farther than `GUARD_RADIUS = 2.0`; otherwise scans for enemies in attack
+  range and attacks them. Polls at `GUARD_SCAN_INTERVAL = 0.5 s` when idle. Guard ends naturally
+  when the target entity is destroyed.
+- [x] New unit tests: `stance_component`, `next_command_conditions_extended`
 
 ### 2.2 Pathfinding Improvements
 

@@ -1,4 +1,4 @@
-// Copyright 2025-2025 the openage authors. See copying.md for legal info.
+// Copyright 2025-2026 the openage authors. See copying.md for legal info.
 
 #include "../testing/testing.h"
 
@@ -8,15 +8,20 @@
 
 #include <nyan/nyan.h>
 
+#include "coord/phys.h"
 #include "event/eventhandler.h"
 #include "event/event_loop.h"
 #include "activity/condition/next_command.h"
 #include "component/internal/command_queue.h"
 #include "component/internal/commands/attack.h"
+#include "component/internal/commands/attack_move.h"
 #include "component/internal/commands/gather.h"
+#include "component/internal/commands/guard.h"
 #include "component/internal/commands/idle.h"
+#include "component/internal/commands/patrol.h"
 #include "component/internal/commands/train.h"
 #include "component/internal/ownership.h"
+#include "component/internal/stance.h"
 #include "event/game_over.h"
 #include "event/send_command.h"
 #include "game_entity.h"
@@ -72,6 +77,9 @@ void next_command_conditions() {
 	TESTEQUALS(activity::next_command_attack(t0, entity), false);
 	TESTEQUALS(activity::next_command_gather(t0, entity), false);
 	TESTEQUALS(activity::next_command_train(t0, entity), false);
+	TESTEQUALS(activity::next_command_attack_move(t0, entity), false);
+	TESTEQUALS(activity::next_command_patrol(t0, entity), false);
+	TESTEQUALS(activity::next_command_guard(t0, entity), false);
 }
 
 void send_command_variants() {
@@ -296,6 +304,58 @@ void no_defeat_for_unit_death() {
 	// Destroying the last building via the (id, time) overload defeats the player.
 	state->remove_game_entity(10, t0);
 	TESTEQUALS(p0->get_state() == player_state_t::DEFEATED, true);
+}
+
+void stance_component() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto t0 = time::time_t::from_int(0);
+	auto t1 = time::time_t::from_int(1);
+
+	component::Stance stance{loop};
+	TESTEQUALS(stance.get_stance(t0) == component::stance_t::AGGRESSIVE, true);
+
+	stance.set_stance(t1, component::stance_t::DEFENSIVE);
+	TESTEQUALS(stance.get_stance(t1) == component::stance_t::DEFENSIVE, true);
+	TESTEQUALS(stance.get_stance(t0) == component::stance_t::AGGRESSIVE, true);
+
+	stance.set_stance(t1, component::stance_t::NO_ATTACK);
+	TESTEQUALS(stance.get_stance(t1) == component::stance_t::NO_ATTACK, true);
+
+	stance.set_stance(t1, component::stance_t::STAND_GROUND);
+	TESTEQUALS(stance.get_stance(t1) == component::stance_t::STAND_GROUND, true);
+}
+
+void next_command_conditions_extended() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto entity = make_entity_with_command_queue(loop, 0);
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+	auto t0 = time::time_t::from_int(0);
+
+	// ATTACK_MOVE
+	command_queue->add_command(t0,
+	    std::make_shared<component::command::AttackMoveCommand>(coord::phys3{1, 1, 0}));
+	TESTEQUALS(activity::next_command_attack_move(t0, entity), true);
+	TESTEQUALS(activity::next_command_patrol(t0, entity), false);
+	TESTEQUALS(activity::next_command_guard(t0, entity), false);
+	command_queue->pop_command(t0);
+
+	// PATROL
+	command_queue->add_command(t0,
+	    std::make_shared<component::command::PatrolCommand>(
+	        coord::phys3{0, 0, 0}, coord::phys3{5, 5, 0}));
+	TESTEQUALS(activity::next_command_attack_move(t0, entity), false);
+	TESTEQUALS(activity::next_command_patrol(t0, entity), true);
+	TESTEQUALS(activity::next_command_guard(t0, entity), false);
+	command_queue->pop_command(t0);
+
+	// GUARD
+	command_queue->add_command(t0,
+	    std::make_shared<component::command::GuardCommand>(entity_id_t{99}));
+	TESTEQUALS(activity::next_command_attack_move(t0, entity), false);
+	TESTEQUALS(activity::next_command_patrol(t0, entity), false);
+	TESTEQUALS(activity::next_command_guard(t0, entity), true);
+	command_queue->pop_command(t0);
 }
 
 } // namespace openage::gamestate::tests

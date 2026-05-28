@@ -36,6 +36,7 @@
 #include "gamestate/component/internal/command_queue.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
+#include "gamestate/component/internal/stance.h"
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
@@ -56,17 +57,23 @@ namespace openage::gamestate {
  *
  *                              |----------------------------(new cmd)-----|
  *                              |                                          v
- * Start -> Idle -> Capable? -> Command? -> CmdType? -> Move -> WaitMove -> (loop to idle)
+ * Start -> Idle -> Capable? -> Command? -> CmdType? -> Move       -> WaitMove       -> (loop to idle)
  *                    |           |            |
- *                    |           |            +-> Attack -> Idle (loop)
+ *                    |           |            +-> Attack      -> Idle (loop)
  *                    |           |            |
- *                    |           |            +-> Gather -> WaitGather -> (loop to idle)
+ *                    |           |            +-> Gather      -> WaitGather      -> (loop to idle)
  *                    |           |            |
- *                    |           |            +-> Create -> WaitCreate -> (loop to idle)
+ *                    |           |            +-> Create      -> WaitCreate      -> (loop to idle)
+ *                    |           |            |
+ *                    |           |            +-> AttackMove  -> WaitAttackMove  -> (loop to idle)
+ *                    |           |            |
+ *                    |           |            +-> Patrol      -> WaitPatrol      -> (loop to idle)
+ *                    |           |            |
+ *                    |           |            +-> Guard       -> WaitGuard       -> (loop to idle)
  *                    |           |
  *                    |           +-> WaitForCmd -> CmdType?
  *                    |
- *                    +-> (none of MOVE/ATTACK/GATHER/CREATE) -> End
+ *                    +-> (none of MOVE/ATTACK/GATHER/CREATE/ATTACK_MOVE/PATROL/GUARD) -> End
  *
  * TODO: Replace with config
  */
@@ -86,6 +93,12 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	auto create = std::make_shared<activity::TaskSystemNode>(11, "Create");
 	auto wait_for_create = std::make_shared<activity::XorEventGate>(12);
 	auto end = std::make_shared<activity::EndNode>(13);
+	auto attack_move = std::make_shared<activity::TaskSystemNode>(14, "AttackMove");
+	auto wait_for_attack_move = std::make_shared<activity::XorEventGate>(15);
+	auto patrol = std::make_shared<activity::TaskSystemNode>(16, "Patrol");
+	auto wait_for_patrol = std::make_shared<activity::XorEventGate>(17);
+	auto guard = std::make_shared<activity::TaskSystemNode>(18, "Guard");
+	auto wait_for_guard = std::make_shared<activity::XorEventGate>(19);
 
 	start->add_output(idle);
 
@@ -93,7 +106,7 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	idle->add_output(condition_capable);
 	idle->set_system_id(system::system_id_t::IDLE);
 
-	// Check if entity can move, attack, or gather; end if none
+	// Check if entity can move, attack, gather, or produce; end if none
 	activity::condition_t capable_branch = [](const time::time_t & /* time */,
 	                                          const std::shared_ptr<gamestate::GameEntity> &entity) {
 		return entity->has_component(component::component_t::MOVE)
@@ -111,10 +124,13 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	// Wait for a command, then check its type
 	wait_for_command->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
-	// Route to attack, gather, train, or move based on next command type
+	// Route to specific behaviour based on next command type
 	condition_cmd_type->add_output(attack, gamestate::activity::next_command_attack);
 	condition_cmd_type->add_output(gather, gamestate::activity::next_command_gather);
 	condition_cmd_type->add_output(create, gamestate::activity::next_command_train);
+	condition_cmd_type->add_output(attack_move, gamestate::activity::next_command_attack_move);
+	condition_cmd_type->add_output(patrol, gamestate::activity::next_command_patrol);
+	condition_cmd_type->add_output(guard, gamestate::activity::next_command_guard);
 	condition_cmd_type->set_default(move);
 
 	// Move system node
@@ -148,6 +164,27 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	// interrupt on a new command to re-evaluate
 	wait_for_create->add_output(idle, gamestate::activity::primer_wait);
 	wait_for_create->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Attack-move system node: move toward destination, attacking enemies along the way
+	attack_move->add_output(wait_for_attack_move);
+	attack_move->set_system_id(system::system_id_t::ATTACK_MOVE_COMMAND);
+
+	wait_for_attack_move->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_attack_move->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Patrol system node: cycle between waypoints, attacking enemies along the way
+	patrol->add_output(wait_for_patrol);
+	patrol->set_system_id(system::system_id_t::PATROL_COMMAND);
+
+	wait_for_patrol->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_patrol->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Guard system node: follow a target and attack nearby threats
+	guard->add_output(wait_for_guard);
+	guard->set_system_id(system::system_id_t::GUARD_COMMAND);
+
+	wait_for_guard->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_guard->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
 	return std::make_shared<activity::Activity>(0, start, "test");
 }
@@ -207,6 +244,10 @@ void EntityFactory::init_components(const std::shared_ptr<openage::event::EventL
 
 	auto command_queue = std::make_shared<component::CommandQueue>(loop);
 	entity->add_component(command_queue);
+
+	// All entities start with AGGRESSIVE stance; can be changed via SET_STANCE command.
+	auto stance = std::make_shared<component::Stance>(loop);
+	entity->add_component(stance);
 
 	auto nyan_obj = owner_db_view->get_object(nyan_entity);
 	nyan::set_t abilities = nyan_obj.get_set("GameEntity.abilities");

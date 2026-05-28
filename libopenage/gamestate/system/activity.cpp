@@ -20,10 +20,13 @@
 #include "gamestate/component/internal/activity.h"
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
+#include "gamestate/system/attack_move.h"
+#include "gamestate/system/guard.h"
 #include "gamestate/system/idle.h"
 #include "gamestate/system/move.h"
 #include "gamestate/system/attack.h"
 #include "gamestate/system/gather.h"
+#include "gamestate/system/patrol.h"
 #include "gamestate/system/production.h"
 #include "util/fixed_point.h"
 
@@ -131,7 +134,7 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
                                               system_id_t system_id) {
 	switch (system_id) {
 	case system_id_t::IDLE:
-		return Idle::idle(entity, start_time);
+		return Idle::idle(entity, state, start_time);
 		break;
 	case system_id_t::MOVE_COMMAND:
 		return Move::move_command(entity, state, start_time);
@@ -147,11 +150,20 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
 		// ATTACK_DEFAULT requires explicit target — not dispatched via activity
 		return time::time_t::from_int(0);
 		break;
+	case system_id_t::ATTACK_MOVE_COMMAND:
+		return AttackMove::attack_move_command(entity, state, start_time);
+		break;
 	case system_id_t::GATHER_COMMAND:
 		return Gather::gather_command(entity, state, start_time);
 		break;
 	case system_id_t::TRAIN_COMMAND:
 		return Production::train_command(entity, loop, state, start_time);
+		break;
+	case system_id_t::PATROL_COMMAND:
+		return Patrol::patrol_command(entity, state, start_time);
+		break;
+	case system_id_t::GUARD_COMMAND:
+		return Guard::guard_command(entity, state, start_time);
 		break;
 	default:
 		throw Error{ERR << "Unhandled subsystem " << static_cast<int>(system_id)};

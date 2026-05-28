@@ -68,5 +68,38 @@ bool next_command_gather(const time::time_t &time,
 bool next_command_train(const time::time_t &time,
                         const std::shared_ptr<gamestate::GameEntity> &entity);
 
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
+ * @return true if the entity has an attack-move command next in the queue, false otherwise.
+ */
+bool next_command_attack_move(const time::time_t &time,
+                              const std::shared_ptr<gamestate::GameEntity> &entity);
+
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
+ * @return true if the entity has a patrol command next in the queue, false otherwise.
+ */
+bool next_command_patrol(const time::time_t &time,
+                         const std::shared_ptr<gamestate::GameEntity> &entity);
+
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
+ * @return true if the entity has a guard command next in the queue, false otherwise.
+ */
+bool next_command_guard(const time::time_t &time,
+                        const std::shared_ptr<gamestate::GameEntity> &entity);
+
 } // namespace activity
 } // namespace openage::gamestate
