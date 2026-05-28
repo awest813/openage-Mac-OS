@@ -143,10 +143,10 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 
 ### 2.2 Pathfinding Improvements
 
-- [ ] Collision avoidance: prevent multiple units occupying the same tile
-- [ ] Formation movement: move a group while preserving relative positions
-- [ ] Hazard cost modifier: avoid tiles in range of enemy towers/castles
-- [ ] Blocked-path re-routing: if the path becomes blocked, recalculate
+- 🚧 Collision avoidance: prevent multiple units occupying the same tile *(data layer added to GameState; spatial enforcement not yet active in pathfinder)*
+- ✅ Formation movement: move a group while preserving relative positions
+- 🚧 Hazard cost modifier: avoid tiles in range of enemy towers/castles *(requires per-layer cost fields in flow-field pathfinder; partially planned)*
+- ✅ Blocked-path re-routing: if the path becomes blocked, recalculate
 
 ### 2.3 Interface Improvements
 
@@ -160,9 +160,9 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 
 ### 2.4 Fog of War
 
-- [ ] Track which tiles each player has explored
-- [ ] Track which tiles are currently visible (line-of-sight per unit)
-- [ ] Hide enemy units outside visible tiles
+- ✅ Track which tiles each player has explored (`FogOfWar::explored_tiles`)
+- ✅ Track which tiles are currently visible (line-of-sight per unit) (`FogOfWar::visible_tiles`, `update_visibility`)
+- 🚧 Hide enemy units outside visible tiles (`GameState::is_entity_visible` query implemented; renderer integration pending)
 - [ ] Show last-known position of units that leave vision
 
 ---

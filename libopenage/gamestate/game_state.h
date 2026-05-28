@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "event/state.h"
+#include "gamestate/fog_of_war.h"
 #include "gamestate/player.h"
 #include "gamestate/types.h"
 #include "time/time.h"
@@ -279,6 +280,65 @@ public:
 	const std::shared_ptr<assets::ModManager> &get_mod_manager() const;
 	void set_mod_manager(const std::shared_ptr<assets::ModManager> &mod_manager);
 
+	// -----------------------------------------------------------------------
+	// Fog of War
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Update the visible tile set for a player around a single unit position.
+	 *
+	 * Should be called once per living unit each tick, after
+	 * flush_player_visibility() has been called to reset the set.
+	 *
+	 * @param player      Player whose visibility is updated.
+	 * @param center      Tile at the centre of the unit's sight cone.
+	 * @param sight_range Chebyshev radius in tiles.
+	 */
+	void update_player_visibility(player_id_t player,
+	                              coord::tile center,
+	                              int sight_range);
+
+	/**
+	 * Clear the currently-visible tile set for a player so it can be rebuilt
+	 * for the next tick.
+	 *
+	 * @param player Player whose visible set is cleared.
+	 */
+	void flush_player_visibility(player_id_t player);
+
+	/**
+	 * Check whether a tile is currently visible to a player.
+	 *
+	 * @param player Player performing the query.
+	 * @param tile   Tile to test.
+	 * @return true if the tile is in the player's current line of sight.
+	 */
+	bool is_tile_visible(player_id_t player, coord::tile tile) const;
+
+	/**
+	 * Check whether a tile has ever been explored by a player.
+	 *
+	 * @param player Player performing the query.
+	 * @param tile   Tile to test.
+	 * @return true if the tile has been seen at least once.
+	 */
+	bool is_tile_explored(player_id_t player, coord::tile tile) const;
+
+	/**
+	 * Check whether a game entity is currently visible to the observer player.
+	 *
+	 * The entity's position at \p time is converted to a tile and compared
+	 * against the observer's current visible tile set.
+	 *
+	 * @param observer  Player performing the query.
+	 * @param entity_id ID of the entity being checked.
+	 * @param time      Simulation time at which to sample the entity's position.
+	 * @return true if the entity's tile is visible to the observer.
+	 */
+	bool is_entity_visible(player_id_t observer,
+	                       entity_id_t entity_id,
+	                       const time::time_t &time) const;
+
 private:
 	/**
 	 * Check whether a player has been defeated (lost all buildings) after the
@@ -328,6 +388,11 @@ private:
 	 * simulation and is cleaned up when an entity is destroyed.
 	 */
 	std::unordered_map<entity_id_t, CarriedResource> carried_resources;
+
+	/**
+	 * Fog-of-war state for all players.
+	 */
+	FogOfWar fog_of_war;
 
 	/**
 	 * TODO: Only for testing

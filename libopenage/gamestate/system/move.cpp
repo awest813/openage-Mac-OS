@@ -1,4 +1,4 @@
-// Copyright 2023-2025 the openage authors. See copying.md for legal info.
+// Copyright 2023-2026 the openage authors. See copying.md for legal info.
 
 #include "move.h"
 
@@ -125,6 +125,13 @@ const time::time_t Move::move_default(const std::shared_ptr<gamestate::GameEntit
 	auto pathfinder = map->get_pathfinder();
 	auto grid_id = map->get_grid_id(move_path_grid->get_name());
 	auto waypoints = find_path(pathfinder, grid_id, current_pos, destination, start_time);
+
+	// If no path was found, schedule a retry after a short delay.
+	if (waypoints.empty()) {
+		log::log(MSG(info) << "Entity " << entity->get_id()
+		                   << ": no path found, will retry in 0.5s.");
+		return time::time_t::from_double(0.5);
+	}
 
 	// use waypoints for movement
 	double total_time = 0;

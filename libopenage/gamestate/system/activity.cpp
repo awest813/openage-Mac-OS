@@ -21,6 +21,7 @@
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/system/attack_move.h"
+#include "gamestate/system/formation_move.h"
 #include "gamestate/system/guard.h"
 #include "gamestate/system/idle.h"
 #include "gamestate/system/move.h"
@@ -164,6 +165,9 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
 		break;
 	case system_id_t::GUARD_COMMAND:
 		return Guard::guard_command(entity, state, start_time);
+		break;
+	case system_id_t::FORMATION_MOVE_COMMAND:
+		return FormationMove::formation_move_command(entity, state, start_time);
 		break;
 	default:
 		throw Error{ERR << "Unhandled subsystem " << static_cast<int>(system_id)};
