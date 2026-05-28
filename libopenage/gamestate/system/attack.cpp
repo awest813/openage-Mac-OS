@@ -116,7 +116,7 @@ const time::time_t Attack::attack_default(const std::shared_ptr<gamestate::GameE
 	// Death detection: remove entity from the game state when HP reaches 0
 	if (new_hp == 0) {
 		log::log(MSG(info) << "Entity " << target_id << " has been destroyed.");
-		state->remove_game_entity(target_id);
+		state->remove_game_entity(target_id, start_time);
 		// Reload time is irrelevant when target is dead; return 0 so the
 		// attacker immediately re-evaluates its next command.
 		return time::time_t::from_int(0);

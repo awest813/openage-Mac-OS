@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "error/error.h"
+#include "event/event_loop.h"
 #include "log/message.h"
 
 #include "gamestate/activity/node.h"
@@ -19,10 +20,14 @@
 #include "gamestate/component/internal/activity.h"
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
+#include "gamestate/system/attack_move.h"
+#include "gamestate/system/guard.h"
 #include "gamestate/system/idle.h"
 #include "gamestate/system/move.h"
 #include "gamestate/system/attack.h"
 #include "gamestate/system/gather.h"
+#include "gamestate/system/patrol.h"
+#include "gamestate/system/production.h"
 #include "util/fixed_point.h"
 
 
@@ -81,7 +86,7 @@ void Activity::advance(const time::time_t &start_time,
 		case activity::node_t::TASK_SYSTEM: {
 			auto node = std::static_pointer_cast<activity::TaskSystemNode>(current_node);
 			auto task = node->get_system_id();
-			event_wait_time = Activity::handle_subsystem(start_time, entity, state, task);
+			event_wait_time = Activity::handle_subsystem(start_time, entity, loop, state, task);
 			auto next_id = node->get_next();
 			current_node = node->next(next_id);
 		} break;
@@ -124,11 +129,12 @@ void Activity::advance(const time::time_t &start_time,
 
 const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
                                               const std::shared_ptr<gamestate::GameEntity> &entity,
+                                              const std::shared_ptr<openage::event::EventLoop> &loop,
                                               const std::shared_ptr<openage::gamestate::GameState> &state,
                                               system_id_t system_id) {
 	switch (system_id) {
 	case system_id_t::IDLE:
-		return Idle::idle(entity, start_time);
+		return Idle::idle(entity, state, start_time);
 		break;
 	case system_id_t::MOVE_COMMAND:
 		return Move::move_command(entity, state, start_time);
@@ -144,8 +150,20 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
 		// ATTACK_DEFAULT requires explicit target — not dispatched via activity
 		return time::time_t::from_int(0);
 		break;
+	case system_id_t::ATTACK_MOVE_COMMAND:
+		return AttackMove::attack_move_command(entity, state, start_time);
+		break;
 	case system_id_t::GATHER_COMMAND:
 		return Gather::gather_command(entity, state, start_time);
+		break;
+	case system_id_t::TRAIN_COMMAND:
+		return Production::train_command(entity, loop, state, start_time);
+		break;
+	case system_id_t::PATROL_COMMAND:
+		return Patrol::patrol_command(entity, state, start_time);
+		break;
+	case system_id_t::GUARD_COMMAND:
+		return Guard::guard_command(entity, state, start_time);
 		break;
 	default:
 		throw Error{ERR << "Unhandled subsystem " << static_cast<int>(system_id)};

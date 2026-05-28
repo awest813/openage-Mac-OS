@@ -64,6 +64,14 @@ void Player::add_resource(const time::time_t &time,
 	it->second->set_last(time, current + amount);
 }
 
+player_state_t Player::get_state() const {
+	return this->state;
+}
+
+void Player::set_state(player_state_t new_state) {
+	this->state = new_state;
+}
+
 void Player::set_id(entity_id_t id) {
 	this->id = id;
 }

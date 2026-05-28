@@ -36,7 +36,9 @@ static const auto ABILITY_DEFS = datastructure::create_const_map<ability_t, nyan
 	std::pair(ability_t::ATTACK,
               nyan::ValueHolder(std::make_shared<nyan::ObjectValue>("engine.ability.type.Attack"))),
 	std::pair(ability_t::GATHER,
-              nyan::ValueHolder(std::make_shared<nyan::ObjectValue>("engine.ability.type.Gather"))));
+              nyan::ValueHolder(std::make_shared<nyan::ObjectValue>("engine.ability.type.Gather"))),
+	std::pair(ability_t::CREATE,
+              nyan::ValueHolder(std::make_shared<nyan::ObjectValue>("engine.ability.type.Create"))));
 
 /**
  * Maps internal property types to nyan API values.
@@ -83,7 +85,9 @@ static const auto ACTIVITY_TASK_SYSTEM_DEFS = datastructure::create_const_map<st
 	std::pair("engine.ability.type.Attack",
               system::system_id_t::ATTACK_COMMAND),
 	std::pair("engine.ability.type.Gather",
-              system::system_id_t::GATHER_COMMAND));
+              system::system_id_t::GATHER_COMMAND),
+	std::pair("engine.ability.type.Create",
+              system::system_id_t::TRAIN_COMMAND));
 
 /**
  * Maps API activity condition types to engine condition types.
@@ -98,7 +102,9 @@ static const auto ACTIVITY_CONDITIONS = datastructure::create_const_map<std::str
 	std::pair("engine.util.activity.condition.type.NextCommandAttack",
               std::function(gamestate::activity::next_command_attack)),
 	std::pair("engine.util.activity.condition.type.NextCommandGather",
-              std::function(gamestate::activity::next_command_gather)));
+              std::function(gamestate::activity::next_command_gather)),
+	std::pair("engine.util.activity.condition.type.NextCommandTrain",
+	              std::function(gamestate::activity::next_command_train)));
 
 static const auto ACTIVITY_EVENT_PRIMERS = datastructure::create_const_map<std::string, activity::event_primer_t>(
 	std::pair("engine.util.activity.event.type.CommandInQueue",

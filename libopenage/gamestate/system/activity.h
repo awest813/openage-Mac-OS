@@ -47,8 +47,12 @@ private:
 	 *
 	 * @return Runtime of the change in simulation time.
 	 */
+	/**
+	 * @param loop Event loop (passed through to systems that schedule future events).
+	 */
 	static const time::time_t handle_subsystem(const time::time_t &start_time,
 	                                           const std::shared_ptr<gamestate::GameEntity> &entity,
+	                                           const std::shared_ptr<openage::event::EventLoop> &loop,
 	                                           const std::shared_ptr<openage::gamestate::GameState> &state,
 	                                           system_id_t system_id);
 };

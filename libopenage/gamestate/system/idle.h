@@ -1,4 +1,4 @@
-// Copyright 2023-2024 the openage authors. See copying.md for legal info.
+// Copyright 2023-2026 the openage authors. See copying.md for legal info.
 
 #pragma once
 
@@ -9,6 +9,7 @@
 
 namespace openage::gamestate {
 class GameEntity;
+class GameState;
 
 namespace system {
 
@@ -17,15 +18,18 @@ public:
 	/**
 	 * Let a game entity idle.
 	 *
-	 * This does not change the state of a unit. It only changes its animation and
-	 * sounds.
+	 * Plays the idle animation. If the entity has a STANCE component that
+	 * allows auto-attack (AGGRESSIVE or DEFENSIVE), scans nearby enemies and
+	 * pushes an ATTACK command if one is in range.
 	 *
-	 * @param entity Game entity.
+	 * @param entity     Game entity.
+	 * @param state      Current game state (used for enemy scanning).
 	 * @param start_time Start time of change.
 	 *
-	 * @return Runtime of the change in simulation time.
+	 * @return Runtime of the change in simulation time (always 0).
 	 */
 	static const time::time_t idle(const std::shared_ptr<gamestate::GameEntity> &entity,
+	                               const std::shared_ptr<openage::gamestate::GameState> &state,
 	                               const time::time_t &start_time);
 };
 

@@ -2,14 +2,20 @@
 
 #include "send_command.h"
 
+#include <string>
 #include <vector>
 
 #include "coord/phys.h"
 #include "gamestate/component/internal/command_queue.h"
 #include "gamestate/component/internal/commands/attack.h"
+#include "gamestate/component/internal/commands/attack_move.h"
 #include "gamestate/component/internal/commands/gather.h"
+#include "gamestate/component/internal/commands/guard.h"
 #include "gamestate/component/internal/commands/idle.h"
 #include "gamestate/component/internal/commands/move.h"
+#include "gamestate/component/internal/commands/patrol.h"
+#include "gamestate/component/internal/commands/train.h"
+#include "gamestate/component/internal/stance.h"
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
@@ -90,6 +96,44 @@ void SendCommandHandler::invoke(openage::event::EventLoop & /* loop */,
 					params.get("target_entity_id",
 			                   gamestate::entity_id_t{})));
 			break;
+		case component::command::command_t::TRAIN:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::TrainCommand>(
+					params.get("game_entity",
+			                   std::string{})));
+			break;
+		case component::command::command_t::ATTACK_MOVE:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::AttackMoveCommand>(
+					params.get("target",
+			                   coord::phys3{0, 0, 0})));
+			break;
+		case component::command::command_t::PATROL:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::PatrolCommand>(
+					params.get("waypoint_from", coord::phys3{0, 0, 0}),
+					params.get("waypoint_to",   coord::phys3{0, 0, 0})));
+			break;
+		case component::command::command_t::GUARD:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::GuardCommand>(
+					params.get("target_entity_id",
+			                   gamestate::entity_id_t{})));
+			break;
+		case component::command::command_t::SET_STANCE: {
+			// SET_STANCE is immediate: update the Stance component directly.
+			if (entity->has_component(component::component_t::STANCE)) {
+				auto stance_comp = std::dynamic_pointer_cast<component::Stance>(
+					entity->get_component(component::component_t::STANCE));
+				stance_comp->set_stance(time,
+				                        params.get("stance",
+				                                   component::stance_t::AGGRESSIVE));
+			}
+		} break;
 		default:
 			break;
 		}

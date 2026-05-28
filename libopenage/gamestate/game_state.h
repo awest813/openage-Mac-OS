@@ -1,12 +1,18 @@
-// Copyright 2023-2024 the openage authors. See copying.md for legal info.
+// Copyright 2023-2026 the openage authors. See copying.md for legal info.
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "event/state.h"
+#include "gamestate/player.h"
 #include "gamestate/types.h"
+#include "time/time.h"
 
 
 namespace nyan {
@@ -27,15 +33,60 @@ class EventLoop;
 namespace gamestate {
 class GameEntity;
 class Map;
-class Player;
+
+/**
+ * A pending unit production request created by the Production system.
+ *
+ * Systems cannot reach the EntityFactory directly, so a completed training
+ * action is recorded here. The simulation drains finished requests (those
+ * whose completion time has passed) and spawns the corresponding entity.
+ */
+struct ProductionRequest {
+	/**
+	 * Player that owns (and paid for) the produced entity.
+	 */
+	player_id_t owner;
+
+	/**
+	 * nyan fqon of the game entity to spawn.
+	 */
+	std::string game_entity;
+
+	/**
+	 * Simulation time at which the entity finishes training.
+	 */
+	time::time_t completion_time;
+};
+
+/**
+ * Resources currently carried by a gatherer entity that have not yet been
+ * dropped off at a drop-off building.
+ */
+struct CarriedResource {
+	/**
+	 * Resource type identifier (nyan fqon).
+	 */
+	std::string resource_type;
+
+	/**
+	 * Amount carried.
+	 */
+	int64_t amount;
+};
 
 /**
  * State of the game.
  *
  * Contains index structures for looking up game entities and other
  * information for the current game.
+ *
+ * NOTE: GameState must always be constructed via std::make_shared. It derives
+ * from std::enable_shared_from_this and uses shared_from_this() (e.g. when
+ * firing game-over events); a non-shared construction would throw
+ * std::bad_weak_ptr.
  */
-class GameState : public openage::event::State {
+class GameState : public openage::event::State,
+                  public std::enable_shared_from_this<GameState> {
 public:
 	/**
 	 * Create a new game state.
@@ -65,11 +116,23 @@ public:
 	/**
 	 * Remove a game entity from the index.
 	 *
-	 * Called when an entity is destroyed (e.g. HP reaches 0).
+	 * Called when an entity is destroyed (e.g. HP reaches 0) without
+	 * defeat checking (e.g. resource depletion).
 	 *
 	 * @param id ID of the game entity to remove.
 	 */
 	void remove_game_entity(entity_id_t id);
+
+	/**
+	 * Remove a game entity from the index and check whether its owner
+	 * has been defeated (lost all buildings).
+	 *
+	 * Use this overload when destroying combat or production entities.
+	 *
+	 * @param id   ID of the game entity to remove.
+	 * @param time Simulation time of the destruction.
+	 */
+	void remove_game_entity(entity_id_t id, const time::time_t &time);
 
 	/**
 	 * Add a new player to the index.
@@ -111,11 +174,104 @@ public:
 	const std::shared_ptr<Player> &get_player(player_id_t id) const;
 
 	/**
+	 * Check whether a player with the given ID exists.
+	 *
+	 * @param id ID of the player.
+	 *
+	 * @return true if the player exists, false otherwise.
+	 */
+	bool has_player(player_id_t id) const;
+
+	/**
+	 * Get all players in the current game.
+	 *
+	 * @return Map of all players by their ID.
+	 */
+	const std::unordered_map<player_id_t, std::shared_ptr<Player>> &get_players() const;
+
+	/**
+	 * Count how many players are still in the ALIVE state.
+	 *
+	 * @return Number of alive players.
+	 */
+	size_t get_alive_player_count() const;
+
+	/**
 	 * Get the map of the current game.
 	 *
 	 * @return Map object.
 	 */
 	const std::shared_ptr<Map> &get_map() const;
+
+	/**
+	 * Queue a unit production request.
+	 *
+	 * Called by the Production system once a unit has been paid for and its
+	 * training timer started. The request is fulfilled (the entity spawned)
+	 * by the simulation once its completion time has passed.
+	 *
+	 * @param owner           Player that owns the produced entity.
+	 * @param game_entity     nyan fqon of the game entity to spawn.
+	 * @param completion_time Simulation time at which training finishes.
+	 */
+	void request_production(player_id_t owner,
+	                        const std::string &game_entity,
+	                        const time::time_t &completion_time);
+
+	/**
+	 * Remove and return all production requests that have finished by the
+	 * given time.
+	 *
+	 * @param time Current simulation time.
+	 *
+	 * @return Completed production requests (in insertion order).
+	 */
+	std::vector<ProductionRequest> take_completed_productions(const time::time_t &time);
+
+	/**
+	 * Get the number of production requests still pending.
+	 *
+	 * @return Number of queued (unfinished and finished-but-undrained) requests.
+	 */
+	size_t pending_production_count() const;
+
+	/**
+	 * Check whether a gatherer entity is currently carrying resources that have
+	 * not yet been dropped off.
+	 *
+	 * @param id Gatherer entity ID.
+	 *
+	 * @return true if the entity is carrying resources, false otherwise.
+	 */
+	bool is_carrying_resources(entity_id_t id) const;
+
+	/**
+	 * Get the resources carried by a gatherer entity.
+	 *
+	 * @param id Gatherer entity ID.
+	 *
+	 * @return Carried resource, or std::nullopt if the entity carries nothing.
+	 */
+	std::optional<CarriedResource> get_carried_resource(entity_id_t id) const;
+
+	/**
+	 * Record the resources carried by a gatherer entity.
+	 *
+	 * @param id            Gatherer entity ID.
+	 * @param resource_type Resource type identifier (nyan fqon).
+	 * @param amount        Amount carried.
+	 */
+	void set_carried_resource(entity_id_t id,
+	                          const std::string &resource_type,
+	                          int64_t amount);
+
+	/**
+	 * Clear any resources carried by a gatherer entity (e.g. after drop-off
+	 * or when the entity is destroyed).
+	 *
+	 * @param id Gatherer entity ID.
+	 */
+	void clear_carried_resource(entity_id_t id);
 
 	/**
 	 * TODO: Only for testing.
@@ -124,6 +280,22 @@ public:
 	void set_mod_manager(const std::shared_ptr<assets::ModManager> &mod_manager);
 
 private:
+	/**
+	 * Check whether a player has been defeated (lost all buildings) after the
+	 * entity with the given ID was removed.  If defeated, mark the player and
+	 * check whether a sole survivor has won the game.  Fires
+	 * "game.player_defeated" and "game.game_over" events as appropriate.
+	 *
+	 * @param owner_id ID of the player whose entity was just removed.
+	 * @param time     Simulation time of the destruction.
+	 */
+	void check_defeat(player_id_t owner_id, const time::time_t &time);
+
+	/**
+	 * Event loop — used to fire player-defeated and game-over events.
+	 */
+	std::shared_ptr<openage::event::EventLoop> event_loop;
+
 	/**
 	 * View for the nyan game data database.
 	 */
@@ -143,6 +315,19 @@ private:
 	 * Map of the current game.
 	 */
 	std::shared_ptr<Map> map;
+
+	/**
+	 * Pending unit production requests, ordered by insertion.
+	 */
+	std::vector<ProductionRequest> production_requests;
+
+	/**
+	 * Resources carried by gatherer entities, keyed by entity ID.
+	 *
+	 * Part of the game state (rather than a global) so it is deterministic per
+	 * simulation and is cleaned up when an entity is destroyed.
+	 */
+	std::unordered_map<entity_id_t, CarriedResource> carried_resources;
 
 	/**
 	 * TODO: Only for testing

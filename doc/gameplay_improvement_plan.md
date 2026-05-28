@@ -44,21 +44,67 @@ What is missing is the act of dealing damage.
 
 ### 1.3 Unit Production
 
-**Status:** ☐ Not started
+**Status:** 🚧 In progress
 
-- [ ] Add `TRAIN` command type for producing units from buildings
+Design: training is modelled on the existing command + system pattern. A
+producing entity (e.g. a building) carries a `Create` API component wrapping the
+nyan `engine.ability.type.Create` ability. The ability holds a set of
+`CreatableGameEntity` objects, each with a `game_entity` (the unit to spawn), a
+`creation_time`, and a resource cost (`cost_resource` + `cost_amount`).
+
+A `TRAIN` command carries the fqon of the unit to produce. The `Production`
+system finds the matching creatable, verifies the owner can afford it, deducts
+the cost from the player's resources, and schedules a `"game.spawn_production"`
+event at the completion time. Because systems cannot reach the `EntityFactory`,
+the actual spawn happens in `SpawnProductionHandler` when that event fires. The
+`GameState` production-request queue (`request_production` /
+`take_completed_productions`) is kept as a bounded "in-progress production" view
+for queries/UI and tests, drained as units finish.
+
+- [x] Add `TRAIN` command type and `TrainCommand` (carries the unit fqon)
+- [x] Add `CREATE` component type and `Create` API component (creatables, cost, build time)
+- [x] Add `TRAIN_COMMAND` system id and `next_command_train` condition
+- [x] Resource cost check before queuing; deduct resources on train start
+- [x] `Production` system: validate creatable, check/deduct cost, queue timed request
+- [x] Timed production request queue on `GameState` (`request_production` / `take_completed_productions`)
+- [x] Wire `Create` into the entity factory, activity graph, and `send_command`
+- [x] Drain completed production requests: `Production::train_command` fires a `"game.spawn_production"` event at `completion_time`; `SpawnProductionHandler` (registered in the simulation) creates and adds the entity at the producer's position when the event fires
 - [ ] Add `BUILD` command type for placing new buildings
-- [ ] Queue-based training: buildings hold a production queue with timers
-- [ ] Resource cost check before queuing; deduct resources on train start
-- [ ] Spawn finished unit at rally point via the existing `Spawner`
 
 ### 1.4 Win / Loss Conditions
 
-**Status:** ☐ Not started
+**Status:** ✅ Complete
 
-- [ ] Add a `Player` state flag (alive / defeated / winner)
-- [ ] Defeat a player when their Town Center (or last building) is destroyed
-- [ ] Broadcast game-over event to all connected clients/UI
+- [x] Add `player_state_t` enum (ALIVE / DEFEATED / WINNER) and `get_state()` / `set_state()` to `Player`
+- [x] Defeat a player when their last building is destroyed: `GameState::remove_game_entity(id, time)` detects building death (owned entity without MOVE component) and calls `check_defeat`
+- [x] `check_defeat` marks the player DEFEATED, then scans for a sole remaining alive player and marks them WINNER
+- [x] Broadcast: `GameState` fires `"game.player_defeated"` and `"game.game_over"` events through the stored event loop; `PlayerDefeatedHandler` and `GameOverHandler` log the outcome (future: UI overlay, network broadcast)
+
+### 1.5 Phase 1 Audit & Polish
+
+**Status:** ✅ Complete
+
+A correctness pass over all of Phase 1 fixed two leaks and several edge cases:
+
+- [x] **Carried-resource state moved off the global static** — `gather.cpp` used a
+  file-scope `std::unordered_map` + mutex for carried cargo, which leaked when a
+  carrying gatherer died and broke determinism across simulations. Moved into
+  `GameState` (`is_/get_/set_/clear_carried_resource`) and cleared in
+  `remove_game_entity`.
+- [x] **Production queue no longer grows unbounded** — `production_requests` was
+  appended on every train but never drained in the real flow (the spawn event
+  did the work). `SpawnProductionHandler` now drains completed requests, keeping
+  the queue as an accurate bounded "in-progress production" view.
+- [x] **Graceful unknown-owner handling** — gather drop-off and `Production` now
+  guard with `GameState::has_player` instead of letting `get_player` throw out of
+  system dispatch.
+- [x] **Sole-survivor / mutual defeat** — `check_defeat` now fires `game.game_over`
+  for `alive_count <= 1` (with a `has_winner` flag) instead of only the exactly-one
+  case.
+- [x] Documented the building heuristic (`OWNERSHIP` + no `MOVE`) as a TODO pending
+  a real unit/building type system, and the `make_shared` requirement on `GameState`.
+- [x] New regression tests: `carried_resources_lifecycle`; defeat tests register the
+  game-over handlers (these `create_event` paths would otherwise throw).
 
 ---
 
@@ -68,11 +114,32 @@ These improve the experience once Phase 1 is functional.
 
 ### 2.1 Unit Behaviour
 
-- [ ] Attack-move command: move toward target, attack enemies encountered along the path
-- [ ] Guard / follow command: stay near a target unit and attack threats
-- [ ] Attack stances: aggressive, defensive, stand-ground, no-attack
-- [ ] Auto-attack: units in aggressive stance automatically target nearby enemies
-- [ ] Patrol: cycle between two or more waypoints, auto-attack enemies in range
+**Status:** ✅ Complete
+
+Design: all behaviours follow the existing command+system+activity pattern. A new `Stance`
+internal component (`component_t::STANCE`, `curve::Discrete<stance_t>`) stores the unit's
+combat stance over time; default is AGGRESSIVE. The `Idle` system was extended to accept
+`GameState` and performs an auto-attack scan when the stance permits it.
+
+- [x] **Attack stances** — `stance_t` enum (AGGRESSIVE / DEFENSIVE / STAND_GROUND / NO_ATTACK).
+  `Stance` internal component holds a `curve::Discrete<stance_t>`; all entities get one (default
+  AGGRESSIVE) in `init_components`. `SET_STANCE` command handled directly in `SendCommandHandler`.
+- [x] **Auto-attack** — `Idle::idle` now receives `GameState`; scans for enemies in `max_range × 5`
+  (AGGRESSIVE) or `max_range × 1` (DEFENSIVE / STAND_GROUND) and pushes an `AttackCommand` if one
+  is found. STAND_GROUND and NO_ATTACK are respected.
+- [x] **Attack-move command** — `command_t::ATTACK_MOVE` / `AttackMoveCommand(coord::phys3)` /
+  `AttackMove::attack_move_command` system. Scans for enemies in attack range on each tick;
+  if found pushes `AttackCommand + AttackMoveCommand` (self-re-enqueue); otherwise calls
+  `Move::move_default` and re-enqueues. Activity wires `wait_for_attack_move` the same way as
+  move/gather.
+- [x] **Patrol** — `command_t::PATROL` / `PatrolCommand(from, to)` / `Patrol::patrol_command`.
+  Moves toward `waypoint_to`, swaps waypoints on arrival, scans for enemies on each leg;
+  always self-re-enqueues (until an explicit new command interrupts via the XorEventGate).
+- [x] **Guard / follow** — `command_t::GUARD` / `GuardCommand(entity_id_t)` / `Guard::guard_command`.
+  Follows the target if farther than `GUARD_RADIUS = 2.0`; otherwise scans for enemies in attack
+  range and attacks them. Polls at `GUARD_SCAN_INTERVAL = 0.5 s` when idle. Guard ends naturally
+  when the target entity is destroyed.
+- [x] New unit tests: `stance_component`, `next_command_conditions_extended`
 
 ### 2.2 Pathfinding Improvements
 
