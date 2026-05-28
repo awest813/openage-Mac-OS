@@ -74,6 +74,17 @@ bool next_command_train(const time::time_t &time,
  * @param time Time when the condition is checked.
  * @param entity Game entity.
  *
+ * @return true if the entity has a build command next in the queue, false otherwise.
+ */
+bool next_command_build(const time::time_t &time,
+                        const std::shared_ptr<gamestate::GameEntity> &entity);
+
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
  * @return true if the entity has an attack-move command next in the queue, false otherwise.
  */
 bool next_command_attack_move(const time::time_t &time,

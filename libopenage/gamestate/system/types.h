@@ -24,6 +24,8 @@ enum class system_id_t {
 
 	TRAIN_COMMAND,
 
+	BUILD_COMMAND,
+
 	PATROL_COMMAND,
 
 	GUARD_COMMAND,

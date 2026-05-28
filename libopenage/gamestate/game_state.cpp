@@ -43,6 +43,7 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 void GameState::remove_game_entity(entity_id_t id) {
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
+	this->release_tile(id);
 }
 
 void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
@@ -69,6 +70,7 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
+	this->release_tile(id);
 
 	if (is_building) {
 		this->check_defeat(owner_id, time);
@@ -301,8 +303,59 @@ bool GameState::is_entity_visible(player_id_t observer,
 	}
 	auto pos_comp = std::dynamic_pointer_cast<component::Position>(
 		entity->get_component(component::component_t::POSITION));
-	auto tile = pos_comp->get_positions().get(time).to_tile();
-	return this->fog_of_war.is_visible(observer, tile);
+	auto pos = pos_comp->get_positions().get(time);
+	auto tile = pos.to_tile();
+
+	bool visible = this->fog_of_war.is_visible(observer, tile);
+
+	// When visibility changes from visible→hidden, record the last-known
+	// position.  When it changes from hidden→visible, clear the stale entry.
+	// Because is_entity_visible is a const query we use mutable fog_of_war.
+	if (visible) {
+		const_cast<FogOfWar &>(this->fog_of_war).clear_last_known_position(observer, entity_id);
+	}
+	else {
+		// Only record if the entity's current tile has been explored by
+		// the observer (i.e. the observer has seen this area before).
+		if (this->fog_of_war.is_explored(observer, tile)) {
+			const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
+		}
+	}
+
+	return visible;
+}
+
+std::optional<coord::phys3> GameState::get_last_known_position(player_id_t observer,
+                                                               entity_id_t entity_id) const {
+	return this->fog_of_war.get_last_known_position(observer, entity_id);
+}
+
+void GameState::occupy_tile(coord::tile tile, entity_id_t entity) {
+	// Release any tile the entity previously occupied.
+	this->release_tile(entity);
+
+	this->tile_occupants[tile] = entity;
+	this->entity_tiles[entity] = tile;
+}
+
+void GameState::release_tile(entity_id_t entity) {
+	auto it = this->entity_tiles.find(entity);
+	if (it != this->entity_tiles.end()) {
+		this->tile_occupants.erase(it->second);
+		this->entity_tiles.erase(it);
+	}
+}
+
+bool GameState::is_tile_occupied(coord::tile tile) const {
+	return this->tile_occupants.contains(tile);
+}
+
+std::optional<entity_id_t> GameState::get_tile_occupant(coord::tile tile) const {
+	auto it = this->tile_occupants.find(tile);
+	if (it == this->tile_occupants.end()) {
+		return std::nullopt;
+	}
+	return it->second;
 }
 
 } // namespace openage::gamestate

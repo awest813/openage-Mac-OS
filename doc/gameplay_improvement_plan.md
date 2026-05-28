@@ -44,7 +44,7 @@ What is missing is the act of dealing damage.
 
 ### 1.3 Unit Production
 
-**Status:** 🚧 In progress
+**Status:** ✅ Complete
 
 Design: training is modelled on the existing command + system pattern. A
 producing entity (e.g. a building) carries a `Create` API component wrapping the
@@ -69,7 +69,7 @@ for queries/UI and tests, drained as units finish.
 - [x] Timed production request queue on `GameState` (`request_production` / `take_completed_productions`)
 - [x] Wire `Create` into the entity factory, activity graph, and `send_command`
 - [x] Drain completed production requests: `Production::train_command` fires a `"game.spawn_production"` event at `completion_time`; `SpawnProductionHandler` (registered in the simulation) creates and adds the entity at the producer's position when the event fires
-- [ ] Add `BUILD` command type for placing new buildings
+- [x] Add `BUILD` command type for placing new buildings
 
 ### 1.4 Win / Loss Conditions
 
@@ -143,7 +143,7 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 
 ### 2.2 Pathfinding Improvements
 
-- 🚧 Collision avoidance: prevent multiple units occupying the same tile *(data layer added to GameState; spatial enforcement not yet active in pathfinder)*
+- ✅ Collision avoidance: tile occupancy tracking in `GameState`; `Move::move_default` checks occupancy and retries when the destination tile is blocked
 - ✅ Formation movement: move a group while preserving relative positions
 - 🚧 Hazard cost modifier: avoid tiles in range of enemy towers/castles *(requires per-layer cost fields in flow-field pathfinder; partially planned)*
 - ✅ Blocked-path re-routing: if the path becomes blocked, recalculate
@@ -163,7 +163,7 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 - ✅ Track which tiles each player has explored (`FogOfWar::explored_tiles`)
 - ✅ Track which tiles are currently visible (line-of-sight per unit) (`FogOfWar::visible_tiles`, `update_visibility`)
 - 🚧 Hide enemy units outside visible tiles (`GameState::is_entity_visible` query implemented; renderer integration pending)
-- [ ] Show last-known position of units that leave vision
+- ✅ Show last-known position of units that leave vision (`FogOfWar::last_known_positions`, `GameState::get_last_known_position`; renderer display pending)
 
 ---
 

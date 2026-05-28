@@ -119,6 +119,9 @@ def tests_cpp():
     yield "openage::gamestate::tests::production_requests"
     yield "openage::gamestate::tests::send_command_variants"
     yield "openage::gamestate::tests::stance_component"
+    yield "openage::gamestate::tests::tile_occupancy"
+    yield "openage::gamestate::tests::last_known_positions"
+    yield "openage::gamestate::tests::next_command_build_test"
 
 
 def demos_cpp():

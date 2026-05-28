@@ -2,6 +2,7 @@ add_sources(libopenage
     activity.cpp
     attack.cpp
     attack_move.cpp
+    build.cpp
     formation_move.cpp
     gather.cpp
     guard.cpp

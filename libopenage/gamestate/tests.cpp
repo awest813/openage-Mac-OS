@@ -16,6 +16,7 @@
 #include "component/internal/command_queue.h"
 #include "component/internal/commands/attack.h"
 #include "component/internal/commands/attack_move.h"
+#include "component/internal/commands/build.h"
 #include "component/internal/commands/formation_move.h"
 #include "component/internal/commands/gather.h"
 #include "component/internal/commands/guard.h"
@@ -436,6 +437,109 @@ void fog_of_war_visibility() {
 	fow.update_visibility(p1, other, 0);
 	TESTEQUALS(fow.is_visible(p1, other), true);
 	TESTEQUALS(fow.is_visible(p0, other), false);
+}
+
+void tile_occupancy() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	coord::tile t0{5, 5};
+	coord::tile t1{6, 6};
+	entity_id_t e0{100};
+	entity_id_t e1{200};
+
+	// Initially no tile is occupied.
+	TESTEQUALS(state->is_tile_occupied(t0), false);
+	TESTEQUALS(state->get_tile_occupant(t0).has_value(), false);
+
+	// Occupy a tile.
+	state->occupy_tile(t0, e0);
+	TESTEQUALS(state->is_tile_occupied(t0), true);
+	TESTEQUALS(state->get_tile_occupant(t0).value(), e0);
+
+	// Other tile still free.
+	TESTEQUALS(state->is_tile_occupied(t1), false);
+
+	// Moving the entity to a new tile releases the old one.
+	state->occupy_tile(t1, e0);
+	TESTEQUALS(state->is_tile_occupied(t0), false);
+	TESTEQUALS(state->is_tile_occupied(t1), true);
+	TESTEQUALS(state->get_tile_occupant(t1).value(), e0);
+
+	// A second entity can occupy the released tile.
+	state->occupy_tile(t0, e1);
+	TESTEQUALS(state->is_tile_occupied(t0), true);
+	TESTEQUALS(state->get_tile_occupant(t0).value(), e1);
+
+	// Release explicitly.
+	state->release_tile(e1);
+	TESTEQUALS(state->is_tile_occupied(t0), false);
+
+	// Release a non-existent entity is safe.
+	state->release_tile(entity_id_t{999});
+}
+
+void last_known_positions() {
+	FogOfWar fow;
+	player_id_t p0{0};
+	entity_id_t e0{10};
+	entity_id_t e1{20};
+
+	// Initially no last-known position.
+	TESTEQUALS(fow.get_last_known_position(p0, e0).has_value(), false);
+
+	// Record a position.
+	coord::phys3 pos{3, 4, 0};
+	fow.set_last_known_position(p0, e0, pos);
+	auto result = fow.get_last_known_position(p0, e0);
+	TESTEQUALS(result.has_value(), true);
+	TESTEQUALS(result.value().ne, pos.ne);
+	TESTEQUALS(result.value().se, pos.se);
+
+	// Different entity not affected.
+	TESTEQUALS(fow.get_last_known_position(p0, e1).has_value(), false);
+
+	// Different player not affected.
+	player_id_t p1{1};
+	TESTEQUALS(fow.get_last_known_position(p1, e0).has_value(), false);
+
+	// Clear the entry.
+	fow.clear_last_known_position(p0, e0);
+	TESTEQUALS(fow.get_last_known_position(p0, e0).has_value(), false);
+
+	// Clearing a non-existent entry is safe.
+	fow.clear_last_known_position(p0, entity_id_t{999});
+}
+
+void next_command_build_test() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto entity = make_entity_with_command_queue(loop, 0);
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+	auto t0 = time::time_t::from_int(0);
+
+	// Queue a BuildCommand and verify the condition detects it.
+	command_queue->add_command(
+		t0,
+		std::make_shared<component::command::BuildCommand>(
+			"test.building.TownCenter",
+			coord::phys3{10, 10, 0}));
+	TESTEQUALS(activity::next_command_build(t0, entity), true);
+	TESTEQUALS(activity::next_command_train(t0, entity), false);
+	TESTEQUALS(activity::next_command_move(t0, entity), false);
+	command_queue->pop_command(t0);
+
+	// After popping, condition returns false.
+	TESTEQUALS(activity::next_command_build(t0, entity), false);
+
+	// Queue a TrainCommand and verify build returns false.
+	command_queue->add_command(
+		t0,
+		std::make_shared<component::command::TrainCommand>("test.unit.Villager"));
+	TESTEQUALS(activity::next_command_build(t0, entity), false);
+	TESTEQUALS(activity::next_command_train(t0, entity), true);
+	command_queue->pop_command(t0);
 }
 
 } // namespace openage::gamestate::tests
