@@ -1,4 +1,4 @@
-// Copyright 2023-2025 the openage authors. See copying.md for legal info.
+// Copyright 2023-2026 the openage authors. See copying.md for legal info.
 
 #include "entity_factory.h"
 
@@ -160,7 +160,7 @@ std::shared_ptr<GameEntity> EntityFactory::add_game_entity(const std::shared_ptr
 	return entity;
 }
 
-std::shared_ptr<Player> EntityFactory::add_player(const std::shared_ptr<openage::event::EventLoop> & /* loop */,
+std::shared_ptr<Player> EntityFactory::add_player(const std::shared_ptr<openage::event::EventLoop> &loop,
                                                   const std::shared_ptr<GameState> &state,
                                                   const nyan::fqon_t & /* player_setup */) {
 	auto player = std::make_shared<Player>(this->get_next_player_id(),
