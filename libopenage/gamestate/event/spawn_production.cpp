@@ -48,6 +48,12 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 		return;
 	}
 
+	// Drain finished entries from the production queue so it stays bounded and
+	// reflects only units still in production. Each finished unit has its own
+	// spawn event, so the actual spawn below is driven by the event params, not
+	// the drained list.
+	gstate->take_completed_productions(time);
+
 	// Derive spawn position from the producing building's current position.
 	// Fall back to world origin if the target is unavailable.
 	coord::phys3 spawn_pos = gamestate::WORLD_ORIGIN;

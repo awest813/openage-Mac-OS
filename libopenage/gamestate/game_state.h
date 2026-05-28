@@ -1,8 +1,10 @@
-// Copyright 2023-2024 the openage authors. See copying.md for legal info.
+// Copyright 2023-2026 the openage authors. See copying.md for legal info.
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -57,10 +59,31 @@ struct ProductionRequest {
 };
 
 /**
+ * Resources currently carried by a gatherer entity that have not yet been
+ * dropped off at a drop-off building.
+ */
+struct CarriedResource {
+	/**
+	 * Resource type identifier (nyan fqon).
+	 */
+	std::string resource_type;
+
+	/**
+	 * Amount carried.
+	 */
+	int64_t amount;
+};
+
+/**
  * State of the game.
  *
  * Contains index structures for looking up game entities and other
  * information for the current game.
+ *
+ * NOTE: GameState must always be constructed via std::make_shared. It derives
+ * from std::enable_shared_from_this and uses shared_from_this() (e.g. when
+ * firing game-over events); a non-shared construction would throw
+ * std::bad_weak_ptr.
  */
 class GameState : public openage::event::State,
                   public std::enable_shared_from_this<GameState> {
@@ -151,6 +174,15 @@ public:
 	const std::shared_ptr<Player> &get_player(player_id_t id) const;
 
 	/**
+	 * Check whether a player with the given ID exists.
+	 *
+	 * @param id ID of the player.
+	 *
+	 * @return true if the player exists, false otherwise.
+	 */
+	bool has_player(player_id_t id) const;
+
+	/**
 	 * Get all players in the current game.
 	 *
 	 * @return Map of all players by their ID.
@@ -204,6 +236,44 @@ public:
 	size_t pending_production_count() const;
 
 	/**
+	 * Check whether a gatherer entity is currently carrying resources that have
+	 * not yet been dropped off.
+	 *
+	 * @param id Gatherer entity ID.
+	 *
+	 * @return true if the entity is carrying resources, false otherwise.
+	 */
+	bool is_carrying_resources(entity_id_t id) const;
+
+	/**
+	 * Get the resources carried by a gatherer entity.
+	 *
+	 * @param id Gatherer entity ID.
+	 *
+	 * @return Carried resource, or std::nullopt if the entity carries nothing.
+	 */
+	std::optional<CarriedResource> get_carried_resource(entity_id_t id) const;
+
+	/**
+	 * Record the resources carried by a gatherer entity.
+	 *
+	 * @param id            Gatherer entity ID.
+	 * @param resource_type Resource type identifier (nyan fqon).
+	 * @param amount        Amount carried.
+	 */
+	void set_carried_resource(entity_id_t id,
+	                          const std::string &resource_type,
+	                          int64_t amount);
+
+	/**
+	 * Clear any resources carried by a gatherer entity (e.g. after drop-off
+	 * or when the entity is destroyed).
+	 *
+	 * @param id Gatherer entity ID.
+	 */
+	void clear_carried_resource(entity_id_t id);
+
+	/**
 	 * TODO: Only for testing.
 	 */
 	const std::shared_ptr<assets::ModManager> &get_mod_manager() const;
@@ -250,6 +320,14 @@ private:
 	 * Pending unit production requests, ordered by insertion.
 	 */
 	std::vector<ProductionRequest> production_requests;
+
+	/**
+	 * Resources carried by gatherer entities, keyed by entity ID.
+	 *
+	 * Part of the game state (rather than a global) so it is deterministic per
+	 * simulation and is cleaned up when an entity is destroyed.
+	 */
+	std::unordered_map<entity_id_t, CarriedResource> carried_resources;
 
 	/**
 	 * TODO: Only for testing

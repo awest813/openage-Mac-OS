@@ -17,6 +17,7 @@
 #include "component/internal/commands/idle.h"
 #include "component/internal/commands/train.h"
 #include "component/internal/ownership.h"
+#include "event/game_over.h"
 #include "event/send_command.h"
 #include "game_entity.h"
 #include "game_state.h"
@@ -166,6 +167,38 @@ void production_requests() {
 	TESTEQUALS(state->pending_production_count(), 0);
 }
 
+void carried_resources_lifecycle() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	auto t0 = time::time_t::from_int(0);
+
+	// A gatherer entity exists in the state.
+	auto gatherer = std::make_shared<GameEntity>(5);
+	state->add_game_entity(gatherer);
+
+	TESTEQUALS(state->is_carrying_resources(5), false);
+	TESTEQUALS(state->get_carried_resource(5).has_value(), false);
+
+	state->set_carried_resource(5, "test.resource.Food", 12);
+	TESTEQUALS(state->is_carrying_resources(5), true);
+	auto cargo = state->get_carried_resource(5);
+	TESTEQUALS(cargo.has_value(), true);
+	TESTEQUALS(cargo->resource_type, std::string{"test.resource.Food"});
+	TESTEQUALS(cargo->amount, 12);
+
+	// Explicit clear (drop-off path).
+	state->clear_carried_resource(5);
+	TESTEQUALS(state->is_carrying_resources(5), false);
+
+	// Cargo is cleaned up when the carrying entity is destroyed (leak fix).
+	state->set_carried_resource(5, "test.resource.Wood", 7);
+	TESTEQUALS(state->is_carrying_resources(5), true);
+	state->remove_game_entity(5, t0);
+	TESTEQUALS(state->is_carrying_resources(5), false);
+}
+
 void player_state_transitions() {
 	auto loop = std::make_shared<event::EventLoop>();
 	auto db = nyan::Database::create();
@@ -201,6 +234,10 @@ void player_defeated_on_last_building_destroyed() {
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
+	// check_defeat fires events via the loop; register their handlers.
+	loop->add_event_handler(std::make_shared<event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<event::GameOverHandler>());
+
 	auto view = db->new_view();
 	auto p0 = std::make_shared<Player>(0, view, loop);
 	auto p1 = std::make_shared<Player>(1, view, loop);
@@ -230,28 +267,33 @@ void no_defeat_for_unit_death() {
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
+	// check_defeat fires events via the loop; register their handlers.
+	loop->add_event_handler(std::make_shared<event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<event::GameOverHandler>());
+
 	auto view = db->new_view();
 	auto p0 = std::make_shared<Player>(0, view, loop);
 	state->add_player(p0);
 
 	auto t0 = time::time_t::from_int(0);
 
-	// One building (owned, no MOVE) and one unit-like entity (owned, no special
-	// flag — still treated as non-building via the plain remove_game_entity(id)).
+	// One owned building for player 0.
 	make_building(10, 0, loop, state, t0);
 
-	// Add a second entity owned by player 0 but remove it via the no-time
-	// overload (resource depletion path) — player must not be defeated.
-	auto unit = std::make_shared<GameEntity>(99);
+	// A second owned entity removed via the no-time overload (the resource
+	// depletion path). That overload intentionally skips defeat checking, so
+	// the player must remain ALIVE even though no buildings would remain by
+	// that count.
+	auto other = std::make_shared<GameEntity>(99);
 	auto ownership = std::make_shared<component::Ownership>(loop);
 	ownership->set_owner(t0, 0);
-	unit->add_component(ownership);
-	state->add_game_entity(unit);
+	other->add_component(ownership);
+	state->add_game_entity(other);
 
 	state->remove_game_entity(99); // no defeat check
 	TESTEQUALS(p0->get_state() == player_state_t::ALIVE, true);
 
-	// Building still alive.
+	// Destroying the last building via the (id, time) overload defeats the player.
 	state->remove_game_entity(10, t0);
 	TESTEQUALS(p0->get_state() == player_state_t::DEFEATED, true);
 }

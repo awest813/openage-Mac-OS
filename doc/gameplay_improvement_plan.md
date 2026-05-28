@@ -54,10 +54,12 @@ nyan `engine.ability.type.Create` ability. The ability holds a set of
 
 A `TRAIN` command carries the fqon of the unit to produce. The `Production`
 system finds the matching creatable, verifies the owner can afford it, deducts
-the cost from the player's resources, and records a timed production request on
-the `GameState`. Because systems cannot reach the `EntityFactory`, the request
-queue (`GameState::request_production` / `take_completed_productions`) is the
-seam the simulation drains to spawn the finished unit via the `Spawner`.
+the cost from the player's resources, and schedules a `"game.spawn_production"`
+event at the completion time. Because systems cannot reach the `EntityFactory`,
+the actual spawn happens in `SpawnProductionHandler` when that event fires. The
+`GameState` production-request queue (`request_production` /
+`take_completed_productions`) is kept as a bounded "in-progress production" view
+for queries/UI and tests, drained as units finish.
 
 - [x] Add `TRAIN` command type and `TrainCommand` (carries the unit fqon)
 - [x] Add `CREATE` component type and `Create` API component (creatables, cost, build time)
@@ -77,6 +79,32 @@ seam the simulation drains to spawn the finished unit via the `Spawner`.
 - [x] Defeat a player when their last building is destroyed: `GameState::remove_game_entity(id, time)` detects building death (owned entity without MOVE component) and calls `check_defeat`
 - [x] `check_defeat` marks the player DEFEATED, then scans for a sole remaining alive player and marks them WINNER
 - [x] Broadcast: `GameState` fires `"game.player_defeated"` and `"game.game_over"` events through the stored event loop; `PlayerDefeatedHandler` and `GameOverHandler` log the outcome (future: UI overlay, network broadcast)
+
+### 1.5 Phase 1 Audit & Polish
+
+**Status:** ✅ Complete
+
+A correctness pass over all of Phase 1 fixed two leaks and several edge cases:
+
+- [x] **Carried-resource state moved off the global static** — `gather.cpp` used a
+  file-scope `std::unordered_map` + mutex for carried cargo, which leaked when a
+  carrying gatherer died and broke determinism across simulations. Moved into
+  `GameState` (`is_/get_/set_/clear_carried_resource`) and cleared in
+  `remove_game_entity`.
+- [x] **Production queue no longer grows unbounded** — `production_requests` was
+  appended on every train but never drained in the real flow (the spawn event
+  did the work). `SpawnProductionHandler` now drains completed requests, keeping
+  the queue as an accurate bounded "in-progress production" view.
+- [x] **Graceful unknown-owner handling** — gather drop-off and `Production` now
+  guard with `GameState::has_player` instead of letting `get_player` throw out of
+  system dispatch.
+- [x] **Sole-survivor / mutual defeat** — `check_defeat` now fires `game.game_over`
+  for `alive_count <= 1` (with a `has_winner` flag) instead of only the exactly-one
+  case.
+- [x] Documented the building heuristic (`OWNERSHIP` + no `MOVE`) as a TODO pending
+  a real unit/building type system, and the `make_shared` requirement on `GameState`.
+- [x] New regression tests: `carried_resources_lifecycle`; defeat tests register the
+  game-over handlers (these `create_event` paths would otherwise throw).
 
 ---
 

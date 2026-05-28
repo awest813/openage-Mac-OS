@@ -106,6 +106,7 @@ def tests_cpp():
     yield "openage::curve::tests::container"
     yield "openage::curve::tests::curve_types"
     yield "openage::event::tests::eventtrigger"
+    yield "openage::gamestate::tests::carried_resources_lifecycle"
     yield "openage::gamestate::tests::next_command_conditions"
     yield "openage::gamestate::tests::no_defeat_for_unit_death"
     yield "openage::gamestate::tests::player_defeated_on_last_building_destroyed"

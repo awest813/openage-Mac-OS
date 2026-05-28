@@ -40,6 +40,7 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 
 void GameState::remove_game_entity(entity_id_t id) {
 	this->game_entities.erase(id);
+	this->carried_resources.erase(id);
 }
 
 void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
@@ -58,11 +59,14 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 			owner_id = ownership->get_owners().get(time);
 
 			// Heuristic: a building is an owned entity without a MOVE component.
+			// TODO: classify buildings via an explicit nyan attribute/ability
+			//       once a unit/building type system exists, instead of "no MOVE".
 			is_building = not entity->has_component(component::component_t::MOVE);
 		}
 	}
 
 	this->game_entities.erase(id);
+	this->carried_resources.erase(id);
 
 	if (is_building) {
 		this->check_defeat(owner_id, time);
@@ -96,6 +100,10 @@ const std::shared_ptr<Player> &GameState::get_player(player_id_t id) const {
 		throw Error(MSG(err) << "Player with ID " << id << " does not exist");
 	}
 	return this->players.at(id);
+}
+
+bool GameState::has_player(player_id_t id) const {
+	return this->players.contains(id);
 }
 
 const std::unordered_map<player_id_t, std::shared_ptr<Player>> &GameState::get_players() const {
@@ -169,6 +177,7 @@ void GameState::check_defeat(player_id_t owner_id, const time::time_t &time) {
 	}
 
 	if (alive_count == 1) {
+		// Exactly one player remains — they win.
 		this->players.at(winner_id)->set_state(player_state_t::WINNER);
 		log::log(MSG(info) << "Player " << winner_id << " has won the game!");
 
@@ -178,7 +187,27 @@ void GameState::check_defeat(player_id_t owner_id, const time::time_t &time) {
 				nullptr,
 				this->shared_from_this(),
 				time,
-				openage::event::EventHandler::param_map{{"winner_id", winner_id}});
+				openage::event::EventHandler::param_map{
+					{"winner_id", winner_id},
+					{"has_winner", true},
+				});
+		}
+	}
+	else if (alive_count == 0) {
+		// No players remain (sole-player loss or simultaneous defeat):
+		// the game is over with no winner.
+		log::log(MSG(info) << "Game over — no players remain.");
+
+		if (this->event_loop) {
+			this->event_loop->create_event(
+				"game.game_over",
+				nullptr,
+				this->shared_from_this(),
+				time,
+				openage::event::EventHandler::param_map{
+					{"winner_id", player_id_t{0}},
+					{"has_winner", false},
+				});
 		}
 	}
 }
@@ -207,6 +236,28 @@ std::vector<ProductionRequest> GameState::take_completed_productions(const time:
 
 size_t GameState::pending_production_count() const {
 	return this->production_requests.size();
+}
+
+bool GameState::is_carrying_resources(entity_id_t id) const {
+	return this->carried_resources.contains(id);
+}
+
+std::optional<CarriedResource> GameState::get_carried_resource(entity_id_t id) const {
+	auto it = this->carried_resources.find(id);
+	if (it == this->carried_resources.end()) {
+		return std::nullopt;
+	}
+	return it->second;
+}
+
+void GameState::set_carried_resource(entity_id_t id,
+                                     const std::string &resource_type,
+                                     int64_t amount) {
+	this->carried_resources[id] = CarriedResource{resource_type, amount};
+}
+
+void GameState::clear_carried_resource(entity_id_t id) {
+	this->carried_resources.erase(id);
 }
 
 const std::shared_ptr<assets::ModManager> &GameState::get_mod_manager() const {

@@ -47,8 +47,14 @@ void GameOverHandler::invoke(openage::event::EventLoop & /* loop */,
                              const std::shared_ptr<openage::event::State> & /* state */,
                              const time::time_t &time,
                              const param_map &params) {
-	auto winner_id = params.get("winner_id", player_id_t{0});
-	log::log(MSG(info) << "[t=" << time << "] Game over — player " << winner_id << " wins!");
+	auto has_winner = params.get("has_winner", true);
+	if (has_winner) {
+		auto winner_id = params.get("winner_id", player_id_t{0});
+		log::log(MSG(info) << "[t=" << time << "] Game over — player " << winner_id << " wins!");
+	}
+	else {
+		log::log(MSG(info) << "[t=" << time << "] Game over — no winner (all players defeated).");
+	}
 }
 
 time::time_t GameOverHandler::predict_invoke_time(

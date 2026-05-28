@@ -51,6 +51,11 @@ const time::time_t Production::train_command(const std::shared_ptr<gamestate::Ga
 	auto ownership = std::dynamic_pointer_cast<component::Ownership>(
 		entity->get_component(component::component_t::OWNERSHIP));
 	auto owner_id = ownership->get_owners().get(start_time);
+	if (not state->has_player(owner_id)) [[unlikely]] {
+		log::log(MSG(warn) << "Entity " << entity->get_id()
+		                   << " has unknown owner " << owner_id << "; cannot train.");
+		return time::time_t::from_int(0);
+	}
 	auto &player = state->get_player(owner_id);
 	auto db_view = player->get_db_view();
 
@@ -103,8 +108,11 @@ const time::time_t Production::train_command(const std::shared_ptr<gamestate::Ga
 	// Deduct resources.
 	player->add_resource(start_time, cost_resource, -cost_amount);
 
-	// Record in the testable production queue.
 	auto completion_time = start_time + creation_time;
+
+	// Record the request as a "pending production" view (used for queries/UI
+	// and tests). It is drained by the SpawnProductionHandler as units finish
+	// so it stays bounded; the actual spawn is driven by the event below.
 	state->request_production(owner_id, target, completion_time);
 
 	// Schedule a spawn event at completion_time. The SpawnProductionHandler
