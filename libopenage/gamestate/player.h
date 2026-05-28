@@ -36,7 +36,8 @@ public:
 	 * @param db_view View of the nyan database used for the player.
 	 */
 	Player(player_id_t id,
-	       const std::shared_ptr<nyan::View> &db_view);
+	       const std::shared_ptr<nyan::View> &db_view,
+	       const std::shared_ptr<openage::event::EventLoop> &loop);
 
 	Player(Player &&) = default;
 	Player &operator=(Player &&) = default;
@@ -137,6 +138,11 @@ private:
 	 * are recorded deterministically.
 	 */
 	std::unordered_map<nyan::fqon_t, std::shared_ptr<curve::Discrete<int64_t>>> resources;
+
+	/**
+	 * Event loop used for lazily creating resource curves.
+	 */
+	std::shared_ptr<openage::event::EventLoop> loop;
 };
 
 } // namespace gamestate

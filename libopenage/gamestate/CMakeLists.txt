@@ -12,9 +12,10 @@ add_sources(libopenage
     terrain_factory.cpp
     terrain_tile.cpp
 	terrain.cpp
+    tests.cpp
     types.cpp
-	world.cpp
-	universe.cpp
+    world.cpp
+    universe.cpp
 )
 
 add_subdirectory(activity/)

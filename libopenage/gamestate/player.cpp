@@ -10,9 +10,11 @@
 namespace openage::gamestate {
 
 Player::Player(player_id_t id,
-               const std::shared_ptr<nyan::View> &db_view) :
+               const std::shared_ptr<nyan::View> &db_view,
+               const std::shared_ptr<openage::event::EventLoop> &loop) :
 	id{id},
-	db_view{db_view} {
+	db_view{db_view},
+	loop{loop} {
 }
 
 std::shared_ptr<Player> Player::copy(entity_id_t id) {
@@ -55,7 +57,8 @@ void Player::add_resource(const time::time_t &time,
                           int64_t amount) {
 	auto it = this->resources.find(resource);
 	if (it == this->resources.end()) {
-		return;
+		this->init_resource(time, this->loop, resource, 0);
+		it = this->resources.find(resource);
 	}
 	int64_t current = it->second->get(time);
 	it->second->set_last(time, current + amount);

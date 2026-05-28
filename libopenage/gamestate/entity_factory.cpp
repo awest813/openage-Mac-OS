@@ -164,7 +164,8 @@ std::shared_ptr<Player> EntityFactory::add_player(const std::shared_ptr<openage:
                                                   const std::shared_ptr<GameState> &state,
                                                   const nyan::fqon_t & /* player_setup */) {
 	auto player = std::make_shared<Player>(this->get_next_player_id(),
-	                                       state->get_db_view()->new_child());
+	                                       state->get_db_view()->new_child(),
+	                                       loop);
 
 	// TODO: Components (for resources, diplomacy, etc.)
 
