@@ -1,4 +1,4 @@
-// Copyright 2023-2024 the openage authors. See copying.md for legal info.
+// Copyright 2023-2026 the openage authors. See copying.md for legal info.
 
 #include "game_state.h"
 
@@ -7,8 +7,13 @@
 #include <nyan/nyan.h>
 
 #include "error/error.h"
+#include "event/event_loop.h"
+#include "event/eventhandler.h"
 #include "log/log.h"
+#include "log/message.h"
 
+#include "gamestate/component/types.h"
+#include "gamestate/component/internal/ownership.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/player.h"
 
@@ -16,8 +21,9 @@
 namespace openage::gamestate {
 
 GameState::GameState(const std::shared_ptr<nyan::Database> &db,
-                     const std::shared_ptr<openage::event::EventLoop> &event_loop) :
-	event::State{event_loop},
+                     const std::shared_ptr<openage::event::EventLoop> &loop) :
+	event::State{loop},
+	event_loop{loop},
 	db_view{db->new_view()} {
 }
 
@@ -34,6 +40,33 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 
 void GameState::remove_game_entity(entity_id_t id) {
 	this->game_entities.erase(id);
+}
+
+void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
+	// Identify the owner and whether the dying entity is a building,
+	// before erasing it from the index.
+	player_id_t owner_id = 0;
+	bool is_building = false;
+
+	auto it = this->game_entities.find(id);
+	if (it != this->game_entities.end()) {
+		auto &entity = it->second;
+
+		if (entity->has_component(component::component_t::OWNERSHIP)) {
+			auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+				entity->get_component(component::component_t::OWNERSHIP));
+			owner_id = ownership->get_owners().get(time);
+
+			// Heuristic: a building is an owned entity without a MOVE component.
+			is_building = not entity->has_component(component::component_t::MOVE);
+		}
+	}
+
+	this->game_entities.erase(id);
+
+	if (is_building) {
+		this->check_defeat(owner_id, time);
+	}
 }
 
 void GameState::add_player(const std::shared_ptr<Player> &player) {
@@ -65,8 +98,89 @@ const std::shared_ptr<Player> &GameState::get_player(player_id_t id) const {
 	return this->players.at(id);
 }
 
+const std::unordered_map<player_id_t, std::shared_ptr<Player>> &GameState::get_players() const {
+	return this->players;
+}
+
+size_t GameState::get_alive_player_count() const {
+	size_t count = 0;
+	for (const auto &[id, player] : this->players) {
+		if (player->get_state() == player_state_t::ALIVE) {
+			++count;
+		}
+	}
+	return count;
+}
+
 const std::shared_ptr<Map> &GameState::get_map() const {
 	return this->map;
+}
+
+void GameState::check_defeat(player_id_t owner_id, const time::time_t &time) {
+	// Skip players that are already out of the game.
+	auto player_it = this->players.find(owner_id);
+	if (player_it == this->players.end()) {
+		return;
+	}
+	auto &player = player_it->second;
+	if (player->get_state() != player_state_t::ALIVE) {
+		return;
+	}
+
+	// Count surviving buildings for this player.
+	size_t building_count = 0;
+	for (const auto &[eid, entity] : this->game_entities) {
+		if (not entity->has_component(component::component_t::OWNERSHIP)
+		    || entity->has_component(component::component_t::MOVE)) {
+			continue;
+		}
+		auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+			entity->get_component(component::component_t::OWNERSHIP));
+		if (ownership->get_owners().get(time) == owner_id) {
+			++building_count;
+		}
+	}
+
+	if (building_count > 0) {
+		return;
+	}
+
+	// No buildings left — player is defeated.
+	player->set_state(player_state_t::DEFEATED);
+	log::log(MSG(info) << "Player " << owner_id << " has been defeated.");
+
+	if (this->event_loop) {
+		this->event_loop->create_event(
+			"game.player_defeated",
+			nullptr,
+			this->shared_from_this(),
+			time,
+			openage::event::EventHandler::param_map{{"player_id", owner_id}});
+	}
+
+	// Check if exactly one player remains alive — they win.
+	player_id_t winner_id = 0;
+	size_t alive_count = 0;
+	for (const auto &[pid, p] : this->players) {
+		if (p->get_state() == player_state_t::ALIVE) {
+			++alive_count;
+			winner_id = pid;
+		}
+	}
+
+	if (alive_count == 1) {
+		this->players.at(winner_id)->set_state(player_state_t::WINNER);
+		log::log(MSG(info) << "Player " << winner_id << " has won the game!");
+
+		if (this->event_loop) {
+			this->event_loop->create_event(
+				"game.game_over",
+				nullptr,
+				this->shared_from_this(),
+				time,
+				openage::event::EventHandler::param_map{{"winner_id", winner_id}});
+		}
+	}
 }
 
 void GameState::request_production(player_id_t owner,

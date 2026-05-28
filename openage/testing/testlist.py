@@ -107,7 +107,10 @@ def tests_cpp():
     yield "openage::curve::tests::curve_types"
     yield "openage::event::tests::eventtrigger"
     yield "openage::gamestate::tests::next_command_conditions"
+    yield "openage::gamestate::tests::no_defeat_for_unit_death"
+    yield "openage::gamestate::tests::player_defeated_on_last_building_destroyed"
     yield "openage::gamestate::tests::player_resources"
+    yield "openage::gamestate::tests::player_state_transitions"
     yield "openage::gamestate::tests::production_requests"
     yield "openage::gamestate::tests::send_command_variants"
 

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "event/state.h"
+#include "gamestate/player.h"
 #include "gamestate/types.h"
 #include "time/time.h"
 
@@ -30,7 +31,6 @@ class EventLoop;
 namespace gamestate {
 class GameEntity;
 class Map;
-class Player;
 
 /**
  * A pending unit production request created by the Production system.
@@ -62,7 +62,8 @@ struct ProductionRequest {
  * Contains index structures for looking up game entities and other
  * information for the current game.
  */
-class GameState : public openage::event::State {
+class GameState : public openage::event::State,
+                  public std::enable_shared_from_this<GameState> {
 public:
 	/**
 	 * Create a new game state.
@@ -92,11 +93,23 @@ public:
 	/**
 	 * Remove a game entity from the index.
 	 *
-	 * Called when an entity is destroyed (e.g. HP reaches 0).
+	 * Called when an entity is destroyed (e.g. HP reaches 0) without
+	 * defeat checking (e.g. resource depletion).
 	 *
 	 * @param id ID of the game entity to remove.
 	 */
 	void remove_game_entity(entity_id_t id);
+
+	/**
+	 * Remove a game entity from the index and check whether its owner
+	 * has been defeated (lost all buildings).
+	 *
+	 * Use this overload when destroying combat or production entities.
+	 *
+	 * @param id   ID of the game entity to remove.
+	 * @param time Simulation time of the destruction.
+	 */
+	void remove_game_entity(entity_id_t id, const time::time_t &time);
 
 	/**
 	 * Add a new player to the index.
@@ -136,6 +149,20 @@ public:
 	 * @return Player with the given ID.
 	 */
 	const std::shared_ptr<Player> &get_player(player_id_t id) const;
+
+	/**
+	 * Get all players in the current game.
+	 *
+	 * @return Map of all players by their ID.
+	 */
+	const std::unordered_map<player_id_t, std::shared_ptr<Player>> &get_players() const;
+
+	/**
+	 * Count how many players are still in the ALIVE state.
+	 *
+	 * @return Number of alive players.
+	 */
+	size_t get_alive_player_count() const;
 
 	/**
 	 * Get the map of the current game.
@@ -183,6 +210,22 @@ public:
 	void set_mod_manager(const std::shared_ptr<assets::ModManager> &mod_manager);
 
 private:
+	/**
+	 * Check whether a player has been defeated (lost all buildings) after the
+	 * entity with the given ID was removed.  If defeated, mark the player and
+	 * check whether a sole survivor has won the game.  Fires
+	 * "game.player_defeated" and "game.game_over" events as appropriate.
+	 *
+	 * @param owner_id ID of the player whose entity was just removed.
+	 * @param time     Simulation time of the destruction.
+	 */
+	void check_defeat(player_id_t owner_id, const time::time_t &time);
+
+	/**
+	 * Event loop — used to fire player-defeated and game-over events.
+	 */
+	std::shared_ptr<openage::event::EventLoop> event_loop;
+
 	/**
 	 * View for the nyan game data database.
 	 */

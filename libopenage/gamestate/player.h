@@ -1,4 +1,4 @@
-// Copyright 2018-2024 the openage authors. See copying.md for legal info.
+// Copyright 2018-2026 the openage authors. See copying.md for legal info.
 
 #pragma once
 
@@ -23,6 +23,15 @@ class EventLoop;
 }
 
 namespace gamestate {
+
+/**
+ * Lifecycle state of a player in the current game.
+ */
+enum class player_state_t {
+	ALIVE,
+	DEFEATED,
+	WINNER,
+};
 
 /**
  * Entity for managing a player inside the game world.
@@ -103,6 +112,20 @@ public:
 	                  const nyan::fqon_t &resource,
 	                  int64_t amount);
 
+	/**
+	 * Get the current lifecycle state of this player.
+	 *
+	 * @return Player lifecycle state.
+	 */
+	player_state_t get_state() const;
+
+	/**
+	 * Set the lifecycle state of this player.
+	 *
+	 * @param state New lifecycle state.
+	 */
+	void set_state(player_state_t state);
+
 protected:
 	/**
 	 * A player cannot be default copied because of their unique ID.
@@ -113,6 +136,10 @@ protected:
 	Player &operator=(const Player &) = default;
 
 private:
+	/**
+	 * Lifecycle state of this player.
+	 */
+	player_state_t state{player_state_t::ALIVE};
 	/**
 	 * Set the unique identifier of this player.
 	 *

@@ -16,6 +16,7 @@
 #include "component/internal/commands/gather.h"
 #include "component/internal/commands/idle.h"
 #include "component/internal/commands/train.h"
+#include "component/internal/ownership.h"
 #include "event/send_command.h"
 #include "game_entity.h"
 #include "game_state.h"
@@ -163,6 +164,96 @@ void production_requests() {
 	TESTEQUALS(completed_late.size(), 1);
 	TESTEQUALS(completed_late.at(0).game_entity, std::string{"test.unit.Archer"});
 	TESTEQUALS(state->pending_production_count(), 0);
+}
+
+void player_state_transitions() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto view = db->new_view();
+	Player player{0, view, loop};
+
+	TESTEQUALS(player.get_state() == player_state_t::ALIVE, true);
+
+	player.set_state(player_state_t::DEFEATED);
+	TESTEQUALS(player.get_state() == player_state_t::DEFEATED, true);
+
+	player.set_state(player_state_t::WINNER);
+	TESTEQUALS(player.get_state() == player_state_t::WINNER, true);
+}
+
+// Helper: create a building entity (has OWNERSHIP, no MOVE) and add it to state.
+static std::shared_ptr<GameEntity>
+make_building(entity_id_t id,
+              player_id_t owner,
+              const std::shared_ptr<event::EventLoop> &loop,
+              const std::shared_ptr<GameState> &state,
+              const time::time_t &t) {
+	auto entity = std::make_shared<GameEntity>(id);
+	auto ownership = std::make_shared<component::Ownership>(loop);
+	ownership->set_owner(t, owner);
+	entity->add_component(ownership);
+	state->add_game_entity(entity);
+	return entity;
+}
+
+void player_defeated_on_last_building_destroyed() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	auto view = db->new_view();
+	auto p0 = std::make_shared<Player>(0, view, loop);
+	auto p1 = std::make_shared<Player>(1, view, loop);
+	state->add_player(p0);
+	state->add_player(p1);
+
+	auto t0 = time::time_t::from_int(0);
+
+	// Two buildings for player 0, one for player 1.
+	make_building(10, 0, loop, state, t0);
+	make_building(11, 0, loop, state, t0);
+	make_building(20, 1, loop, state, t0);
+
+	// Destroy one building of player 0 — still has one left, not defeated.
+	state->remove_game_entity(10, t0);
+	TESTEQUALS(p0->get_state() == player_state_t::ALIVE, true);
+
+	// Destroy player 0's last building — now defeated; player 1 wins.
+	state->remove_game_entity(11, t0);
+	TESTEQUALS(p0->get_state() == player_state_t::DEFEATED, true);
+	TESTEQUALS(p1->get_state() == player_state_t::WINNER, true);
+	TESTEQUALS(state->get_alive_player_count(), 0);
+}
+
+void no_defeat_for_unit_death() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	auto view = db->new_view();
+	auto p0 = std::make_shared<Player>(0, view, loop);
+	state->add_player(p0);
+
+	auto t0 = time::time_t::from_int(0);
+
+	// One building (owned, no MOVE) and one unit-like entity (owned, no special
+	// flag — still treated as non-building via the plain remove_game_entity(id)).
+	make_building(10, 0, loop, state, t0);
+
+	// Add a second entity owned by player 0 but remove it via the no-time
+	// overload (resource depletion path) — player must not be defeated.
+	auto unit = std::make_shared<GameEntity>(99);
+	auto ownership = std::make_shared<component::Ownership>(loop);
+	ownership->set_owner(t0, 0);
+	unit->add_component(ownership);
+	state->add_game_entity(unit);
+
+	state->remove_game_entity(99); // no defeat check
+	TESTEQUALS(p0->get_state() == player_state_t::ALIVE, true);
+
+	// Building still alive.
+	state->remove_game_entity(10, t0);
+	TESTEQUALS(p0->get_state() == player_state_t::DEFEATED, true);
 }
 
 } // namespace openage::gamestate::tests

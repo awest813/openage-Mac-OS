@@ -71,11 +71,12 @@ seam the simulation drains to spawn the finished unit via the `Spawner`.
 
 ### 1.4 Win / Loss Conditions
 
-**Status:** ☐ Not started
+**Status:** ✅ Complete
 
-- [ ] Add a `Player` state flag (alive / defeated / winner)
-- [ ] Defeat a player when their Town Center (or last building) is destroyed
-- [ ] Broadcast game-over event to all connected clients/UI
+- [x] Add `player_state_t` enum (ALIVE / DEFEATED / WINNER) and `get_state()` / `set_state()` to `Player`
+- [x] Defeat a player when their last building is destroyed: `GameState::remove_game_entity(id, time)` detects building death (owned entity without MOVE component) and calls `check_defeat`
+- [x] `check_defeat` marks the player DEFEATED, then scans for a sole remaining alive player and marks them WINNER
+- [x] Broadcast: `GameState` fires `"game.player_defeated"` and `"game.game_over"` events through the stored event loop; `PlayerDefeatedHandler` and `GameOverHandler` log the outcome (future: UI overlay, network broadcast)
 
 ---
 
