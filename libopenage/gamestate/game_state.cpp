@@ -315,8 +315,8 @@ bool GameState::is_entity_visible(player_id_t observer,
 		const_cast<FogOfWar &>(this->fog_of_war).clear_last_known_position(observer, entity_id);
 	}
 	else {
-		// Only record if the entity was previously visible (has been seen at least once
-		// at this tile / a nearby tile).  We approximate by checking explored status.
+		// Only record if the entity's current tile has been explored by
+		// the observer (i.e. the observer has seen this area before).
 		if (this->fog_of_war.is_explored(observer, tile)) {
 			const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
 		}
