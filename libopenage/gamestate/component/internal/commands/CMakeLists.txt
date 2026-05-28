@@ -5,5 +5,6 @@ add_sources(libopenage
     gather.cpp
     idle.cpp
     move.cpp
+    train.cpp
     types.cpp
 )

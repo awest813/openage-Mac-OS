@@ -16,6 +16,7 @@ enum class command_t {
 	MOVE,
 	ATTACK,
 	GATHER,
+	TRAIN,
 };
 
 } // namespace openage::gamestate::component::command

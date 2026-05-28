@@ -2,6 +2,8 @@
 
 #include "game_state.h"
 
+#include <utility>
+
 #include <nyan/nyan.h>
 
 #include "error/error.h"
@@ -65,6 +67,32 @@ const std::shared_ptr<Player> &GameState::get_player(player_id_t id) const {
 
 const std::shared_ptr<Map> &GameState::get_map() const {
 	return this->map;
+}
+
+void GameState::request_production(player_id_t owner,
+                                   const std::string &game_entity,
+                                   const time::time_t &completion_time) {
+	this->production_requests.push_back(ProductionRequest{owner, game_entity, completion_time});
+}
+
+std::vector<ProductionRequest> GameState::take_completed_productions(const time::time_t &time) {
+	std::vector<ProductionRequest> completed;
+	std::vector<ProductionRequest> remaining;
+	for (auto &request : this->production_requests) {
+		if (request.completion_time <= time) {
+			completed.push_back(request);
+		}
+		else {
+			remaining.push_back(request);
+		}
+	}
+	this->production_requests = std::move(remaining);
+
+	return completed;
+}
+
+size_t GameState::pending_production_count() const {
+	return this->production_requests.size();
 }
 
 const std::shared_ptr<assets::ModManager> &GameState::get_mod_manager() const {

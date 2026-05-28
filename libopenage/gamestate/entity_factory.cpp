@@ -26,6 +26,7 @@
 #include "gamestate/api/activity.h"
 #include "gamestate/component/api/idle.h"
 #include "gamestate/component/api/attack.h"
+#include "gamestate/component/api/create.h"
 #include "gamestate/component/api/gather.h"
 #include "gamestate/component/api/live.h"
 #include "gamestate/component/api/move.h"
@@ -60,10 +61,12 @@ namespace openage::gamestate {
  *                    |           |            +-> Attack -> Idle (loop)
  *                    |           |            |
  *                    |           |            +-> Gather -> WaitGather -> (loop to idle)
+ *                    |           |            |
+ *                    |           |            +-> Create -> WaitCreate -> (loop to idle)
  *                    |           |
  *                    |           +-> WaitForCmd -> CmdType?
  *                    |
- *                    +-> (none of MOVE/ATTACK/GATHER) -> End
+ *                    +-> (none of MOVE/ATTACK/GATHER/CREATE) -> End
  *
  * TODO: Replace with config
  */
@@ -80,7 +83,9 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	auto attack = std::make_shared<activity::TaskSystemNode>(8, "Attack");
 	auto gather = std::make_shared<activity::TaskSystemNode>(9, "Gather");
 	auto wait_for_gather = std::make_shared<activity::XorEventGate>(10);
-	auto end = std::make_shared<activity::EndNode>(11);
+	auto create = std::make_shared<activity::TaskSystemNode>(11, "Create");
+	auto wait_for_create = std::make_shared<activity::XorEventGate>(12);
+	auto end = std::make_shared<activity::EndNode>(13);
 
 	start->add_output(idle);
 
@@ -93,7 +98,8 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	                                          const std::shared_ptr<gamestate::GameEntity> &entity) {
 		return entity->has_component(component::component_t::MOVE)
 		       || entity->has_component(component::component_t::ATTACK)
-		       || entity->has_component(component::component_t::GATHER);
+		       || entity->has_component(component::component_t::GATHER)
+		       || entity->has_component(component::component_t::CREATE);
 	};
 	condition_capable->add_output(condition_command, capable_branch);
 	condition_capable->set_default(end);
@@ -105,9 +111,10 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	// Wait for a command, then check its type
 	wait_for_command->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
-	// Route to attack, gather, or move based on next command type
+	// Route to attack, gather, train, or move based on next command type
 	condition_cmd_type->add_output(attack, gamestate::activity::next_command_attack);
 	condition_cmd_type->add_output(gather, gamestate::activity::next_command_gather);
+	condition_cmd_type->add_output(create, gamestate::activity::next_command_train);
 	condition_cmd_type->set_default(move);
 
 	// Move system node
@@ -131,6 +138,16 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	// interrupt on a new command to re-evaluate
 	wait_for_gather->add_output(idle, gamestate::activity::primer_wait);
 	wait_for_gather->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Create (train) system node: start producing one unit, then wait for the
+	// creation time before looping back to idle
+	create->add_output(wait_for_create);
+	create->set_system_id(system::system_id_t::TRAIN_COMMAND);
+
+	// After create: wait for the creation time, then loop back to idle;
+	// interrupt on a new command to re-evaluate
+	wait_for_create->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_create->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
 	return std::make_shared<activity::Activity>(0, start, "test");
 }
@@ -242,6 +259,10 @@ void EntityFactory::init_components(const std::shared_ptr<openage::event::EventL
 		else if (ability_parent == "engine.ability.type.Gather") {
 			auto gather_comp = std::make_shared<component::Gather>(loop, ability_obj);
 			entity->add_component(gather_comp);
+		}
+		else if (ability_parent == "engine.ability.type.Create") {
+			auto create_comp = std::make_shared<component::Create>(loop, ability_obj);
+			entity->add_component(create_comp);
 		}
 		else if (ability_parent == "engine.ability.type.Selectable") {
 			auto selectable = std::make_shared<component::Selectable>(loop, ability_obj);

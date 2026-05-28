@@ -15,6 +15,7 @@ enum class ability_t {
 	TURN,
 	ATTACK,
 	GATHER,
+	CREATE,
 
 	// TODO
 };

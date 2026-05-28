@@ -21,6 +21,7 @@ enum class component_t {
 	MOVE,
 	ATTACK,
 	GATHER,
+	CREATE,
 	SELECTABLE,
 	LIVE
 };

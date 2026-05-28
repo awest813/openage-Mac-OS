@@ -44,13 +44,30 @@ What is missing is the act of dealing damage.
 
 ### 1.3 Unit Production
 
-**Status:** ☐ Not started
+**Status:** 🚧 In progress
 
-- [ ] Add `TRAIN` command type for producing units from buildings
+Design: training is modelled on the existing command + system pattern. A
+producing entity (e.g. a building) carries a `Create` API component wrapping the
+nyan `engine.ability.type.Create` ability. The ability holds a set of
+`CreatableGameEntity` objects, each with a `game_entity` (the unit to spawn), a
+`creation_time`, and a resource cost (`cost_resource` + `cost_amount`).
+
+A `TRAIN` command carries the fqon of the unit to produce. The `Production`
+system finds the matching creatable, verifies the owner can afford it, deducts
+the cost from the player's resources, and records a timed production request on
+the `GameState`. Because systems cannot reach the `EntityFactory`, the request
+queue (`GameState::request_production` / `take_completed_productions`) is the
+seam the simulation drains to spawn the finished unit via the `Spawner`.
+
+- [x] Add `TRAIN` command type and `TrainCommand` (carries the unit fqon)
+- [x] Add `CREATE` component type and `Create` API component (creatables, cost, build time)
+- [x] Add `TRAIN_COMMAND` system id and `next_command_train` condition
+- [x] Resource cost check before queuing; deduct resources on train start
+- [x] `Production` system: validate creatable, check/deduct cost, queue timed request
+- [x] Timed production request queue on `GameState` (`request_production` / `take_completed_productions`)
+- [x] Wire `Create` into the entity factory, activity graph, and `send_command`
+- [ ] Drain completed production requests in the simulation tick and spawn finished units at the rally point via the existing `Spawner`
 - [ ] Add `BUILD` command type for placing new buildings
-- [ ] Queue-based training: buildings hold a production queue with timers
-- [ ] Resource cost check before queuing; deduct resources on train start
-- [ ] Spawn finished unit at rally point via the existing `Spawner`
 
 ### 1.4 Win / Loss Conditions
 

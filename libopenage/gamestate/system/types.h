@@ -21,6 +21,8 @@ enum class system_id_t {
 
 	GATHER_COMMAND,
 
+	TRAIN_COMMAND,
+
 	ACTIVITY_ADVANCE,
 };
 

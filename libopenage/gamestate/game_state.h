@@ -3,10 +3,13 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "event/state.h"
 #include "gamestate/types.h"
+#include "time/time.h"
 
 
 namespace nyan {
@@ -28,6 +31,30 @@ namespace gamestate {
 class GameEntity;
 class Map;
 class Player;
+
+/**
+ * A pending unit production request created by the Production system.
+ *
+ * Systems cannot reach the EntityFactory directly, so a completed training
+ * action is recorded here. The simulation drains finished requests (those
+ * whose completion time has passed) and spawns the corresponding entity.
+ */
+struct ProductionRequest {
+	/**
+	 * Player that owns (and paid for) the produced entity.
+	 */
+	player_id_t owner;
+
+	/**
+	 * nyan fqon of the game entity to spawn.
+	 */
+	std::string game_entity;
+
+	/**
+	 * Simulation time at which the entity finishes training.
+	 */
+	time::time_t completion_time;
+};
 
 /**
  * State of the game.
@@ -118,6 +145,38 @@ public:
 	const std::shared_ptr<Map> &get_map() const;
 
 	/**
+	 * Queue a unit production request.
+	 *
+	 * Called by the Production system once a unit has been paid for and its
+	 * training timer started. The request is fulfilled (the entity spawned)
+	 * by the simulation once its completion time has passed.
+	 *
+	 * @param owner           Player that owns the produced entity.
+	 * @param game_entity     nyan fqon of the game entity to spawn.
+	 * @param completion_time Simulation time at which training finishes.
+	 */
+	void request_production(player_id_t owner,
+	                        const std::string &game_entity,
+	                        const time::time_t &completion_time);
+
+	/**
+	 * Remove and return all production requests that have finished by the
+	 * given time.
+	 *
+	 * @param time Current simulation time.
+	 *
+	 * @return Completed production requests (in insertion order).
+	 */
+	std::vector<ProductionRequest> take_completed_productions(const time::time_t &time);
+
+	/**
+	 * Get the number of production requests still pending.
+	 *
+	 * @return Number of queued (unfinished and finished-but-undrained) requests.
+	 */
+	size_t pending_production_count() const;
+
+	/**
 	 * TODO: Only for testing.
 	 */
 	const std::shared_ptr<assets::ModManager> &get_mod_manager() const;
@@ -143,6 +202,11 @@ private:
 	 * Map of the current game.
 	 */
 	std::shared_ptr<Map> map;
+
+	/**
+	 * Pending unit production requests, ordered by insertion.
+	 */
+	std::vector<ProductionRequest> production_requests;
 
 	/**
 	 * TODO: Only for testing

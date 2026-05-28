@@ -23,6 +23,7 @@
 #include "gamestate/system/move.h"
 #include "gamestate/system/attack.h"
 #include "gamestate/system/gather.h"
+#include "gamestate/system/production.h"
 #include "util/fixed_point.h"
 
 
@@ -146,6 +147,9 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
 		break;
 	case system_id_t::GATHER_COMMAND:
 		return Gather::gather_command(entity, state, start_time);
+		break;
+	case system_id_t::TRAIN_COMMAND:
+		return Production::train_command(entity, state, start_time);
 		break;
 	default:
 		throw Error{ERR << "Unhandled subsystem " << static_cast<int>(system_id)};

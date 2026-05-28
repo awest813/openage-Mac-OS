@@ -3,6 +3,7 @@
 #include "../testing/testing.h"
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <nyan/nyan.h>
@@ -14,6 +15,7 @@
 #include "component/internal/commands/attack.h"
 #include "component/internal/commands/gather.h"
 #include "component/internal/commands/idle.h"
+#include "component/internal/commands/train.h"
 #include "event/send_command.h"
 #include "game_entity.h"
 #include "game_state.h"
@@ -67,6 +69,7 @@ void next_command_conditions() {
 	TESTEQUALS(activity::next_command_move(t0, entity), false);
 	TESTEQUALS(activity::next_command_attack(t0, entity), false);
 	TESTEQUALS(activity::next_command_gather(t0, entity), false);
+	TESTEQUALS(activity::next_command_train(t0, entity), false);
 }
 
 void send_command_variants() {
@@ -111,6 +114,55 @@ void send_command_variants() {
 		command_queue->pop_command(t0));
 	TESTEQUALS(gather_command != nullptr, true);
 	TESTEQUALS(gather_command->get_target(), 42);
+
+	handler.invoke(*loop,
+	               nullptr,
+	               state,
+	               t0,
+	               event::EventHandler::param_map{
+	                   {"type", component::command::command_t::TRAIN},
+	                   {"game_entity", std::string{"test.unit.Spearman"}},
+	                   {"entity_ids", std::vector<entity_id_t>{7}},
+	               });
+
+	auto train_command = std::dynamic_pointer_cast<component::command::TrainCommand>(
+		command_queue->pop_command(t0));
+	TESTEQUALS(train_command != nullptr, true);
+	TESTEQUALS(train_command->get_game_entity(), std::string{"test.unit.Spearman"});
+}
+
+void production_requests() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	auto t0 = time::time_t::from_int(0);
+	auto t5 = time::time_t::from_int(5);
+	auto t10 = time::time_t::from_int(10);
+
+	TESTEQUALS(state->pending_production_count(), 0);
+
+	// Two units queued: one ready at t=5, one at t=10.
+	state->request_production(0, "test.unit.Spearman", t5);
+	state->request_production(0, "test.unit.Archer", t10);
+	TESTEQUALS(state->pending_production_count(), 2);
+
+	// Nothing completed before the first completion time.
+	auto completed_early = state->take_completed_productions(t0);
+	TESTEQUALS(completed_early.size(), 0);
+	TESTEQUALS(state->pending_production_count(), 2);
+
+	// Only the first unit has finished at t=5.
+	auto completed_mid = state->take_completed_productions(t5);
+	TESTEQUALS(completed_mid.size(), 1);
+	TESTEQUALS(completed_mid.at(0).game_entity, std::string{"test.unit.Spearman"});
+	TESTEQUALS(state->pending_production_count(), 1);
+
+	// The second unit finishes by t=10 and is drained.
+	auto completed_late = state->take_completed_productions(t10);
+	TESTEQUALS(completed_late.size(), 1);
+	TESTEQUALS(completed_late.at(0).game_entity, std::string{"test.unit.Archer"});
+	TESTEQUALS(state->pending_production_count(), 0);
 }
 
 } // namespace openage::gamestate::tests

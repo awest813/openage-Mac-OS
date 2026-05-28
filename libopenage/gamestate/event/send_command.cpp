@@ -2,6 +2,7 @@
 
 #include "send_command.h"
 
+#include <string>
 #include <vector>
 
 #include "coord/phys.h"
@@ -10,6 +11,7 @@
 #include "gamestate/component/internal/commands/gather.h"
 #include "gamestate/component/internal/commands/idle.h"
 #include "gamestate/component/internal/commands/move.h"
+#include "gamestate/component/internal/commands/train.h"
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
@@ -89,6 +91,13 @@ void SendCommandHandler::invoke(openage::event::EventLoop & /* loop */,
 				std::make_shared<component::command::GatherCommand>(
 					params.get("target_entity_id",
 			                   gamestate::entity_id_t{})));
+			break;
+		case component::command::command_t::TRAIN:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::TrainCommand>(
+					params.get("game_entity",
+			                   std::string{})));
 			break;
 		default:
 			break;
