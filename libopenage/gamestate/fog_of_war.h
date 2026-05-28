@@ -2,9 +2,11 @@
 
 #pragma once
 
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 
+#include "coord/phys.h"
 #include "coord/tile.h"
 #include "gamestate/types.h"
 
@@ -70,6 +72,42 @@ public:
 	 */
 	const std::unordered_set<coord::tile> &get_explored_tiles(player_id_t player) const;
 
+	// -----------------------------------------------------------------------
+	// Last-known position tracking
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Record the last-known position of an entity for a specific observer.
+	 *
+	 * Called when an entity leaves the observer's line of sight.
+	 *
+	 * @param observer  Observing player.
+	 * @param entity    Entity whose position is recorded.
+	 * @param position  The entity's position at the moment it left vision.
+	 */
+	void set_last_known_position(player_id_t observer,
+	                             entity_id_t entity,
+	                             const coord::phys3 &position);
+
+	/**
+	 * Get the last-known position of an entity for a specific observer.
+	 *
+	 * @param observer  Observing player.
+	 * @param entity    Entity to query.
+	 * @return The last-known position, or std::nullopt if never recorded.
+	 */
+	std::optional<coord::phys3> get_last_known_position(player_id_t observer,
+	                                                    entity_id_t entity) const;
+
+	/**
+	 * Clear the last-known position entry for an entity (e.g. when it becomes
+	 * visible again).
+	 *
+	 * @param observer  Observing player.
+	 * @param entity    Entity to clear.
+	 */
+	void clear_last_known_position(player_id_t observer, entity_id_t entity);
+
 private:
 	/// Tiles currently visible to each player (rebuilt each tick).
 	std::unordered_map<player_id_t, std::unordered_set<coord::tile>> visible_tiles;
@@ -79,6 +117,15 @@ private:
 
 	/// Empty set returned by reference for players with no entries.
 	static const std::unordered_set<coord::tile> empty_set;
+
+	/**
+	 * Last-known position of entities per observer player.
+	 * Outer key: observer player ID.
+	 * Inner key: entity ID.
+	 * Value:     world position when the entity was last visible.
+	 */
+	std::unordered_map<player_id_t,
+	                   std::unordered_map<entity_id_t, coord::phys3>> last_known_positions;
 };
 
 } // namespace openage::gamestate

@@ -59,4 +59,30 @@ const std::unordered_set<coord::tile> &FogOfWar::get_explored_tiles(player_id_t 
 	return it->second;
 }
 
+void FogOfWar::set_last_known_position(player_id_t observer,
+                                       entity_id_t entity,
+                                       const coord::phys3 &position) {
+	this->last_known_positions[observer][entity] = position;
+}
+
+std::optional<coord::phys3> FogOfWar::get_last_known_position(player_id_t observer,
+                                                              entity_id_t entity) const {
+	auto player_it = this->last_known_positions.find(observer);
+	if (player_it == this->last_known_positions.end()) {
+		return std::nullopt;
+	}
+	auto entity_it = player_it->second.find(entity);
+	if (entity_it == player_it->second.end()) {
+		return std::nullopt;
+	}
+	return entity_it->second;
+}
+
+void FogOfWar::clear_last_known_position(player_id_t observer, entity_id_t entity) {
+	auto player_it = this->last_known_positions.find(observer);
+	if (player_it != this->last_known_positions.end()) {
+		player_it->second.erase(entity);
+	}
+}
+
 } // namespace openage::gamestate

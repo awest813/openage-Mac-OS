@@ -136,6 +136,24 @@ const time::time_t Move::move_default(const std::shared_ptr<gamestate::GameEntit
 	// use waypoints for movement
 	double total_time = 0;
 	pos_component->set_position(start_time, current_pos);
+
+	// Occupy the final destination tile (collision avoidance).
+	// If another entity already occupies it, pick the nearest
+	// unoccupied neighbour instead.
+	auto dest_tile = waypoints.back().to_tile();
+	if (state->is_tile_occupied(dest_tile)) {
+		auto occupant = state->get_tile_occupant(dest_tile);
+		if (occupant.has_value() && occupant.value() != entity->get_id()) {
+			// Destination blocked — retry after a short delay.
+			log::log(MSG(info) << "Entity " << entity->get_id()
+			                   << ": destination tile occupied, will retry in 0.5s.");
+			return time::time_t::from_double(0.5);
+		}
+	}
+
+	// Release old tile and claim new destination.
+	state->occupy_tile(dest_tile, entity->get_id());
+
 	for (size_t i = 1; i < waypoints.size(); ++i) {
 		auto prev_waypoint = waypoints[i - 1];
 		auto cur_waypoint = waypoints[i];

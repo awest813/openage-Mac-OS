@@ -10,6 +10,7 @@
 #include "gamestate/component/internal/command_queue.h"
 #include "gamestate/component/internal/commands/attack.h"
 #include "gamestate/component/internal/commands/attack_move.h"
+#include "gamestate/component/internal/commands/build.h"
 #include "gamestate/component/internal/commands/formation_move.h"
 #include "gamestate/component/internal/commands/gather.h"
 #include "gamestate/component/internal/commands/guard.h"
@@ -162,6 +163,15 @@ void SendCommandHandler::invoke(openage::event::EventLoop & /* loop */,
 				std::make_shared<component::command::TrainCommand>(
 					params.get("game_entity",
 			                   std::string{})));
+			break;
+		case component::command::command_t::BUILD:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::BuildCommand>(
+					params.get("game_entity",
+			                   std::string{}),
+					params.get("target",
+			                   coord::phys3{0, 0, 0})));
 			break;
 		case component::command::command_t::ATTACK_MOVE:
 			command_queue->add_command(

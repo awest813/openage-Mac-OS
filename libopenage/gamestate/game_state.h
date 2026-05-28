@@ -7,8 +7,10 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
+#include "coord/tile.h"
 #include "event/state.h"
 #include "gamestate/fog_of_war.h"
 #include "gamestate/player.h"
@@ -339,6 +341,55 @@ public:
 	                       entity_id_t entity_id,
 	                       const time::time_t &time) const;
 
+	/**
+	 * Get the last-known position of an entity as seen by a player.
+	 *
+	 * When an entity leaves a player's vision, its most recent position is
+	 * stored. This can be used to show "ghost" units on the map.
+	 *
+	 * @param observer  Player who saw the entity.
+	 * @param entity_id ID of the entity.
+	 * @return The last-known position, or std::nullopt if the entity has
+	 *         never been seen by the observer.
+	 */
+	std::optional<coord::phys3> get_last_known_position(player_id_t observer,
+	                                                    entity_id_t entity_id) const;
+
+	// -----------------------------------------------------------------------
+	// Tile Occupancy (collision avoidance)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Mark a tile as occupied by the given entity.
+	 *
+	 * @param tile   Tile to occupy.
+	 * @param entity Entity occupying the tile.
+	 */
+	void occupy_tile(coord::tile tile, entity_id_t entity);
+
+	/**
+	 * Release any tile previously occupied by the given entity.
+	 *
+	 * @param entity Entity releasing its tile.
+	 */
+	void release_tile(entity_id_t entity);
+
+	/**
+	 * Check whether a tile is currently occupied by any entity.
+	 *
+	 * @param tile Tile to test.
+	 * @return true if some entity occupies the tile.
+	 */
+	bool is_tile_occupied(coord::tile tile) const;
+
+	/**
+	 * Get the entity occupying a tile, if any.
+	 *
+	 * @param tile Tile to query.
+	 * @return The occupying entity's ID, or std::nullopt.
+	 */
+	std::optional<entity_id_t> get_tile_occupant(coord::tile tile) const;
+
 private:
 	/**
 	 * Check whether a player has been defeated (lost all buildings) after the
@@ -393,6 +444,19 @@ private:
 	 * Fog-of-war state for all players.
 	 */
 	FogOfWar fog_of_war;
+
+	/**
+	 * Tile occupancy: maps a tile to the entity currently occupying it.
+	 *
+	 * Used for collision avoidance: the Move system checks this before
+	 * placing a unit on a destination tile.
+	 */
+	std::unordered_map<coord::tile, entity_id_t> tile_occupants;
+
+	/**
+	 * Reverse map: entity → the tile it currently occupies.
+	 */
+	std::unordered_map<entity_id_t, coord::tile> entity_tiles;
 
 	/**
 	 * TODO: Only for testing

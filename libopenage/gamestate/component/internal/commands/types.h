@@ -18,6 +18,7 @@ enum class command_t {
 	ATTACK_MOVE,
 	GATHER,
 	TRAIN,
+	BUILD,
 	PATROL,
 	GUARD,
 	SET_STANCE,

@@ -21,6 +21,7 @@
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/system/attack_move.h"
+#include "gamestate/system/build.h"
 #include "gamestate/system/formation_move.h"
 #include "gamestate/system/guard.h"
 #include "gamestate/system/idle.h"
@@ -159,6 +160,9 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
 		break;
 	case system_id_t::TRAIN_COMMAND:
 		return Production::train_command(entity, loop, state, start_time);
+		break;
+	case system_id_t::BUILD_COMMAND:
+		return Build::build_command(entity, loop, state, start_time);
 		break;
 	case system_id_t::PATROL_COMMAND:
 		return Patrol::patrol_command(entity, state, start_time);
