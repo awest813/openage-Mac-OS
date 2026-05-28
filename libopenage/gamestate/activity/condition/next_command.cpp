@@ -18,7 +18,7 @@ bool next_command_idle(const time::time_t &time,
 	}
 
 	auto command = command_queue->get_queue().front(time);
-	return command->get_type() == component::command::command_t::MOVE;
+	return command->get_type() == component::command::command_t::IDLE;
 }
 
 bool next_command_move(const time::time_t &time,

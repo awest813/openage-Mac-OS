@@ -6,6 +6,8 @@
 
 #include "coord/phys.h"
 #include "gamestate/component/internal/command_queue.h"
+#include "gamestate/component/internal/commands/attack.h"
+#include "gamestate/component/internal/commands/gather.h"
 #include "gamestate/component/internal/commands/idle.h"
 #include "gamestate/component/internal/commands/move.h"
 #include "gamestate/component/types.h"
@@ -73,6 +75,20 @@ void SendCommandHandler::invoke(openage::event::EventLoop & /* loop */,
 				std::make_shared<component::command::MoveCommand>(
 					params.get("target",
 			                   coord::phys3{0, 0, 0})));
+			break;
+		case component::command::command_t::ATTACK:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::AttackCommand>(
+					params.get("target_entity_id",
+			                   gamestate::entity_id_t{})));
+			break;
+		case component::command::command_t::GATHER:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::GatherCommand>(
+					params.get("target_entity_id",
+			                   gamestate::entity_id_t{})));
 			break;
 		default:
 			break;
