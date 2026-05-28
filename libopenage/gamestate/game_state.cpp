@@ -12,6 +12,8 @@
 #include "log/log.h"
 #include "log/message.h"
 
+#include "coord/tile.h"
+#include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/game_entity.h"
@@ -266,6 +268,41 @@ const std::shared_ptr<assets::ModManager> &GameState::get_mod_manager() const {
 
 void GameState::set_mod_manager(const std::shared_ptr<assets::ModManager> &mod_manager) {
 	this->mod_manager = mod_manager;
+}
+
+void GameState::update_player_visibility(player_id_t player,
+                                         coord::tile center,
+                                         int sight_range) {
+	this->fog_of_war.update_visibility(player, center, sight_range);
+}
+
+void GameState::flush_player_visibility(player_id_t player) {
+	this->fog_of_war.flush_visible(player);
+}
+
+bool GameState::is_tile_visible(player_id_t player, coord::tile tile) const {
+	return this->fog_of_war.is_visible(player, tile);
+}
+
+bool GameState::is_tile_explored(player_id_t player, coord::tile tile) const {
+	return this->fog_of_war.is_explored(player, tile);
+}
+
+bool GameState::is_entity_visible(player_id_t observer,
+                                   entity_id_t entity_id,
+                                   const time::time_t &time) const {
+	auto it = this->game_entities.find(entity_id);
+	if (it == this->game_entities.end()) {
+		return false;
+	}
+	const auto &entity = it->second;
+	if (not entity->has_component(component::component_t::POSITION)) {
+		return false;
+	}
+	auto pos_comp = std::dynamic_pointer_cast<component::Position>(
+		entity->get_component(component::component_t::POSITION));
+	auto tile = pos_comp->get_positions().get(time).to_tile();
+	return this->fog_of_war.is_visible(observer, tile);
 }
 
 } // namespace openage::gamestate

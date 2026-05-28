@@ -70,10 +70,12 @@ namespace openage::gamestate {
  *                    |           |            +-> Patrol      -> WaitPatrol      -> (loop to idle)
  *                    |           |            |
  *                    |           |            +-> Guard       -> WaitGuard       -> (loop to idle)
+ *                    |           |            |
+ *                    |           |            +-> FormMove    -> WaitFormMove    -> (loop to idle)
  *                    |           |
  *                    |           +-> WaitForCmd -> CmdType?
  *                    |
- *                    +-> (none of MOVE/ATTACK/GATHER/CREATE/ATTACK_MOVE/PATROL/GUARD) -> End
+ *                    +-> (none of MOVE/ATTACK/GATHER/CREATE/ATTACK_MOVE/PATROL/GUARD/FORMOVE) -> End
  *
  * TODO: Replace with config
  */
@@ -99,6 +101,8 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	auto wait_for_patrol = std::make_shared<activity::XorEventGate>(17);
 	auto guard = std::make_shared<activity::TaskSystemNode>(18, "Guard");
 	auto wait_for_guard = std::make_shared<activity::XorEventGate>(19);
+	auto formation_move = std::make_shared<activity::TaskSystemNode>(20, "FormationMove");
+	auto wait_for_formation_move = std::make_shared<activity::XorEventGate>(21);
 
 	start->add_output(idle);
 
@@ -131,6 +135,7 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	condition_cmd_type->add_output(attack_move, gamestate::activity::next_command_attack_move);
 	condition_cmd_type->add_output(patrol, gamestate::activity::next_command_patrol);
 	condition_cmd_type->add_output(guard, gamestate::activity::next_command_guard);
+	condition_cmd_type->add_output(formation_move, gamestate::activity::next_command_formation_move);
 	condition_cmd_type->set_default(move);
 
 	// Move system node
@@ -185,6 +190,13 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 
 	wait_for_guard->add_output(idle, gamestate::activity::primer_wait);
 	wait_for_guard->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Formation-move system node: move while preserving formation offsets
+	formation_move->add_output(wait_for_formation_move);
+	formation_move->set_system_id(system::system_id_t::FORMATION_MOVE_COMMAND);
+
+	wait_for_formation_move->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_formation_move->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
 	return std::make_shared<activity::Activity>(0, start, "test");
 }

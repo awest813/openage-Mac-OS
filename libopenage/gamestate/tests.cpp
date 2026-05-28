@@ -9,12 +9,14 @@
 #include <nyan/nyan.h>
 
 #include "coord/phys.h"
+#include "coord/tile.h"
 #include "event/eventhandler.h"
 #include "event/event_loop.h"
 #include "activity/condition/next_command.h"
 #include "component/internal/command_queue.h"
 #include "component/internal/commands/attack.h"
 #include "component/internal/commands/attack_move.h"
+#include "component/internal/commands/formation_move.h"
 #include "component/internal/commands/gather.h"
 #include "component/internal/commands/guard.h"
 #include "component/internal/commands/idle.h"
@@ -24,6 +26,7 @@
 #include "component/internal/stance.h"
 #include "event/game_over.h"
 #include "event/send_command.h"
+#include "fog_of_war.h"
 #include "game_entity.h"
 #include "game_state.h"
 #include "player.h"
@@ -356,6 +359,83 @@ void next_command_conditions_extended() {
 	TESTEQUALS(activity::next_command_patrol(t0, entity), false);
 	TESTEQUALS(activity::next_command_guard(t0, entity), true);
 	command_queue->pop_command(t0);
+}
+
+void next_command_formation_move_test() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto entity = make_entity_with_command_queue(loop, 0);
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+	auto t0 = time::time_t::from_int(0);
+
+	// Queue a FormationMoveCommand and verify the condition detects it.
+	command_queue->add_command(
+		t0,
+		std::make_shared<component::command::FormationMoveCommand>(
+			coord::phys3{10, 10, 0},
+			coord::phys3_delta{1, 0, 0}));
+	TESTEQUALS(activity::next_command_formation_move(t0, entity), true);
+	TESTEQUALS(activity::next_command_move(t0, entity), false);
+	TESTEQUALS(activity::next_command_idle(t0, entity), false);
+	command_queue->pop_command(t0);
+
+	// Queue a regular MoveCommand and verify formation_move returns false.
+	command_queue->add_command(
+		t0,
+		std::make_shared<component::command::MoveCommand>(coord::phys3{5, 5, 0}));
+	TESTEQUALS(activity::next_command_formation_move(t0, entity), false);
+	TESTEQUALS(activity::next_command_move(t0, entity), true);
+	command_queue->pop_command(t0);
+}
+
+void fog_of_war_exploration() {
+	FogOfWar fow;
+	player_id_t p0{0};
+	coord::tile center{5, 5};
+
+	// Initially nothing explored.
+	TESTEQUALS(fow.is_explored(p0, center), false);
+	TESTEQUALS(fow.is_visible(p0, center), false);
+
+	// update_visibility with range=1 should reveal a 3x3 area.
+	fow.update_visibility(p0, center, 1);
+	TESTEQUALS(fow.is_visible(p0, center), true);
+	TESTEQUALS(fow.is_explored(p0, center), true);
+
+	// Adjacent tile within range should be visible and explored.
+	coord::tile adj{6, 5};
+	TESTEQUALS(fow.is_visible(p0, adj), true);
+	TESTEQUALS(fow.is_explored(p0, adj), true);
+
+	// Tile outside range-1 from center should not be visible.
+	coord::tile far{8, 8};
+	TESTEQUALS(fow.is_visible(p0, far), false);
+	TESTEQUALS(fow.is_explored(p0, far), false);
+}
+
+void fog_of_war_visibility() {
+	FogOfWar fow;
+	player_id_t p0{0};
+	coord::tile center{5, 5};
+
+	fow.update_visibility(p0, center, 1);
+	TESTEQUALS(fow.is_visible(p0, center), true);
+
+	// flush_visible should clear current visibility but not explored status.
+	fow.flush_visible(p0);
+	TESTEQUALS(fow.is_visible(p0, center), false);
+	TESTEQUALS(fow.is_explored(p0, center), true);
+
+	// Different player should not share visibility.
+	player_id_t p1{1};
+	TESTEQUALS(fow.is_visible(p1, center), false);
+	TESTEQUALS(fow.is_explored(p1, center), false);
+
+	// Update p1's visibility at a different location.
+	coord::tile other{20, 20};
+	fow.update_visibility(p1, other, 0);
+	TESTEQUALS(fow.is_visible(p1, other), true);
+	TESTEQUALS(fow.is_visible(p0, other), false);
 }
 
 } // namespace openage::gamestate::tests

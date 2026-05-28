@@ -28,6 +28,8 @@ enum class system_id_t {
 
 	GUARD_COMMAND,
 
+	FORMATION_MOVE_COMMAND,
+
 	ACTIVITY_ADVANCE,
 };
 
