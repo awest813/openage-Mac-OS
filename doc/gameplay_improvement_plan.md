@@ -66,7 +66,7 @@ seam the simulation drains to spawn the finished unit via the `Spawner`.
 - [x] `Production` system: validate creatable, check/deduct cost, queue timed request
 - [x] Timed production request queue on `GameState` (`request_production` / `take_completed_productions`)
 - [x] Wire `Create` into the entity factory, activity graph, and `send_command`
-- [ ] Drain completed production requests in the simulation tick and spawn finished units at the rally point via the existing `Spawner`
+- [x] Drain completed production requests: `Production::train_command` fires a `"game.spawn_production"` event at `completion_time`; `SpawnProductionHandler` (registered in the simulation) creates and adds the entity at the producer's position when the event fires
 - [ ] Add `BUILD` command type for placing new buildings
 
 ### 1.4 Win / Loss Conditions

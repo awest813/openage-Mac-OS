@@ -9,6 +9,7 @@
 #include "gamestate/event/process_command.h"
 #include "gamestate/event/send_command.h"
 #include "gamestate/event/spawn_entity.h"
+#include "gamestate/event/spawn_production.h"
 #include "gamestate/event/wait.h"
 #include "gamestate/terrain_factory.h"
 #include "time/clock.h"
@@ -137,11 +138,14 @@ void GameSimulation::init_event_handlers() {
 	auto drag_select_handler = std::make_shared<gamestate::event::DragSelectHandler>();
 	auto spawn_handler = std::make_shared<gamestate::event::SpawnEntityHandler>(this->event_loop,
 	                                                                            this->entity_factory);
+	auto spawn_production_handler = std::make_shared<gamestate::event::SpawnProductionHandler>(this->event_loop,
+	                                                                                           this->entity_factory);
 	auto command_handler = std::make_shared<gamestate::event::SendCommandHandler>();
 	auto manager_handler = std::make_shared<gamestate::event::ProcessCommandHandler>();
 	auto wait_handler = std::make_shared<gamestate::event::WaitHandler>();
 	this->event_loop->add_event_handler(drag_select_handler);
 	this->event_loop->add_event_handler(spawn_handler);
+	this->event_loop->add_event_handler(spawn_production_handler);
 	this->event_loop->add_event_handler(command_handler);
 	this->event_loop->add_event_handler(manager_handler);
 	this->event_loop->add_event_handler(wait_handler);

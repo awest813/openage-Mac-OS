@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "error/error.h"
+#include "event/event_loop.h"
 #include "log/message.h"
 
 #include "gamestate/activity/node.h"
@@ -82,7 +83,7 @@ void Activity::advance(const time::time_t &start_time,
 		case activity::node_t::TASK_SYSTEM: {
 			auto node = std::static_pointer_cast<activity::TaskSystemNode>(current_node);
 			auto task = node->get_system_id();
-			event_wait_time = Activity::handle_subsystem(start_time, entity, state, task);
+			event_wait_time = Activity::handle_subsystem(start_time, entity, loop, state, task);
 			auto next_id = node->get_next();
 			current_node = node->next(next_id);
 		} break;
@@ -125,6 +126,7 @@ void Activity::advance(const time::time_t &start_time,
 
 const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
                                               const std::shared_ptr<gamestate::GameEntity> &entity,
+                                              const std::shared_ptr<openage::event::EventLoop> &loop,
                                               const std::shared_ptr<openage::gamestate::GameState> &state,
                                               system_id_t system_id) {
 	switch (system_id) {
@@ -149,7 +151,7 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
 		return Gather::gather_command(entity, state, start_time);
 		break;
 	case system_id_t::TRAIN_COMMAND:
-		return Production::train_command(entity, state, start_time);
+		return Production::train_command(entity, loop, state, start_time);
 		break;
 	default:
 		throw Error{ERR << "Unhandled subsystem " << static_cast<int>(system_id)};

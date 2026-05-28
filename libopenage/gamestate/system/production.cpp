@@ -4,6 +4,7 @@
 
 #include <nyan/nyan.h>
 
+#include "event/event_loop.h"
 #include "log/log.h"
 #include "log/message.h"
 
@@ -14,12 +15,17 @@
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
+#include "gamestate/manager.h"
 #include "gamestate/player.h"
 
 
 namespace openage::gamestate::system {
 
+// Event handler ID for the spawn-production event fired at completion time.
+static constexpr const char *SPAWN_PRODUCTION_EVENT = "game.spawn_production";
+
 const time::time_t Production::train_command(const std::shared_ptr<gamestate::GameEntity> &entity,
+                                             const std::shared_ptr<openage::event::EventLoop> &loop,
                                              const std::shared_ptr<openage::gamestate::GameState> &state,
                                              const time::time_t &start_time) {
 	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
@@ -94,10 +100,25 @@ const time::time_t Production::train_command(const std::shared_ptr<gamestate::Ga
 		return time::time_t::from_int(0);
 	}
 
-	// Deduct resources and queue the production request.
+	// Deduct resources.
 	player->add_resource(start_time, cost_resource, -cost_amount);
+
+	// Record in the testable production queue.
 	auto completion_time = start_time + creation_time;
 	state->request_production(owner_id, target, completion_time);
+
+	// Schedule a spawn event at completion_time. The SpawnProductionHandler
+	// (registered on the loop by the simulation) will create and add the
+	// entity when the event fires.
+	openage::event::EventHandler::param_map params{
+		{"owner", owner_id},
+		{"game_entity", target},
+	};
+	loop->create_event(SPAWN_PRODUCTION_EVENT,
+	                   entity->get_manager(),
+	                   state,
+	                   completion_time,
+	                   params);
 
 	log::log(MSG(info) << "Entity " << entity->get_id()
 	                   << " started producing " << target
