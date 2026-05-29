@@ -15,7 +15,7 @@ namespace openage::gamestate::component::command {
  *
  * The final destination for the unit is `centroid + offset`.
  */
-class FormationMoveCommand final : public Command {
+class FormationMoveCommand final : public BaseCommand {
 public:
 	/**
 	 * @param centroid Group destination (where the formation centre should end up).
@@ -49,5 +49,4 @@ private:
 	coord::phys3_delta offset;
 };
 
-} // namespace openage::gamestate::component::command
-
+} // namespace openage::gamestate::command
