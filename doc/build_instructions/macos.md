@@ -169,4 +169,3 @@ Pass the full path to `clang++` manually:
 # Intel example
 ./configure --compiler=/usr/local/opt/llvm/bin/clang++ --download-nyan
 ```
-
