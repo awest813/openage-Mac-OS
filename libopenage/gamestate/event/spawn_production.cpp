@@ -13,6 +13,7 @@
 #include "gamestate/entity_factory.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
+#include "gamestate/manager.h"
 #include "gamestate/map.h"
 #include "gamestate/types.h"
 #include "log/log.h"
