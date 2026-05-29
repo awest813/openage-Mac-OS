@@ -37,6 +37,10 @@
 
 namespace openage::gamestate::tests {
 
+// gamestate/event/ lives in this namespace; qualify the global event loop types.
+using openage::event::EventHandler;
+using openage::event::EventLoop;
+
 namespace {
 
 std::shared_ptr<GameEntity> make_entity_with_command_queue(const std::shared_ptr<event::EventLoop> &loop,
