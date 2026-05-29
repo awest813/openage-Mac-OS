@@ -21,6 +21,7 @@
 #include "component/internal/commands/gather.h"
 #include "component/internal/commands/guard.h"
 #include "component/internal/commands/idle.h"
+#include "component/internal/commands/move.h"
 #include "component/internal/commands/patrol.h"
 #include "component/internal/commands/train.h"
 #include "component/internal/ownership.h"
@@ -530,7 +531,7 @@ void fog_of_war_refresh() {
 		entity->add_component(position);
 
 		auto ownership = std::make_shared<component::Ownership>(loop);
-		ownership->get_owners().set(t0, player_id_t{0});
+		ownership->set_owner(t0, player_id_t{0});
 		entity->add_component(ownership);
 
 		state->add_game_entity(entity);
@@ -569,7 +570,7 @@ void entity_visibility_query() {
 		entity->add_component(position);
 
 		auto ownership = std::make_shared<component::Ownership>(loop);
-		ownership->get_owners().set(t0, owner);
+		ownership->set_owner(t0, owner);
 		entity->add_component(ownership);
 
 		state->add_game_entity(entity);
