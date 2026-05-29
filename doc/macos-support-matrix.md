@@ -134,7 +134,7 @@ Examples:
 | Runner label   | Architecture | macOS version |
 | -------------- | ------------ | ------------- |
 | `macos-15`     | arm64        | 15.x          |
-| `macos-13`     | x86_64       | 13.x          |
+| `macos-15-intel` | x86_64     | 15.x (Intel)  |
 
 CI jobs are pinned to these specific runner labels to guarantee architecture
 coverage.  `macos-latest` is **not used** in CI to prevent silent drift.

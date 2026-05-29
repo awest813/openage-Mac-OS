@@ -211,6 +211,18 @@ def get_macos_options(args):
         f'-DMACOSX_DEPLOYMENT_TARGET={args.macos_deployment_target}'
     )
 
+    # Homebrew LLVM needs the macOS SDK sysroot or libc++ headers conflict with
+    # Xcode SDK C headers (size_t / cmath errors on CI runners).
+    import subprocess
+    try:
+        sdkroot = subprocess.check_output(
+            ['xcrun', '--show-sdk-path'], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        if sdkroot:
+            extra_flags.append(f'-DCMAKE_OSX_SYSROOT={sdkroot}')
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+
     return extra_flags
 
 

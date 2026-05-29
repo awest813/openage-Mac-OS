@@ -48,7 +48,9 @@ void GameSimulation::run() {
 	this->start();
 	while (this->running) {
 		time::time_t current_time = this->time_loop->get_clock()->get_time();
-		this->event_loop->reach_time(current_time, this->game->get_state());
+		auto state = this->game->get_state();
+		this->event_loop->reach_time(current_time, state);
+		state->refresh_visibility(current_time);
 	}
 	log::log(MSG(info) << "Game simulation loop exited");
 }

@@ -21,9 +21,11 @@
 #include "component/internal/commands/gather.h"
 #include "component/internal/commands/guard.h"
 #include "component/internal/commands/idle.h"
+#include "component/internal/commands/move.h"
 #include "component/internal/commands/patrol.h"
 #include "component/internal/commands/train.h"
 #include "component/internal/ownership.h"
+#include "component/internal/position.h"
 #include "component/internal/stance.h"
 #include "event/game_over.h"
 #include "event/send_command.h"
@@ -36,9 +38,10 @@
 
 namespace openage::gamestate::tests {
 
+
 namespace {
 
-std::shared_ptr<GameEntity> make_entity_with_command_queue(const std::shared_ptr<event::EventLoop> &loop,
+std::shared_ptr<GameEntity> make_entity_with_command_queue(const std::shared_ptr<openage::event::EventLoop> &loop,
                                                            entity_id_t id) {
 	auto entity = std::make_shared<GameEntity>(id);
 	entity->add_component(std::make_shared<component::CommandQueue>(loop));
@@ -49,7 +52,7 @@ std::shared_ptr<GameEntity> make_entity_with_command_queue(const std::shared_ptr
 } // namespace
 
 void player_resources() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
 	auto view = db->new_view();
 	Player player{0, view, loop};
@@ -69,7 +72,7 @@ void player_resources() {
 }
 
 void next_command_conditions() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto entity = make_entity_with_command_queue(loop, 0);
 	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
 		entity->get_component(component::component_t::COMMANDQUEUE));
@@ -87,7 +90,7 @@ void next_command_conditions() {
 }
 
 void send_command_variants() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 	auto entity = make_entity_with_command_queue(loop, 7);
@@ -95,13 +98,13 @@ void send_command_variants() {
 
 	state->add_game_entity(entity);
 
-	event::SendCommandHandler handler;
+	gamestate::event::SendCommandHandler handler;
 
 	handler.invoke(*loop,
 	               nullptr,
 	               state,
 	               t0,
-	               event::EventHandler::param_map{
+	               openage::event::EventHandler::param_map{
 	                   {"type", component::command::command_t::ATTACK},
 	                   {"target_entity_id", entity_id_t{23}},
 	                   {"entity_ids", std::vector<entity_id_t>{7}},
@@ -118,7 +121,7 @@ void send_command_variants() {
 	               nullptr,
 	               state,
 	               t0,
-	               event::EventHandler::param_map{
+	               openage::event::EventHandler::param_map{
 	                   {"type", component::command::command_t::GATHER},
 	                   {"target_entity_id", entity_id_t{42}},
 	                   {"entity_ids", std::vector<entity_id_t>{7}},
@@ -133,7 +136,7 @@ void send_command_variants() {
 	               nullptr,
 	               state,
 	               t0,
-	               event::EventHandler::param_map{
+	               openage::event::EventHandler::param_map{
 	                   {"type", component::command::command_t::TRAIN},
 	                   {"game_entity", std::string{"test.unit.Spearman"}},
 	                   {"entity_ids", std::vector<entity_id_t>{7}},
@@ -146,7 +149,7 @@ void send_command_variants() {
 }
 
 void production_requests() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
@@ -180,7 +183,7 @@ void production_requests() {
 }
 
 void carried_resources_lifecycle() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
@@ -212,7 +215,7 @@ void carried_resources_lifecycle() {
 }
 
 void player_state_transitions() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
 	auto view = db->new_view();
 	Player player{0, view, loop};
@@ -230,7 +233,7 @@ void player_state_transitions() {
 static std::shared_ptr<GameEntity>
 make_building(entity_id_t id,
               player_id_t owner,
-              const std::shared_ptr<event::EventLoop> &loop,
+              const std::shared_ptr<openage::event::EventLoop> &loop,
               const std::shared_ptr<GameState> &state,
               const time::time_t &t) {
 	auto entity = std::make_shared<GameEntity>(id);
@@ -242,13 +245,13 @@ make_building(entity_id_t id,
 }
 
 void player_defeated_on_last_building_destroyed() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
 	// check_defeat fires events via the loop; register their handlers.
-	loop->add_event_handler(std::make_shared<event::PlayerDefeatedHandler>());
-	loop->add_event_handler(std::make_shared<event::GameOverHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
 
 	auto view = db->new_view();
 	auto p0 = std::make_shared<Player>(0, view, loop);
@@ -275,13 +278,13 @@ void player_defeated_on_last_building_destroyed() {
 }
 
 void no_defeat_for_unit_death() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
 	// check_defeat fires events via the loop; register their handlers.
-	loop->add_event_handler(std::make_shared<event::PlayerDefeatedHandler>());
-	loop->add_event_handler(std::make_shared<event::GameOverHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
 
 	auto view = db->new_view();
 	auto p0 = std::make_shared<Player>(0, view, loop);
@@ -311,7 +314,7 @@ void no_defeat_for_unit_death() {
 }
 
 void stance_component() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto t0 = time::time_t::from_int(0);
 	auto t1 = time::time_t::from_int(1);
 
@@ -330,7 +333,7 @@ void stance_component() {
 }
 
 void next_command_conditions_extended() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto entity = make_entity_with_command_queue(loop, 0);
 	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
 		entity->get_component(component::component_t::COMMANDQUEUE));
@@ -363,7 +366,7 @@ void next_command_conditions_extended() {
 }
 
 void next_command_formation_move_test() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto entity = make_entity_with_command_queue(loop, 0);
 	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
 		entity->get_component(component::component_t::COMMANDQUEUE));
@@ -440,7 +443,7 @@ void fog_of_war_visibility() {
 }
 
 void tile_occupancy() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = std::make_shared<nyan::Database>();
 	auto state = std::make_shared<GameState>(db, loop);
 
@@ -512,8 +515,84 @@ void last_known_positions() {
 	fow.clear_last_known_position(p0, entity_id_t{999});
 }
 
+void fog_of_war_refresh() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	auto player = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(player);
+
+	auto make_scout = [&](entity_id_t id, coord::phys3 pos) {
+		auto entity = std::make_shared<GameEntity>(id);
+		auto position = std::make_shared<component::Position>(loop);
+		position->set_position(t0, pos);
+		entity->add_component(position);
+
+		auto ownership = std::make_shared<component::Ownership>(loop);
+		ownership->set_owner(t0, player_id_t{0});
+		entity->add_component(ownership);
+
+		state->add_game_entity(entity);
+	};
+
+	make_scout(entity_id_t{1}, coord::phys3{10, 10, 0});
+	make_scout(entity_id_t{2}, coord::phys3{50, 50, 0});
+
+	state->refresh_visibility(t0);
+
+	coord::tile near_scout{10, 10};
+	coord::tile far_from_scouts{0, 0};
+	TESTEQUALS(state->is_tile_visible(player_id_t{0}, near_scout), true);
+	TESTEQUALS(state->is_tile_explored(player_id_t{0}, near_scout), true);
+	TESTEQUALS(state->is_tile_visible(player_id_t{0}, far_from_scouts), false);
+
+	state->refresh_visibility(t0);
+	TESTEQUALS(state->is_tile_visible(player_id_t{0}, far_from_scouts), false);
+}
+
+void entity_visibility_query() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	auto observer = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	auto enemy_player = std::make_shared<Player>(player_id_t{1}, db->new_view(), loop);
+	state->add_player(observer);
+	state->add_player(enemy_player);
+
+	auto make_unit = [&](entity_id_t id, player_id_t owner, coord::phys3 pos) {
+		auto entity = std::make_shared<GameEntity>(id);
+		auto position = std::make_shared<component::Position>(loop);
+		position->set_position(t0, pos);
+		entity->add_component(position);
+
+		auto ownership = std::make_shared<component::Ownership>(loop);
+		ownership->set_owner(t0, owner);
+		entity->add_component(ownership);
+
+		state->add_game_entity(entity);
+	};
+
+	make_unit(entity_id_t{1}, player_id_t{0}, coord::phys3{10, 10, 0});
+	make_unit(entity_id_t{2}, player_id_t{1}, coord::phys3{12, 12, 0});
+
+	state->refresh_visibility(t0);
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), true);
+
+	auto enemy_entity = state->get_game_entity(entity_id_t{2});
+	auto enemy_pos = std::dynamic_pointer_cast<component::Position>(
+		enemy_entity->get_component(component::component_t::POSITION));
+	enemy_pos->set_position(t0, coord::phys3{100, 100, 0});
+
+	state->refresh_visibility(t0);
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), false);
+}
+
 void next_command_build_test() {
-	auto loop = std::make_shared<event::EventLoop>();
+	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto entity = make_entity_with_command_queue(loop, 0);
 	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
 		entity->get_component(component::component_t::COMMANDQUEUE));

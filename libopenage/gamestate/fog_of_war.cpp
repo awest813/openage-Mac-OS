@@ -62,7 +62,8 @@ const std::unordered_set<coord::tile> &FogOfWar::get_explored_tiles(player_id_t 
 void FogOfWar::set_last_known_position(player_id_t observer,
                                        entity_id_t entity,
                                        const coord::phys3 &position) {
-	this->last_known_positions[observer][entity] = position;
+	// phys3 has no default constructor; use insert_or_assign instead of operator[].
+	this->last_known_positions[observer].insert_or_assign(entity, position);
 }
 
 std::optional<coord::phys3> FogOfWar::get_last_known_position(player_id_t observer,

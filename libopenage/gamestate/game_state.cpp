@@ -13,6 +13,7 @@
 #include "log/message.h"
 
 #include "coord/tile.h"
+#include "gamestate/component/api/live.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
 #include "gamestate/component/internal/ownership.h"
@@ -272,6 +273,57 @@ void GameState::set_mod_manager(const std::shared_ptr<assets::ModManager> &mod_m
 	this->mod_manager = mod_manager;
 }
 
+namespace {
+
+constexpr const char *HP_ATTRIBUTE = "engine.ability.type.Live.AttributeAmount";
+constexpr int DEFAULT_SIGHT_RANGE_TILES = 4;
+
+bool entity_provides_visibility(const std::shared_ptr<GameEntity> &entity,
+                                const time::time_t &time) {
+	if (not entity->has_component(component::component_t::POSITION)
+	    || not entity->has_component(component::component_t::OWNERSHIP)) {
+		return false;
+	}
+
+	if (entity->has_component(component::component_t::LIVE)) {
+		auto live = std::dynamic_pointer_cast<component::Live>(
+			entity->get_component(component::component_t::LIVE));
+		if (live->get_attribute(time, HP_ATTRIBUTE) <= 0) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+} // namespace
+
+void GameState::refresh_visibility(const time::time_t &time) {
+	for (const auto &[player_id, player] : this->players) {
+		(void) player;
+		this->flush_player_visibility(player_id);
+	}
+
+	for (const auto &[entity_id, entity] : this->game_entities) {
+		if (not entity_provides_visibility(entity, time)) {
+			continue;
+		}
+
+		auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+			entity->get_component(component::component_t::OWNERSHIP));
+		auto owner_id = ownership->get_owners().get(time);
+		if (not this->has_player(owner_id)) {
+			continue;
+		}
+
+		auto pos_comp = std::dynamic_pointer_cast<component::Position>(
+			entity->get_component(component::component_t::POSITION));
+		auto center = pos_comp->get_positions().get(time).to_tile();
+
+		this->update_player_visibility(owner_id, center, DEFAULT_SIGHT_RANGE_TILES);
+	}
+}
+
 void GameState::update_player_visibility(player_id_t player,
                                          coord::tile center,
                                          int sight_range) {
@@ -335,7 +387,7 @@ void GameState::occupy_tile(coord::tile tile, entity_id_t entity) {
 	this->release_tile(entity);
 
 	this->tile_occupants[tile] = entity;
-	this->entity_tiles[entity] = tile;
+	this->entity_tiles.insert_or_assign(entity, tile);
 }
 
 void GameState::release_tile(entity_id_t entity) {

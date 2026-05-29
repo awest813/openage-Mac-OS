@@ -18,7 +18,7 @@ jobs:
         include:
           - runner: macos-15    # Apple Silicon (arm64)
             arch: arm64
-          - runner: macos-13    # Intel (x86_64)
+          - runner: macos-15-intel    # Intel (x86_64); macos-13 retired Dec 2025
             arch: x86_64
     name: Build macOS ${{ matrix.arch }} release
     runs-on: ${{ matrix.runner }}

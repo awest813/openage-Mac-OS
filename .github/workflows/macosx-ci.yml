@@ -16,10 +16,9 @@ jobs:
         include:
           - runner: macos-15    # Apple Silicon (arm64)
             arch: arm64
-          - runner: macos-13    # Intel (x86_64)
+          - runner: macos-15-intel    # Intel (x86_64); macos-13 retired Dec 2025
             arch: x86_64
-          - runner: macos-15    # Universal2 fat binary (arm64 host)
-            arch: universal2
+          # universal2 omitted until Homebrew deps ship fat binaries; see doc/macos-support-matrix.md
     name: macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     steps:
