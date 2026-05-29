@@ -304,7 +304,7 @@ void GameState::refresh_visibility(const time::time_t &time) {
 		this->flush_player_visibility(player_id);
 	}
 
-	for (const auto &[ /* entity_id */ , entity] : this->game_entities) {
+	for (const auto &[entity_id, entity] : this->game_entities) {
 		if (not entity_provides_visibility(entity, time)) {
 			continue;
 		}
