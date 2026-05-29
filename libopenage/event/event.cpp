@@ -25,8 +25,8 @@ Event::Event(const std::shared_ptr<EventEntity> &entity,
 	entity{entity},
 	eventhandler{eventhandler},
 	myhash{
-		util::hash_combine(std::hash<size_t>()(entity->id()),
-                           std::hash<std::string>()(eventhandler->id()))} {}
+		util::hash_combine(std::hash<size_t>()(entity ? entity->id() : 0),
+		                   std::hash<std::string>()(eventhandler->id()))} {}
 
 
 void Event::depend_on(const std::shared_ptr<EventEntity> &dependency) {
