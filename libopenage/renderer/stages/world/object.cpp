@@ -61,12 +61,29 @@ void WorldObject::fetch_updates(const time::time_t &time) {
 		return;
 	}
 
+	const auto fog_display = this->render_entity->get_fog_display();
+	if (fog_display == fog_display_t::HIDDEN) {
+		this->render_entity->clear_changed_flag();
+		return;
+	}
+
+	std::optional<coord::phys3> ghost_pos;
+	if (fog_display == fog_display_t::GHOST) {
+		ghost_pos = this->render_entity->get_ghost_position();
+	}
+
 	// Get data from render entity
 	this->ref_id = this->render_entity->get_id();
 
 	// Thread-safe access to curves needs a lock on the render entity's mutex
 	auto read_lock = this->render_entity->get_read_lock();
-	this->position.sync(this->render_entity->get_position());
+
+	if (ghost_pos.has_value()) {
+		this->position.set_last(time, ghost_pos.value().to_scene3());
+	}
+	else {
+		this->position.sync(this->render_entity->get_position());
+	}
 	this->animation_info.sync(this->render_entity->get_animation_path(),
 	                          std::function<std::shared_ptr<renderer::resources::Animation2dInfo>(const std::string &)>(
 								  [&](const std::string &path) {
@@ -239,6 +256,13 @@ bool WorldObject::is_visible(const camera::Frustum2d &frustum,
 	                          model_matrix,
 	                          animation_info->get_scalefactor(),
 	                          animation_info->get_max_bounds());
+}
+
+bool WorldObject::is_fog_visible() const {
+	if (this->render_entity == nullptr) {
+		return true;
+	}
+	return this->render_entity->get_fog_display() != fog_display_t::HIDDEN;
 }
 
 } // namespace openage::renderer::world

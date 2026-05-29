@@ -15,7 +15,9 @@ RenderEntity::RenderEntity() :
 	ref_id{0},
 	position{nullptr, 0, "", nullptr, SCENE_ORIGIN},
 	angle{nullptr, 0, "", nullptr, 0},
-	animation_path{nullptr, 0} {
+	animation_path{nullptr, 0},
+	fog_display{fog_display_t::VISIBLE},
+	ghost_position{} {
 }
 
 void RenderEntity::update(const uint32_t ref_id,
@@ -75,6 +77,32 @@ const curve::Discrete<std::string> &RenderEntity::get_animation_path() {
 	std::shared_lock lock{this->mutex};
 
 	return this->animation_path;
+}
+
+void RenderEntity::set_fog_display(fog_display_t display,
+                                   const std::optional<coord::phys3> &ghost_position) {
+	std::unique_lock lock{this->mutex};
+
+	this->fog_display = display;
+	if (display == fog_display_t::GHOST && ghost_position.has_value()) {
+		this->ghost_position = ghost_position;
+	}
+	else {
+		this->ghost_position.reset();
+	}
+	this->changed = true;
+}
+
+fog_display_t RenderEntity::get_fog_display() const {
+	std::shared_lock lock{this->mutex};
+
+	return this->fog_display;
+}
+
+const std::optional<coord::phys3> &RenderEntity::get_ghost_position() const {
+	std::shared_lock lock{this->mutex};
+
+	return this->ghost_position;
 }
 
 } // namespace openage::renderer::world

@@ -63,6 +63,10 @@ void WorldRenderStage::update() {
 	auto current_time = this->clock->get_real_time();
 	auto &camera_frustum = this->camera->get_frustum_2d();
 	for (auto &obj : this->render_objects) {
+		if (not obj->is_fog_visible()) {
+			continue;
+		}
+
 		obj->fetch_updates(current_time);
 
 		if (WorldRenderStage::ENABLE_FRUSTUM_CULLING

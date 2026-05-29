@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "coord/phys.h"
@@ -14,6 +15,18 @@
 
 
 namespace openage::renderer::world {
+
+/**
+ * How an entity is drawn under fog of war.
+ */
+enum class fog_display_t {
+	/** Entity is in the observer's line of sight (or owned by them). */
+	VISIBLE,
+	/** Entity is outside vision and has no last-known position to show. */
+	HIDDEN,
+	/** Entity left vision; draw a ghost at the last-known position. */
+	GHOST,
+};
 
 /**
  * Render entity for pushing updates to the World renderer.
@@ -96,6 +109,25 @@ public:
 	 */
 	const curve::Discrete<std::string> &get_animation_path();
 
+	/**
+	 * Set how this entity should be drawn for the local observer.
+	 *
+	 * @param display  Visibility mode.
+	 * @param ghost_position  Position for GHOST mode; ignored otherwise.
+	 */
+	void set_fog_display(fog_display_t display,
+	                     const std::optional<coord::phys3> &ghost_position = std::nullopt);
+
+	/**
+	 * @return Current fog-of-war display mode.
+	 */
+	fog_display_t get_fog_display() const;
+
+	/**
+	 * @return Ghost position when display mode is GHOST.
+	 */
+	const std::optional<coord::phys3> &get_ghost_position() const;
+
 private:
 	/**
 	 * ID of the game entity in the gamestate.
@@ -116,5 +148,15 @@ private:
 	 * Path to the animation definition file.
 	 */
 	curve::Discrete<std::string> animation_path;
+
+	/**
+	 * Fog-of-war display mode for the local observer.
+	 */
+	fog_display_t fog_display;
+
+	/**
+	 * Last-known world position used when \p fog_display is GHOST.
+	 */
+	std::optional<coord::phys3> ghost_position;
 };
 } // namespace openage::renderer::world

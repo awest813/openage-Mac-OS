@@ -108,6 +108,13 @@ public:
 	void render_update(const time::time_t &time,
 	                   const std::string &animation_path);
 
+	/**
+	 * Get the render entity used for world rendering, if any.
+	 *
+	 * @return Render entity, or nullptr when not attached to a renderer.
+	 */
+	const std::shared_ptr<renderer::world::RenderEntity> &get_render_entity() const;
+
 protected:
 	/**
 	 * A game entity cannot be default copied because of their unique ID.

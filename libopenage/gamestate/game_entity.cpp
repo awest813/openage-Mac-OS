@@ -56,6 +56,10 @@ bool GameEntity::has_component(component::component_t type) {
 	return this->components.contains(type);
 }
 
+const std::shared_ptr<renderer::world::RenderEntity> &GameEntity::get_render_entity() const {
+	return this->render_entity;
+}
+
 void GameEntity::render_update(const time::time_t &time,
                                const std::string &animation_path) {
 	if (this->render_entity != nullptr) {
