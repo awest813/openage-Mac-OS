@@ -56,7 +56,9 @@ find_package(PNG REQUIRED)
 find_package(Opusfile REQUIRED)
 find_package(Epoxy REQUIRED)
 find_package(HarfBuzz 1.0.0 REQUIRED)
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+# Homebrew may ship Eigen 3.4+ / 5.x whose version file does not satisfy "3.3"
+# exactly; any 3.x+ header API is compatible for our use.
+find_package(Eigen3 REQUIRED NO_MODULE)
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 find_package(Threads REQUIRED)

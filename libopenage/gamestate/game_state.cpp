@@ -387,7 +387,7 @@ void GameState::occupy_tile(coord::tile tile, entity_id_t entity) {
 	this->release_tile(entity);
 
 	this->tile_occupants[tile] = entity;
-	this->entity_tiles[entity] = tile;
+	this->entity_tiles.insert_or_assign(entity, tile);
 }
 
 void GameState::release_tile(entity_id_t entity) {
