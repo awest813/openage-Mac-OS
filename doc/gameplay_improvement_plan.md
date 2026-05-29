@@ -162,6 +162,7 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 
 - ✅ Track which tiles each player has explored (`FogOfWar::explored_tiles`)
 - ✅ Track which tiles are currently visible (line-of-sight per unit) (`FogOfWar::visible_tiles`, `update_visibility`)
+- ✅ Rebuild visibility each simulation tick (`GameState::refresh_visibility`, called from `GameSimulation::run`)
 - 🚧 Hide enemy units outside visible tiles (`GameState::is_entity_visible` query implemented; renderer integration pending)
 - ✅ Show last-known position of units that leave vision (`FogOfWar::last_known_positions`, `GameState::get_last_known_position`; renderer display pending)
 

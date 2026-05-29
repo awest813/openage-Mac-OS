@@ -287,6 +287,17 @@ public:
 	// -----------------------------------------------------------------------
 
 	/**
+	 * Rebuild fog-of-war visibility for all players at the given time.
+	 *
+	 * Flushes each player's visible tile set, then reveals tiles around every
+	 * entity that currently provides line of sight (position + ownership, and
+	 * HP > 0 when a Live component is present).
+	 *
+	 * @param time Simulation time at which entity positions are sampled.
+	 */
+	void refresh_visibility(const time::time_t &time);
+
+	/**
 	 * Update the visible tile set for a player around a single unit position.
 	 *
 	 * Should be called once per living unit each tick, after

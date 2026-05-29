@@ -24,6 +24,7 @@
 #include "component/internal/commands/patrol.h"
 #include "component/internal/commands/train.h"
 #include "component/internal/ownership.h"
+#include "component/internal/position.h"
 #include "component/internal/stance.h"
 #include "event/game_over.h"
 #include "event/send_command.h"
@@ -510,6 +511,82 @@ void last_known_positions() {
 
 	// Clearing a non-existent entry is safe.
 	fow.clear_last_known_position(p0, entity_id_t{999});
+}
+
+void fog_of_war_refresh() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	auto player = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(player);
+
+	auto make_scout = [&](entity_id_t id, coord::phys3 pos) {
+		auto entity = std::make_shared<GameEntity>(id);
+		auto position = std::make_shared<component::Position>(loop);
+		position->set_position(t0, pos);
+		entity->add_component(position);
+
+		auto ownership = std::make_shared<component::Ownership>(loop);
+		ownership->get_owners().set(t0, player_id_t{0});
+		entity->add_component(ownership);
+
+		state->add_game_entity(entity);
+	};
+
+	make_scout(entity_id_t{1}, coord::phys3{10, 10, 0});
+	make_scout(entity_id_t{2}, coord::phys3{50, 50, 0});
+
+	state->refresh_visibility(t0);
+
+	coord::tile near_scout{10, 10};
+	coord::tile far_from_scouts{0, 0};
+	TESTEQUALS(state->is_tile_visible(player_id_t{0}, near_scout), true);
+	TESTEQUALS(state->is_tile_explored(player_id_t{0}, near_scout), true);
+	TESTEQUALS(state->is_tile_visible(player_id_t{0}, far_from_scouts), false);
+
+	state->refresh_visibility(t0);
+	TESTEQUALS(state->is_tile_visible(player_id_t{0}, far_from_scouts), false);
+}
+
+void entity_visibility_query() {
+	auto loop = std::make_shared<event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	auto observer = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	auto enemy_player = std::make_shared<Player>(player_id_t{1}, db->new_view(), loop);
+	state->add_player(observer);
+	state->add_player(enemy_player);
+
+	auto make_unit = [&](entity_id_t id, player_id_t owner, coord::phys3 pos) {
+		auto entity = std::make_shared<GameEntity>(id);
+		auto position = std::make_shared<component::Position>(loop);
+		position->set_position(t0, pos);
+		entity->add_component(position);
+
+		auto ownership = std::make_shared<component::Ownership>(loop);
+		ownership->get_owners().set(t0, owner);
+		entity->add_component(ownership);
+
+		state->add_game_entity(entity);
+	};
+
+	make_unit(entity_id_t{1}, player_id_t{0}, coord::phys3{10, 10, 0});
+	make_unit(entity_id_t{2}, player_id_t{1}, coord::phys3{12, 12, 0});
+
+	state->refresh_visibility(t0);
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), true);
+
+	auto enemy_entity = state->get_game_entity(entity_id_t{2});
+	auto enemy_pos = std::dynamic_pointer_cast<component::Position>(
+		enemy_entity->get_component(component::component_t::POSITION));
+	enemy_pos->set_position(t0, coord::phys3{100, 100, 0});
+
+	state->refresh_visibility(t0);
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), false);
 }
 
 void next_command_build_test() {
