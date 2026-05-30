@@ -13,6 +13,7 @@
 #include "gamestate/component/internal/commands/train.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/types.h"
+#include "gamestate/definitions.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
 #include "gamestate/manager.h"
@@ -105,8 +106,24 @@ const time::time_t Production::train_command(const std::shared_ptr<gamestate::Ga
 		return time::time_t::from_int(0);
 	}
 
+	// Population check: the unit must fit within the player's remaining
+	// population space. Training is blocked (without spending resources) when
+	// the player is at the population cap.
+	if (not player->has_population_space(start_time, DEFAULT_POPULATION_COST)) {
+		log::log(MSG(dbg) << "Player " << owner_id
+		                  << " cannot train " << target
+		                  << ": population cap reached (demand="
+		                  << player->get_population_demand(start_time)
+		                  << ", capacity=" << player->get_population_capacity(start_time) << ").");
+		return time::time_t::from_int(0);
+	}
+
 	// Deduct resources.
 	player->add_resource(start_time, cost_resource, -cost_amount);
+
+	// Reserve population space immediately, so queued units count against the
+	// cap (released when the unit dies; see GameState::remove_game_entity).
+	player->add_population_demand(start_time, DEFAULT_POPULATION_COST);
 
 	auto completion_time = start_time + creation_time;
 

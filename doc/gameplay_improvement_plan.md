@@ -70,6 +70,30 @@ for queries/UI and tests, drained as units finish.
 - [x] Wire `Create` into the entity factory, activity graph, and `send_command`
 - [x] Drain completed production requests: `Production::train_command` fires a `"game.spawn_production"` event at `completion_time`; `SpawnProductionHandler` (registered in the simulation) creates and adds the entity at the producer's position when the event fires
 - [x] Add `BUILD` command type for placing new buildings
+- [x] **Honour the build placement position** — `BuildCommand` already carries the
+  player-selected `target` (`coord::phys3`). `Build::build_command` now forwards it
+  to the spawn event under the `"spawn_pos"` param, and `SpawnProductionHandler`
+  uses an explicit `spawn_pos` verbatim when present (BUILD) and otherwise falls
+  back to the producer-derived position (TRAIN). Previously buildings appeared one
+  tile from the villager instead of where the player clicked. Test:
+  `build_command_placement`.
+- [x] **Walk to the build site before constructing** — `Build::build_command` now
+  checks the builder's distance to the target. While farther than `BUILD_RANGE`
+  (2 tiles) and the builder has `MOVE`, it steps toward the site via
+  `Move::move_default` and re-enqueues the `BuildCommand` (the same self-re-enqueue
+  pattern as `AttackMove` / `Patrol`, wired through `build → wait_for_build →
+  {idle | condition_cmd_type}`). Resources are only spent and the
+  `game.spawn_production` event is only scheduled once the builder has reached the
+  site, so construction (the `creation_time` wait) starts on arrival rather than
+  immediately. Builders without `MOVE` construct in place as before.
+- [x] **Rally points** — a producing building can be given a rally point;
+  units it produces are automatically sent there on spawn. `command_t::SET_RALLY_POINT`
+  is handled immediately in `SendCommandHandler` (like `SET_STANCE`) and stored on
+  `GameState` (`set_/get_/has_/clear_rally_point`, keyed by entity ID, cleared in
+  `remove_game_entity`). `SpawnProductionHandler` queues a `MoveCommand` to the
+  rally point on the new unit (if it has `MOVE` + a command queue) before its
+  activity is initialised, so it walks there immediately. Test:
+  `rally_point_lifecycle`.
 
 ### 1.4 Win / Loss Conditions
 
@@ -105,6 +129,41 @@ A correctness pass over all of Phase 1 fixed two leaks and several edge cases:
   a real unit/building type system, and the `make_shared` requirement on `GameState`.
 - [x] New regression tests: `carried_resources_lifecycle`; defeat tests register the
   game-over handlers (these `create_event` paths would otherwise throw).
+
+### 1.6 Population Cap
+
+**Status:** ✅ Core complete (data-sourced costs/capacity pending)
+
+Population is modelled on `Player` with two time-indexed `Discrete<int64_t>`
+curves — `population_demand` (space consumed by living + in-production units)
+and `population_capacity` (headroom from buildings) — mirroring the resource
+model so it is deterministic and rewindable.
+
+- [x] `Player` population API: `init_population`, `get_population_demand`,
+  `get_population_capacity` (clamped to `POPULATION_MAX = 200`),
+  `get_population_space`, `has_population_space`, `add_population_demand`,
+  `add_population_capacity`. Demand and capacity are never recorded below 0.
+- [x] **Training gate** — `Production::train_command` blocks training (without
+  spending resources) when `has_population_space` is false, and reserves
+  `DEFAULT_POPULATION_COST` on a successful train so queued units count against
+  the cap immediately.
+- [x] **Release on death** — `GameState::remove_game_entity(id, time)` releases the
+  reserved population when an owned unit (has `MOVE`) dies.
+- [x] New unit test: `player_population` (demand/capacity/space, the gate, the
+  `POPULATION_MAX` clamp, and time-indexed history).
+- [ ] **Per-unit population cost from nyan** — currently every unit costs
+  `DEFAULT_POPULATION_COST = 1`; should come from a nyan `PopulationSpace`
+  ability once the API/data is wired (same constraint as the unit/building
+  heuristic).
+- [x] **Building-provided capacity** — a completed building raises its owner's
+  `population_capacity` by `DEFAULT_BUILDING_POPULATION_SPACE` (`SpawnProductionHandler`)
+  and `GameState::remove_game_entity` lowers it again on destruction, using the
+  same `OWNERSHIP` + no-`MOVE` building heuristic. So houses/town centres now lift
+  the cap and losing them lowers it. Test: `building_population_capacity`.
+  *Limitation:* until nyan `PopulationSpace` data is wired, **every** building
+  contributes the same default (not just houses/TCs), and by a fixed amount.
+  Pre-placed starting units/buildings must still register their demand/capacity at
+  game setup via the `Player` API.
 
 ---
 
@@ -168,6 +227,12 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 - ✅ Terrain fog overlay: per-tile fog texture rebuilt each tick (`FogTileTexture`, `GameState::update_fog_tile_texture`); terrain shader darkens explored tiles and blacks out unexplored areas (`TerrainRenderStage::update_fog_overlay`)
 - [ ] Minimap fog overlay (HUD minimap not implemented yet)
 - ✅ Ghost unit visuals: last-known units render desaturated and semi-transparent (`fog_ghost` uniform in `world2d.frag.glsl`)
+- ✅ **Ghost recording fix** — `GameState::is_entity_visible` now records an entity's
+  position whenever it *is* visible (the spot it was last seen) and leaves that
+  entry untouched once it goes out of vision, so it renders as a `GHOST`.
+  Previously a last-known position was only stored if the entity's *new, hidden*
+  tile happened to be explored, so a unit moving into unexplored fog incorrectly
+  showed as `HIDDEN`. Fixed the `fog_render_visibility` test (was failing).
 
 ---
 
@@ -211,6 +276,29 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 - [ ] Skill-based matchmaking via the openage master server
 
 ---
+
+## Build & Test Environment
+
+The full suite builds and runs green on Ubuntu 24.04 (matching CI's devenv):
+
+```
+# system deps: see packaging/docker/devenv/Dockerfile.ubuntu.2404
+python3.12 -m pip install "cython>=3.0.10,<4.0.0" --break-system-packages
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3.12 \
+      -DDOWNLOAD_NYAN=YES -G Ninja ..
+cmake --build . --parallel "$(nproc)"
+./run test -a          # all 54 tests pass (exit 0)
+```
+
+Notes:
+- Ubuntu 24.04's default `python3` may be a 3.11 that lacks numpy/mako; point
+  CMake at 3.12 with `-DPython3_EXECUTABLE=/usr/bin/python3.12`. Cython must be
+  installed for *that* interpreter.
+- `Map` construction is robust to a database without the `engine.util.path_type.PathType`
+  base object (it builds with no pathfinding grids) so gamestate unit tests can
+  construct a `Map` without loading the full nyan API. This fixed an abort in the
+  `fog_tile_texture` test that previously took down the whole `./run test -a` run.
 
 ## Implementation Notes
 

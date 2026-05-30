@@ -25,6 +25,7 @@
 #include "pathfinding/sector.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/map.h"
+#include "gamestate/definitions.h"
 #include "gamestate/player.h"
 #include "renderer/stages/world/render_entity.h"
 
@@ -53,6 +54,7 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 void GameState::remove_game_entity(entity_id_t id) {
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
+	this->rally_points.erase(id);
 	this->release_tile(id);
 }
 
@@ -61,6 +63,7 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	// before erasing it from the index.
 	player_id_t owner_id = 0;
 	bool is_building = false;
+	bool is_owned_unit = false;
 
 	auto it = this->game_entities.find(id);
 	if (it != this->game_entities.end()) {
@@ -75,12 +78,24 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 			// TODO: classify buildings via an explicit nyan attribute/ability
 			//       once a unit/building type system exists, instead of "no MOVE".
 			is_building = not entity->has_component(component::component_t::MOVE);
+			is_owned_unit = not is_building;
 		}
 	}
 
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
+	this->rally_points.erase(id);
 	this->release_tile(id);
+
+	// Release the population space a unit reserved when it was trained.
+	if (is_owned_unit and this->has_player(owner_id)) {
+		this->get_player(owner_id)->add_population_demand(time, -DEFAULT_POPULATION_COST);
+	}
+
+	// Remove the population headroom a destroyed building had provided.
+	if (is_building and this->has_player(owner_id)) {
+		this->get_player(owner_id)->add_population_capacity(time, -DEFAULT_BUILDING_POPULATION_SPACE);
+	}
 
 	if (is_building) {
 		this->check_defeat(owner_id, time);
@@ -274,6 +289,27 @@ void GameState::clear_carried_resource(entity_id_t id) {
 	this->carried_resources.erase(id);
 }
 
+bool GameState::has_rally_point(entity_id_t id) const {
+	return this->rally_points.contains(id);
+}
+
+std::optional<coord::phys3> GameState::get_rally_point(entity_id_t id) const {
+	auto it = this->rally_points.find(id);
+	if (it == this->rally_points.end()) {
+		return std::nullopt;
+	}
+	return it->second;
+}
+
+void GameState::set_rally_point(entity_id_t id, const coord::phys3 &target) {
+	// coord::phys3 is not default-constructible, so operator[] cannot be used.
+	this->rally_points.insert_or_assign(id, target);
+}
+
+void GameState::clear_rally_point(entity_id_t id) {
+	this->rally_points.erase(id);
+}
+
 const std::shared_ptr<assets::ModManager> &GameState::get_mod_manager() const {
 	return this->mod_manager;
 }
@@ -372,18 +408,13 @@ bool GameState::is_entity_visible(player_id_t observer,
 
 	bool visible = this->fog_of_war.is_visible(observer, tile);
 
-	// When visibility changes from visible→hidden, record the last-known
-	// position.  When it changes from hidden→visible, clear the stale entry.
+	// Remember the entity's position whenever it is visible to the observer.
+	// Once it leaves vision we keep that remembered spot untouched so it can
+	// be rendered as a "ghost" at the place it was last seen. Entities the
+	// observer has never seen have no recorded position and stay hidden.
 	// Because is_entity_visible is a const query we use mutable fog_of_war.
 	if (visible) {
-		const_cast<FogOfWar &>(this->fog_of_war).clear_last_known_position(observer, entity_id);
-	}
-	else {
-		// Only record if the entity's current tile has been explored by
-		// the observer (i.e. the observer has seen this area before).
-		if (this->fog_of_war.is_explored(observer, tile)) {
-			const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
-		}
+		const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
 	}
 
 	return visible;

@@ -6,6 +6,8 @@
 
 #include "coord/phys.h"
 #include "gamestate/component/internal/activity.h"
+#include "gamestate/component/internal/command_queue.h"
+#include "gamestate/component/internal/commands/move.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
@@ -15,6 +17,7 @@
 #include "gamestate/game_state.h"
 #include "gamestate/manager.h"
 #include "gamestate/map.h"
+#include "gamestate/player.h"
 #include "gamestate/types.h"
 #include "log/log.h"
 #include "log/message.h"
@@ -55,10 +58,15 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 	// the drained list.
 	gstate->take_completed_productions(time);
 
-	// Derive spawn position from the producing building's current position.
-	// Fall back to world origin if the target is unavailable.
+	// BUILD requests carry an explicit placement position (where the player
+	// chose to put the building). TRAIN requests do not, and instead derive
+	// the spawn position from the producing building below.
 	coord::phys3 spawn_pos = gamestate::WORLD_ORIGIN;
-	if (target) {
+	bool has_explicit_pos = params.check_type<coord::phys3>("spawn_pos");
+	if (has_explicit_pos) {
+		spawn_pos = params.get("spawn_pos", gamestate::WORLD_ORIGIN);
+	}
+	else if (target) {
 		// target is the producing building's GameEntityManager; its id() is the entity id.
 		auto entity_id = static_cast<gamestate::entity_id_t>(target->id());
 		const auto &entities = gstate->get_game_entities();
@@ -97,6 +105,31 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 	auto entity_owner = std::dynamic_pointer_cast<component::Ownership>(
 		entity->get_component(component::component_t::OWNERSHIP));
 	entity_owner->set_owner(time, owner_id);
+
+	// If the producing entity has a rally point set, send the new unit there.
+	// Queue the move before the activity is initialised so it is processed on
+	// the first activity pass. Only mobile units with a command queue qualify.
+	if (target
+	    and entity->has_component(component::component_t::MOVE)
+	    and entity->has_component(component::component_t::COMMANDQUEUE)) {
+		auto producer_id = static_cast<gamestate::entity_id_t>(target->id());
+		auto rally_point = gstate->get_rally_point(producer_id);
+		if (rally_point.has_value()) {
+			auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+				entity->get_component(component::component_t::COMMANDQUEUE));
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::MoveCommand>(rally_point.value()));
+		}
+	}
+
+	// A completed building raises its owner's population capacity. Buildings are
+	// identified by the same heuristic used elsewhere (owned, no MOVE component).
+	if (not entity->has_component(component::component_t::MOVE)
+	    and gstate->has_player(owner_id)) {
+		gstate->get_player(owner_id)->add_population_capacity(
+			time, gamestate::DEFAULT_BUILDING_POPULATION_SPACE);
+	}
 
 	auto activity = std::dynamic_pointer_cast<component::Activity>(
 		entity->get_component(component::component_t::ACTIVITY));

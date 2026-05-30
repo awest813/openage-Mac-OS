@@ -107,6 +107,7 @@ def tests_cpp():
     yield "openage::curve::tests::curve_types"
     yield "openage::event::tests::eventtrigger"
     yield "openage::gamestate::tests::carried_resources_lifecycle"
+    yield "openage::gamestate::tests::rally_point_lifecycle"
     yield "openage::gamestate::tests::fog_of_war_exploration"
     yield "openage::gamestate::tests::fog_of_war_visibility"
     yield "openage::gamestate::tests::fog_of_war_refresh"
@@ -119,7 +120,9 @@ def tests_cpp():
     yield "openage::gamestate::tests::next_command_formation_move_test"
     yield "openage::gamestate::tests::no_defeat_for_unit_death"
     yield "openage::gamestate::tests::player_defeated_on_last_building_destroyed"
+    yield "openage::gamestate::tests::building_population_capacity"
     yield "openage::gamestate::tests::player_resources"
+    yield "openage::gamestate::tests::player_population"
     yield "openage::gamestate::tests::player_state_transitions"
     yield "openage::gamestate::tests::production_requests"
     yield "openage::gamestate::tests::send_command_variants"
@@ -127,6 +130,7 @@ def tests_cpp():
     yield "openage::gamestate::tests::tile_occupancy"
     yield "openage::gamestate::tests::last_known_positions"
     yield "openage::gamestate::tests::next_command_build_test"
+    yield "openage::gamestate::tests::build_command_placement"
 
 
 def demos_cpp():

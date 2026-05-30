@@ -27,6 +27,7 @@
 #include "component/internal/ownership.h"
 #include "component/internal/position.h"
 #include "component/internal/stance.h"
+#include "definitions.h"
 #include "event/game_over.h"
 #include "event/send_command.h"
 #include "fog_of_war.h"
@@ -74,6 +75,55 @@ void player_resources() {
 	player.add_resource(t1, resource, -10);
 	TESTEQUALS(player.get_resource(t1, resource), 15);
 	TESTEQUALS(player.get_resource(t0, resource), 25);
+}
+
+void player_population() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto view = db->new_view();
+	Player player{0, view, loop};
+
+	auto t0 = time::time_t::from_int(0);
+	auto t1 = time::time_t::from_int(1);
+	auto t2 = time::time_t::from_int(2);
+
+	// Fresh player: no demand, no capacity, no space — cannot support a unit.
+	TESTEQUALS(player.get_population_demand(t0), 0);
+	TESTEQUALS(player.get_population_capacity(t0), 0);
+	TESTEQUALS(player.get_population_space(t0), 0);
+	TESTEQUALS(player.has_population_space(t0, 1), false);
+
+	// Give the player headroom for 5 population.
+	player.init_population(t0, 5);
+	TESTEQUALS(player.get_population_capacity(t0), 5);
+	TESTEQUALS(player.get_population_space(t0), 5);
+	TESTEQUALS(player.has_population_space(t0, 5), true);
+	TESTEQUALS(player.has_population_space(t0, 6), false);
+
+	// Reserve 4 population (e.g. four villagers queued).
+	player.add_population_demand(t1, 4);
+	TESTEQUALS(player.get_population_demand(t1), 4);
+	TESTEQUALS(player.get_population_space(t1), 1);
+	TESTEQUALS(player.has_population_space(t1, 1), true);
+	TESTEQUALS(player.has_population_space(t1, 2), false);
+
+	// A house raises capacity; now there is room again.
+	player.add_population_capacity(t1, 5);
+	TESTEQUALS(player.get_population_capacity(t1), 10);
+	TESTEQUALS(player.get_population_space(t1), 6);
+
+	// A unit dies: demand drops, space recovers. Past values are unchanged.
+	player.add_population_demand(t2, -1);
+	TESTEQUALS(player.get_population_demand(t2), 3);
+	TESTEQUALS(player.get_population_demand(t1), 4);
+
+	// Demand never records below 0 even if over-released.
+	player.add_population_demand(t2, -100);
+	TESTEQUALS(player.get_population_demand(t2), 0);
+
+	// Capacity is clamped to POPULATION_MAX.
+	player.init_population(t2, POPULATION_MAX + 50);
+	TESTEQUALS(player.get_population_capacity(t2), POPULATION_MAX);
 }
 
 void next_command_conditions() {
@@ -219,6 +269,43 @@ void carried_resources_lifecycle() {
 	TESTEQUALS(state->is_carrying_resources(5), false);
 }
 
+void rally_point_lifecycle() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	auto t0 = time::time_t::from_int(0);
+
+	// A producing building exists in the state.
+	auto building = std::make_shared<GameEntity>(7);
+	state->add_game_entity(building);
+
+	TESTEQUALS(state->has_rally_point(7), false);
+	TESTEQUALS(state->get_rally_point(7).has_value(), false);
+
+	coord::phys3 rally{20, 30, 0};
+	state->set_rally_point(7, rally);
+	TESTEQUALS(state->has_rally_point(7), true);
+	auto stored = state->get_rally_point(7);
+	TESTEQUALS(stored.has_value(), true);
+	TESTEQUALS(stored.value() == rally, true);
+
+	// Setting again overwrites the previous point.
+	coord::phys3 rally2{5, 6, 0};
+	state->set_rally_point(7, rally2);
+	TESTEQUALS(state->get_rally_point(7).value() == rally2, true);
+
+	// Explicit clear removes it.
+	state->clear_rally_point(7);
+	TESTEQUALS(state->has_rally_point(7), false);
+
+	// The rally point is cleaned up when the producing entity is destroyed.
+	state->set_rally_point(7, rally);
+	TESTEQUALS(state->has_rally_point(7), true);
+	state->remove_game_entity(7, t0);
+	TESTEQUALS(state->has_rally_point(7), false);
+}
+
 void player_state_transitions() {
 	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
@@ -280,6 +367,37 @@ void player_defeated_on_last_building_destroyed() {
 	TESTEQUALS(p0->get_state() == player_state_t::DEFEATED, true);
 	TESTEQUALS(p1->get_state() == player_state_t::WINNER, true);
 	TESTEQUALS(state->get_alive_player_count(), 0);
+}
+
+void building_population_capacity() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	// Destroying a building runs check_defeat, which fires events via the loop.
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	auto view = db->new_view();
+	auto p0 = std::make_shared<Player>(0, view, loop);
+	state->add_player(p0);
+
+	auto t0 = time::time_t::from_int(0);
+
+	// Two completed buildings' worth of population headroom.
+	p0->init_population(t0, 0);
+	p0->add_population_capacity(t0, 2 * DEFAULT_BUILDING_POPULATION_SPACE);
+	TESTEQUALS(p0->get_population_capacity(t0), 2 * DEFAULT_BUILDING_POPULATION_SPACE);
+
+	make_building(10, 0, loop, state, t0);
+	make_building(11, 0, loop, state, t0);
+
+	// Destroying one building releases the headroom it provided; the player is
+	// still alive (one building remains), so demand/capacity bookkeeping — not
+	// defeat — is what changes.
+	state->remove_game_entity(10, t0);
+	TESTEQUALS(p0->get_state() == player_state_t::ALIVE, true);
+	TESTEQUALS(p0->get_population_capacity(t0), DEFAULT_BUILDING_POPULATION_SPACE);
 }
 
 void no_defeat_for_unit_death() {
@@ -734,6 +852,50 @@ void next_command_build_test() {
 	TESTEQUALS(activity::next_command_build(t0, entity), false);
 	TESTEQUALS(activity::next_command_train(t0, entity), true);
 	command_queue->pop_command(t0);
+}
+
+// A built building must be placed at the position the player selected, not at
+// the builder's location (the way TRAIN spawns units). The Build system carries
+// that position to the spawn handler through the event param_map under the
+// "spawn_pos" key; this test guards both the command payload and the param_map
+// round-trip that the handler relies on to choose explicit placement.
+void build_command_placement() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto entity = make_entity_with_command_queue(loop, 0);
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+	auto t0 = time::time_t::from_int(0);
+
+	// The build command preserves both the building fqon and the target site.
+	auto build_site = coord::phys3{42, 17, 0};
+	command_queue->add_command(
+		t0,
+		std::make_shared<component::command::BuildCommand>(
+			"test.building.TownCenter",
+			build_site));
+	auto build_command = std::dynamic_pointer_cast<component::command::BuildCommand>(
+		command_queue->pop_command(t0));
+	TESTEQUALS(build_command != nullptr, true);
+	TESTEQUALS(build_command->get_building(), std::string{"test.building.TownCenter"});
+	TESTEQUALS(build_command->get_target() == build_site, true);
+
+	// BUILD events carry the site under "spawn_pos"; the handler detects this and
+	// uses it verbatim instead of deriving the position from the producer.
+	openage::event::EventHandler::param_map build_params{
+		{"owner", player_id_t{0}},
+		{"game_entity", build_command->get_building()},
+		{"spawn_pos", build_command->get_target()},
+	};
+	TESTEQUALS(build_params.check_type<coord::phys3>("spawn_pos"), true);
+	TESTEQUALS(build_params.get("spawn_pos", WORLD_ORIGIN) == build_site, true);
+
+	// TRAIN events omit "spawn_pos"; the handler must fall back to its
+	// producer-derived position, so the explicit-position check is false.
+	openage::event::EventHandler::param_map train_params{
+		{"owner", player_id_t{0}},
+		{"game_entity", std::string{"test.unit.Villager"}},
+	};
+	TESTEQUALS(train_params.check_type<coord::phys3>("spawn_pos"), false);
 }
 
 } // namespace openage::gamestate::tests
