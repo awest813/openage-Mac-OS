@@ -8,6 +8,7 @@
 #include <nyan/nyan.h>
 
 #include "pathfinding/types.h"
+#include "time/time.h"
 #include "util/vector.h"
 
 
@@ -65,7 +66,25 @@ public:
 	 */
 	path::grid_id_t get_grid_id(const nyan::fqon_t &path_grid) const;
 
+	/**
+	 * Restore pathfinding costs on a grid to the values captured at map creation.
+	 *
+	 * @param grid_id Grid to restore.
+	 * @param time    Time stamp used to invalidate cached flow fields.
+	 */
+	void restore_sector_costs(path::grid_id_t grid_id, const time::time_t &time) const;
+
 private:
+	/**
+	 * Capture baseline pathfinding costs after terrain setup.
+	 */
+	void snapshot_sector_costs();
+
+	/**
+	 * Baseline sector cost fields per path grid, indexed by sector ID.
+	 */
+	std::unordered_map<path::grid_id_t, std::vector<std::vector<path::cost_t>>> sector_cost_snapshots;
+
 	/**
 	 * Terrain.
 	 */

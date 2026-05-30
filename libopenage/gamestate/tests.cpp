@@ -33,6 +33,7 @@
 #include "game_entity.h"
 #include "game_state.h"
 #include "map.h"
+#include "pathfinding/types.h"
 #include "player.h"
 #include "terrain.h"
 #include "terrain_chunk.h"
@@ -643,6 +644,16 @@ void fog_tile_texture() {
 
 	// Scout at tile (2,2) on a 4x4 map should be visible (default sight range 4).
 	TESTEQUALS(fog.pixels[(2 + 2 * 4) * 4] > 200, true);
+}
+
+void hazard_path_costs_no_map() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	// Safe no-op when no map or grids exist yet.
+	state->apply_hazard_path_costs(player_id_t{0}, path::grid_id_t{0}, t0);
 }
 
 void fog_render_visibility() {

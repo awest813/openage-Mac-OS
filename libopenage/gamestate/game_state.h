@@ -13,6 +13,7 @@
 
 #include "coord/tile.h"
 #include "event/state.h"
+#include "pathfinding/types.h"
 #include "gamestate/fog_of_war.h"
 #include "gamestate/player.h"
 #include "gamestate/types.h"
@@ -417,6 +418,20 @@ public:
 	 * @return Fog texture data for the view player.
 	 */
 	FogTileTexture get_fog_tile_texture() const;
+
+	/**
+	 * Raise movement costs on tiles within range of enemy attackers.
+	 *
+	 * Used before pathfinding so units path around hostile towers and castles.
+	 * Call \p Map::restore_sector_costs() before and after applying hazards.
+	 *
+	 * @param for_player  Player whose units are pathfinding (enemies pose hazards).
+	 * @param grid_id     Pathfinding grid to modify.
+	 * @param time        Time stamp for cost-field invalidation.
+	 */
+	void apply_hazard_path_costs(player_id_t for_player,
+	                             path::grid_id_t grid_id,
+	                             const time::time_t &time);
 
 	// -----------------------------------------------------------------------
 	// Tile Occupancy (collision avoidance)

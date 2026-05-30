@@ -181,6 +181,10 @@ void WorldObject::update_uniforms(const time::time_t &time) {
 			static_cast<float>(subtex_size[1])};
 		layer_unifs->update(this->subtex_size, subtex_size_vec);
 
+		const bool is_ghost = this->render_entity != nullptr
+		                      && this->render_entity->get_fog_display() == fog_display_t::GHOST;
+		layer_unifs->update(this->fog_ghost, is_ghost);
+
 		// Anchor point offset (in pixels)
 		// moves the subtex in the shader so that the anchor point is at the object's position
 		auto anchor = tex_info->get_subtex_info(subtex_idx).get_anchor_params();

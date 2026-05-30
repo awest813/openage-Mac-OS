@@ -145,7 +145,7 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 
 - ✅ Collision avoidance: tile occupancy tracking in `GameState`; `Move::move_default` checks occupancy and retries when the destination tile is blocked
 - ✅ Formation movement: move a group while preserving relative positions
-- 🚧 Hazard cost modifier: avoid tiles in range of enemy towers/castles *(requires per-layer cost fields in flow-field pathfinder; partially planned)*
+- ✅ Hazard cost modifier: tiles within enemy `Attack.max_range` get +20 path cost before each `Move` path query (`GameState::apply_hazard_path_costs`, `Map::restore_sector_costs` baseline snapshots)
 - ✅ Blocked-path re-routing: if the path becomes blocked, recalculate
 
 ### 2.3 Interface Improvements
@@ -167,6 +167,7 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 - ✅ Show last-known position of units that leave vision (`fog_display_t::GHOST` draws at `FogOfWar::last_known_positions` via `WorldObject::fetch_updates`)
 - ✅ Terrain fog overlay: per-tile fog texture rebuilt each tick (`FogTileTexture`, `GameState::update_fog_tile_texture`); terrain shader darkens explored tiles and blacks out unexplored areas (`TerrainRenderStage::update_fog_overlay`)
 - [ ] Minimap fog overlay (HUD minimap not implemented yet)
+- ✅ Ghost unit visuals: last-known units render desaturated and semi-transparent (`fog_ghost` uniform in `world2d.frag.glsl`)
 
 ---
 
