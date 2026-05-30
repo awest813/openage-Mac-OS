@@ -103,10 +103,18 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 	try_enable_gold_linker()
 
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+	# Matches both upstream LLVM ("Clang") and Apple's toolchain ("AppleClang").
 	set_compiler_flags("EXTRA" "-Wno-gnu-statement-expression")
-	try_enable_gold_linker()
+	# Clang/AppleClang use -fcolor-diagnostics (GCC uses -fdiagnostics-color=auto).
+	set_compiler_flags("CXX" "-fcolor-diagnostics")
+	# GNU gold linker does not exist on macOS; skip to avoid a spurious warning.
+	if(NOT APPLE)
+		try_enable_gold_linker()
+	endif()
 
 	if(APPLE)
+		# Apple Clang defaults to libc++, but set it explicitly for clarity and
+		# to ensure correctness when Homebrew LLVM is used on macOS.
 		set_compiler_flags("CXX" "-stdlib=libc++")
 	endif()
 
@@ -161,7 +169,9 @@ elseif("${CXX_OPTIMIZATION_LEVEL}" STREQUAL "2")
 elseif("${CXX_OPTIMIZATION_LEVEL}" STREQUAL "3")
 	set_cxx_optimize_flags("-O3")
 elseif("${CXX_OPTIMIZATION_LEVEL}" STREQUAL "g")
-	if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+	# -Og is supported by GCC and by Clang/AppleClang >= the versions required
+	# for C++20 (LLVM >= 12, AppleClang >= 14 / Xcode >= 14).
+	if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
 		set_cxx_optimize_flags("-Og")
 	else()
 		set_cxx_optimize_flags("-O0")
@@ -194,7 +204,8 @@ if("${CXX_SANITIZE_MODE}" STREQUAL "none")
 else()
 	set_compiler_flags("CXX" "-fno-omit-frame-pointer")
 	if("${CXX_SANITIZE_FATAL}" AND "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-		set_compiler_flags("CXX" "-fno-sanitize-recover")
+		# -fno-sanitize-recover is deprecated; the modern form names the sanitizer set.
+		set_compiler_flags("CXX" "-fno-sanitize-recover=all")
 	endif()
 
 	if("${CXX_SANITIZE_MODE}" STREQUAL "yes")

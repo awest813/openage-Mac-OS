@@ -48,7 +48,8 @@ The compiler doesn't support required C++20 features:
   * Concepts
   * Default comparisons
 The following versions support these features:
-  * clang++ >= 10
+  * clang++ >= 10 (LLVM / Homebrew)
+  * Apple Clang >= 14 (Xcode >= 14)
   * g++ >= 10
   * Microsoft Visual Studio 2019 >= 16.8
 Please upgrade your compiler to build openage.
