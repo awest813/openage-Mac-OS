@@ -51,7 +51,7 @@ make run
 
 **Note:** 
 - For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
-- The `--break-system-packages` flag is used to allow pip to install packages outside Homebrew's managed Python. This is consistent with Homebrew's Python workflow on macOS.
+- The `--break-system-packages` flag allows pip to install packages outside Homebrew's managed Python environment. This is the recommended approach for Homebrew Python on macOS (see [macOS build guide](/doc/build_instructions/macos.md) for details).
 
 ### Run the Game
 
@@ -111,7 +111,7 @@ The game requires original Age of Empires assets (not included). The converter w
 - **Architecture Support:**
   - ✅ **Apple Silicon (arm64)** — Primary support
   - ✅ **Intel (x86_64)** — Primary support
-  - 🔄 **Universal2 (fat binaries)** — Planned for future release
+  - 🔄 **Universal 2 (fat binaries)** — Planned for future release
 
 ---
 
