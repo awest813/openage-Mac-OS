@@ -70,6 +70,13 @@ for queries/UI and tests, drained as units finish.
 - [x] Wire `Create` into the entity factory, activity graph, and `send_command`
 - [x] Drain completed production requests: `Production::train_command` fires a `"game.spawn_production"` event at `completion_time`; `SpawnProductionHandler` (registered in the simulation) creates and adds the entity at the producer's position when the event fires
 - [x] Add `BUILD` command type for placing new buildings
+- [x] **Honour the build placement position** — `BuildCommand` already carries the
+  player-selected `target` (`coord::phys3`). `Build::build_command` now forwards it
+  to the spawn event under the `"spawn_pos"` param, and `SpawnProductionHandler`
+  uses an explicit `spawn_pos` verbatim when present (BUILD) and otherwise falls
+  back to the producer-derived position (TRAIN). Previously buildings appeared one
+  tile from the villager instead of where the player clicked. Test:
+  `build_command_placement`.
 
 ### 1.4 Win / Loss Conditions
 

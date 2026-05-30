@@ -127,6 +127,7 @@ def tests_cpp():
     yield "openage::gamestate::tests::tile_occupancy"
     yield "openage::gamestate::tests::last_known_positions"
     yield "openage::gamestate::tests::next_command_build_test"
+    yield "openage::gamestate::tests::build_command_placement"
 
 
 def demos_cpp():

@@ -114,9 +114,15 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 	// used for TRAIN will spawn the building entity.
 	state->request_production(owner_id, target_building, completion_time);
 
+	// Unlike TRAIN (where the produced unit appears next to the producer), a
+	// building must be placed at the position the player selected. Pass the
+	// build site through to the spawn handler so it is honoured.
+	const auto &build_site = command->get_target();
+
 	openage::event::EventHandler::param_map params{
 		{"owner", owner_id},
 		{"game_entity", target_building},
+		{"spawn_pos", build_site},
 	};
 	loop->create_event(SPAWN_PRODUCTION_EVENT,
 	                   entity->get_manager(),
@@ -128,6 +134,7 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 	                   << " started building " << target_building
 	                   << " for player " << owner_id
 	                   << " (cost=" << cost_amount << " of " << cost_resource
+	                   << ", at " << build_site
 	                   << ", ready at t=" << completion_time << ").");
 
 	return creation_time;

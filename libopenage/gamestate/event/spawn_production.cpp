@@ -55,10 +55,15 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 	// the drained list.
 	gstate->take_completed_productions(time);
 
-	// Derive spawn position from the producing building's current position.
-	// Fall back to world origin if the target is unavailable.
+	// BUILD requests carry an explicit placement position (where the player
+	// chose to put the building). TRAIN requests do not, and instead derive
+	// the spawn position from the producing building below.
 	coord::phys3 spawn_pos = gamestate::WORLD_ORIGIN;
-	if (target) {
+	bool has_explicit_pos = params.check_type<coord::phys3>("spawn_pos");
+	if (has_explicit_pos) {
+		spawn_pos = params.get("spawn_pos", gamestate::WORLD_ORIGIN);
+	}
+	else if (target) {
 		// target is the producing building's GameEntityManager; its id() is the entity id.
 		auto entity_id = static_cast<gamestate::entity_id_t>(target->id());
 		const auto &entities = gstate->get_game_entities();

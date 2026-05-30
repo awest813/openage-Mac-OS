@@ -27,6 +27,7 @@
 #include "component/internal/ownership.h"
 #include "component/internal/position.h"
 #include "component/internal/stance.h"
+#include "definitions.h"
 #include "event/game_over.h"
 #include "event/send_command.h"
 #include "fog_of_war.h"
@@ -734,6 +735,50 @@ void next_command_build_test() {
 	TESTEQUALS(activity::next_command_build(t0, entity), false);
 	TESTEQUALS(activity::next_command_train(t0, entity), true);
 	command_queue->pop_command(t0);
+}
+
+// A built building must be placed at the position the player selected, not at
+// the builder's location (the way TRAIN spawns units). The Build system carries
+// that position to the spawn handler through the event param_map under the
+// "spawn_pos" key; this test guards both the command payload and the param_map
+// round-trip that the handler relies on to choose explicit placement.
+void build_command_placement() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto entity = make_entity_with_command_queue(loop, 0);
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+	auto t0 = time::time_t::from_int(0);
+
+	// The build command preserves both the building fqon and the target site.
+	auto build_site = coord::phys3{42, 17, 0};
+	command_queue->add_command(
+		t0,
+		std::make_shared<component::command::BuildCommand>(
+			"test.building.TownCenter",
+			build_site));
+	auto build_command = std::dynamic_pointer_cast<component::command::BuildCommand>(
+		command_queue->pop_command(t0));
+	TESTEQUALS(build_command != nullptr, true);
+	TESTEQUALS(build_command->get_building(), std::string{"test.building.TownCenter"});
+	TESTEQUALS(build_command->get_target() == build_site, true);
+
+	// BUILD events carry the site under "spawn_pos"; the handler detects this and
+	// uses it verbatim instead of deriving the position from the producer.
+	openage::event::EventHandler::param_map build_params{
+		{"owner", player_id_t{0}},
+		{"game_entity", build_command->get_building()},
+		{"spawn_pos", build_command->get_target()},
+	};
+	TESTEQUALS(build_params.check_type<coord::phys3>("spawn_pos"), true);
+	TESTEQUALS(build_params.get("spawn_pos", WORLD_ORIGIN) == build_site, true);
+
+	// TRAIN events omit "spawn_pos"; the handler must fall back to its
+	// producer-derived position, so the explicit-position check is false.
+	openage::event::EventHandler::param_map train_params{
+		{"owner", player_id_t{0}},
+		{"game_entity", std::string{"test.unit.Villager"}},
+	};
+	TESTEQUALS(train_params.check_type<coord::phys3>("spawn_pos"), false);
 }
 
 } // namespace openage::gamestate::tests
