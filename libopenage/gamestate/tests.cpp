@@ -617,8 +617,6 @@ void fog_tile_texture() {
 		state->add_game_entity(entity);
 	};
 
-	make_scout(entity_id_t{1}, coord::phys3{5, 5, 0});
-
 	// Without a map the fog texture stays empty.
 	state->refresh_visibility(t0);
 	auto empty_fog = state->get_fog_tile_texture();
@@ -634,6 +632,8 @@ void fog_tile_texture() {
 	auto terrain = std::make_shared<Terrain>(util::Vector2s{4, 4}, std::move(chunks));
 	state->set_map(std::make_shared<Map>(state, terrain));
 
+	make_scout(entity_id_t{1}, coord::phys3{2, 2, 0});
+
 	state->refresh_visibility(t0);
 	auto fog = state->get_fog_tile_texture();
 	TESTEQUALS(fog.empty(), false);
@@ -641,8 +641,8 @@ void fog_tile_texture() {
 	TESTEQUALS(fog.size[1], size_t{4});
 	TESTEQUALS(fog.pixels.size(), size_t{4 * 4 * 4});
 
-	// Scout at (5,5) reveals tiles around it with default sight range 4.
-	TESTEQUALS(fog.pixels[(5 + 5 * 4) * 4] > 200, true);
+	// Scout at tile (2,2) on a 4x4 map should be visible (default sight range 4).
+	TESTEQUALS(fog.pixels[(2 + 2 * 4) * 4] > 200, true);
 }
 
 void fog_render_visibility() {

@@ -17,6 +17,7 @@
 #include "gamestate/player.h"
 #include "gamestate/types.h"
 #include "time/time.h"
+#include "util/vector.h"
 
 
 namespace nyan {
