@@ -27,7 +27,7 @@ This is a **specialized fork** targeting native macOS development. It delivers:
 
 ### System Requirements
 
-- **macOS 13.0** (Ventura) or later — Minimum supported version; earlier versions are not compatible (check [macOS support matrix](/doc/macos-support-matrix.md) for architecture-specific details)
+- **macOS 13.0** (Ventura) or later — Minimum supported version (check [macOS support matrix](/doc/macos-support-matrix.md) for architecture-specific details)
 - **Xcode 14+** — Command Line Tools (minimal) or full Xcode (complete development environment)
   - Required for macOS 13 SDK and C++20 support (check [macOS support matrix](/doc/macos-support-matrix.md) for current version requirements)
 - **Homebrew** (for dependency management)
@@ -63,7 +63,7 @@ make run
 - See [Asset Conversion](/doc/media_convert.md) for detailed instructions
 
 **Note:** 
-- For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
+- For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see the [macOS build guide](/doc/build_instructions/macos.md).
 - A virtual environment is recommended to isolate Python dependencies. For alternative installation approaches, see the [macOS build guide](/doc/build_instructions/macos.md).
 
 ### Run the Game
