@@ -27,7 +27,7 @@ This is a **specialized fork** targeting native macOS development. It delivers:
 
 ### System Requirements
 
-- **macOS 13.0** (Ventura) or later
+- **macOS 13.0** (Ventura) or later — Hard requirement for this fork (check [macOS support matrix](/doc/macos-support-matrix.md) for architecture-specific details)
 - **Xcode 14+** — Command Line Tools (minimal) or full Xcode (complete development environment)
   - Required for macOS 13 SDK and C++20 support (check [macOS support matrix](/doc/macos-support-matrix.md) for current version requirements)
 - **Homebrew** (for dependency management)
@@ -48,12 +48,14 @@ source venv/bin/activate
 
 pip3 install --upgrade cython numpy mako lz4 pillow pygments setuptools toml
 
-# Build and test (if pip install fails, see Troubleshooting in [macOS build guide](/doc/build_instructions/macos.md))
+# Build and test
 ./configure --compiler="$(brew --prefix llvm)/bin/clang++" --download-nyan
 make
 make test
 make run
 ```
+
+> **If pip install fails:** See the [Troubleshooting](/doc/troubleshooting.md) section in the build guide for common issues and solutions.
 
 **Before running the game:**
 - Copy your original Age of Empires game installation files to a location on this machine
@@ -61,7 +63,7 @@ make run
 - See [Asset Conversion](/doc/media_convert.md) for detailed instructions
 
 **Note:** 
-- For detailed macOS build guidance, including cross-architecture builds, custom compiler options, and error handling, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
+- For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
 - A virtual environment is recommended to isolate Python dependencies. For alternative installation approaches, see the [macOS build guide](/doc/build_instructions/macos.md).
 
 ### Run the Game
