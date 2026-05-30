@@ -32,4 +32,14 @@ constexpr int64_t DEFAULT_POPULATION_COST = 1;
  */
 constexpr int64_t POPULATION_MAX = 200;
 
+/**
+ * Population headroom each completed building contributes to its owner.
+ *
+ * TODO: in the original game only some buildings (houses, town centres) raise
+ *       the cap, by building-specific amounts. Until a nyan PopulationSpace
+ *       ability is wired up, every building (the `OWNERSHIP` + no `MOVE`
+ *       heuristic) contributes this same default.
+ */
+constexpr int64_t DEFAULT_BUILDING_POPULATION_SPACE = 5;
+
 } // namespace openage::gamestate

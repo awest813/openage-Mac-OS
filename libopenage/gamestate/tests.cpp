@@ -369,6 +369,37 @@ void player_defeated_on_last_building_destroyed() {
 	TESTEQUALS(state->get_alive_player_count(), 0);
 }
 
+void building_population_capacity() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	// Destroying a building runs check_defeat, which fires events via the loop.
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	auto view = db->new_view();
+	auto p0 = std::make_shared<Player>(0, view, loop);
+	state->add_player(p0);
+
+	auto t0 = time::time_t::from_int(0);
+
+	// Two completed buildings' worth of population headroom.
+	p0->init_population(t0, 0);
+	p0->add_population_capacity(t0, 2 * DEFAULT_BUILDING_POPULATION_SPACE);
+	TESTEQUALS(p0->get_population_capacity(t0), 2 * DEFAULT_BUILDING_POPULATION_SPACE);
+
+	make_building(10, 0, loop, state, t0);
+	make_building(11, 0, loop, state, t0);
+
+	// Destroying one building releases the headroom it provided; the player is
+	// still alive (one building remains), so demand/capacity bookkeeping — not
+	// defeat — is what changes.
+	state->remove_game_entity(10, t0);
+	TESTEQUALS(p0->get_state() == player_state_t::ALIVE, true);
+	TESTEQUALS(p0->get_population_capacity(t0), DEFAULT_BUILDING_POPULATION_SPACE);
+}
+
 void no_defeat_for_unit_death() {
 	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();

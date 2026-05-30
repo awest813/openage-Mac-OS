@@ -155,12 +155,15 @@ model so it is deterministic and rewindable.
   `DEFAULT_POPULATION_COST = 1`; should come from a nyan `PopulationSpace`
   ability once the API/data is wired (same constraint as the unit/building
   heuristic).
-- [ ] **Building-provided capacity** — houses / town centres should raise
-  `population_capacity` on spawn and lower it on destruction. The `Player` API
-  supports this (`add_population_capacity`); auto-wiring needs nyan data to know
-  which buildings provide population space and how much. Pre-placed starting
-  units/buildings must register their demand/capacity at game setup via the same
-  API.
+- [x] **Building-provided capacity** — a completed building raises its owner's
+  `population_capacity` by `DEFAULT_BUILDING_POPULATION_SPACE` (`SpawnProductionHandler`)
+  and `GameState::remove_game_entity` lowers it again on destruction, using the
+  same `OWNERSHIP` + no-`MOVE` building heuristic. So houses/town centres now lift
+  the cap and losing them lowers it. Test: `building_population_capacity`.
+  *Limitation:* until nyan `PopulationSpace` data is wired, **every** building
+  contributes the same default (not just houses/TCs), and by a fixed amount.
+  Pre-placed starting units/buildings must still register their demand/capacity at
+  game setup via the `Player` API.
 
 ---
 

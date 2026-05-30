@@ -17,6 +17,7 @@
 #include "gamestate/game_state.h"
 #include "gamestate/manager.h"
 #include "gamestate/map.h"
+#include "gamestate/player.h"
 #include "gamestate/types.h"
 #include "log/log.h"
 #include "log/message.h"
@@ -120,6 +121,14 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 				time,
 				std::make_shared<component::command::MoveCommand>(rally_point.value()));
 		}
+	}
+
+	// A completed building raises its owner's population capacity. Buildings are
+	// identified by the same heuristic used elsewhere (owned, no MOVE component).
+	if (not entity->has_component(component::component_t::MOVE)
+	    and gstate->has_player(owner_id)) {
+		gstate->get_player(owner_id)->add_population_capacity(
+			time, gamestate::DEFAULT_BUILDING_POPULATION_SPACE);
 	}
 
 	auto activity = std::dynamic_pointer_cast<component::Activity>(

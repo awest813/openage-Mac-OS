@@ -92,6 +92,11 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 		this->get_player(owner_id)->add_population_demand(time, -DEFAULT_POPULATION_COST);
 	}
 
+	// Remove the population headroom a destroyed building had provided.
+	if (is_building and this->has_player(owner_id)) {
+		this->get_player(owner_id)->add_population_capacity(time, -DEFAULT_BUILDING_POPULATION_SPACE);
+	}
+
 	if (is_building) {
 		this->check_defeat(owner_id, time);
 	}
