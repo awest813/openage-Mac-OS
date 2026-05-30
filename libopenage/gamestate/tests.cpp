@@ -680,19 +680,19 @@ void fog_render_visibility() {
 	auto enemy_render = enemy->get_render_entity();
 
 	state->refresh_visibility(t0);
-	TESTEQUALS(enemy_render->get_fog_display(), renderer::world::fog_display_t::VISIBLE);
+	TESTEQUALS(enemy_render->get_fog_display() == renderer::world::fog_display_t::VISIBLE, true);
 
 	auto enemy_pos = std::dynamic_pointer_cast<component::Position>(
 		enemy->get_component(component::component_t::POSITION));
 	enemy_pos->set_position(t0, coord::phys3{100, 100, 0});
 
 	state->refresh_visibility(t0);
-	TESTEQUALS(enemy_render->get_fog_display(), renderer::world::fog_display_t::GHOST);
+	TESTEQUALS(enemy_render->get_fog_display() == renderer::world::fog_display_t::GHOST, true);
 	TESTEQUALS(enemy_render->get_ghost_position().has_value(), true);
 
 	// Own units stay visible regardless of fog tiles.
 	auto own_render = state->get_game_entity(entity_id_t{1})->get_render_entity();
-	TESTEQUALS(own_render->get_fog_display(), renderer::world::fog_display_t::VISIBLE);
+	TESTEQUALS(own_render->get_fog_display() == renderer::world::fog_display_t::VISIBLE, true);
 }
 
 void next_command_build_test() {
