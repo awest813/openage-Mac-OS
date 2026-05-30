@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "gamestate/game.h"
+#include "gamestate/game_state.h"
 #include "gamestate/simulation.h"
 #include "input/controller/camera/binding_context.h"
 #include "input/controller/camera/controller.h"
@@ -310,6 +312,15 @@ void Presenter::init_final_render_pass() {
 void Presenter::render() {
 	// TODO: Pass current time to update() instead of fetching it in renderer
 	this->camera_manager->update();
+
+	if (this->simulation) {
+		auto game = this->simulation->get_game();
+		if (game) {
+			auto fog = game->get_state()->get_fog_tile_texture();
+			this->terrain_renderer->update_fog_overlay(fog);
+		}
+	}
+
 	this->terrain_renderer->update();
 	this->world_renderer->update();
 	this->hud_renderer->update();

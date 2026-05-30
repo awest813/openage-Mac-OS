@@ -2,6 +2,7 @@
 
 #include "game_state.h"
 
+#include <cmath>
 #include <utility>
 
 #include <nyan/nyan.h>
@@ -13,11 +14,17 @@
 #include "log/message.h"
 
 #include "coord/tile.h"
+#include "gamestate/component/api/attack.h"
 #include "gamestate/component/api/live.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
 #include "gamestate/component/internal/ownership.h"
+#include "pathfinding/cost_field.h"
+#include "pathfinding/definitions.h"
+#include "pathfinding/grid.h"
+#include "pathfinding/sector.h"
 #include "gamestate/game_entity.h"
+#include "gamestate/map.h"
 #include "gamestate/player.h"
 #include "renderer/stages/world/render_entity.h"
 
@@ -326,6 +333,7 @@ void GameState::refresh_visibility(const time::time_t &time) {
 	}
 
 	this->update_fog_render_visibility(time);
+	this->update_fog_tile_texture();
 }
 
 void GameState::update_player_visibility(player_id_t player,
@@ -392,6 +400,160 @@ void GameState::set_view_player(player_id_t player) {
 
 player_id_t GameState::get_view_player() const {
 	return this->view_player_id;
+}
+
+namespace {
+
+constexpr uint8_t FOG_TEX_UNEXPLORED = 0;
+constexpr uint8_t FOG_TEX_EXPLORED = 128;
+constexpr uint8_t FOG_TEX_VISIBLE = 255;
+
+} // namespace
+
+void GameState::update_fog_tile_texture() {
+	if (this->map == nullptr) {
+		return;
+	}
+
+	const auto &map_size = this->map->get_size();
+	const size_t width = map_size[0];
+	const size_t height = map_size[1];
+	if (width == 0 || height == 0) {
+		return;
+	}
+
+	const player_id_t observer = this->view_player_id;
+	std::vector<uint8_t> pixels(width * height * 4, 0);
+
+	for (size_t se = 0; se < height; ++se) {
+		for (size_t ne = 0; ne < width; ++ne) {
+			coord::tile tile{static_cast<coord::tile_t>(ne), static_cast<coord::tile_t>(se)};
+			uint8_t value = FOG_TEX_UNEXPLORED;
+			if (this->fog_of_war.is_visible(observer, tile)) {
+				value = FOG_TEX_VISIBLE;
+			}
+			else if (this->fog_of_war.is_explored(observer, tile)) {
+				value = FOG_TEX_EXPLORED;
+			}
+
+			const size_t idx = (se * width + ne) * 4;
+			pixels[idx] = value;
+			pixels[idx + 1] = value;
+			pixels[idx + 2] = value;
+			pixels[idx + 3] = 255;
+		}
+	}
+
+	std::unique_lock lock{this->fog_texture_mutex};
+	this->fog_tile_texture.size = map_size;
+	this->fog_tile_texture.pixels = std::move(pixels);
+}
+
+FogTileTexture GameState::get_fog_tile_texture() const {
+	std::shared_lock lock{this->fog_texture_mutex};
+	return this->fog_tile_texture;
+}
+
+namespace {
+
+constexpr path::cost_t HAZARD_COST_DELTA = 20;
+
+int attack_range_tiles(const std::shared_ptr<component::Attack> &attack_component) {
+	auto attack_ability = attack_component->get_ability();
+	auto max_range = attack_ability.get<nyan::Float>("Attack.max_range");
+	const int range = static_cast<int>(std::ceil(max_range->get()));
+	return std::max(1, range);
+}
+
+} // namespace
+
+void GameState::apply_hazard_path_costs(player_id_t for_player,
+                                        path::grid_id_t grid_id,
+                                        const time::time_t &time) {
+	if (this->map == nullptr) {
+		return;
+	}
+
+	const auto &map_size = this->map->get_size();
+	const auto pathfinder = this->map->get_pathfinder();
+	const auto &grid = pathfinder->get_grid(grid_id);
+	const size_t sector_size = grid->get_sector_size();
+
+	for (const auto &[entity_id, entity] : this->game_entities) {
+		(void) entity_id;
+
+		if (not entity->has_component(component::component_t::OWNERSHIP)
+		    || not entity->has_component(component::component_t::POSITION)
+		    || not entity->has_component(component::component_t::ATTACK)) {
+			continue;
+		}
+
+		auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+			entity->get_component(component::component_t::OWNERSHIP));
+		if (ownership->get_owners().get(time) == for_player) {
+			continue;
+		}
+
+		if (entity->has_component(component::component_t::LIVE)) {
+			auto live = std::dynamic_pointer_cast<component::Live>(
+				entity->get_component(component::component_t::LIVE));
+			if (live->get_attribute(time, HP_ATTRIBUTE) <= 0) {
+				continue;
+			}
+		}
+
+		auto attack = std::dynamic_pointer_cast<component::Attack>(
+			entity->get_component(component::component_t::ATTACK));
+		const int hazard_radius = attack_range_tiles(attack);
+
+		auto pos_comp = std::dynamic_pointer_cast<component::Position>(
+			entity->get_component(component::component_t::POSITION));
+		const auto center = pos_comp->get_positions().get(time).to_tile();
+
+		if (center.ne < 0 || center.se < 0
+		    || static_cast<size_t>(center.ne) >= map_size[0]
+		    || static_cast<size_t>(center.se) >= map_size[1]) {
+			continue;
+		}
+
+		const auto r = static_cast<coord::tile_t>(hazard_radius);
+		for (coord::tile_t dne = -r; dne <= r; ++dne) {
+			for (coord::tile_t dse = -r; dse <= r; ++dse) {
+				const coord::tile_t tne = center.ne + dne;
+				const coord::tile_t tse = center.se + dse;
+				if (tne < 0 || tse < 0
+				    || static_cast<size_t>(tne) >= map_size[0]
+				    || static_cast<size_t>(tse) >= map_size[1]) {
+					continue;
+				}
+
+				const size_t sector_x = static_cast<size_t>(tne) / sector_size;
+				const size_t sector_y = static_cast<size_t>(tse) / sector_size;
+				auto sector = grid->get_sector(sector_x, sector_y);
+				auto cost_field = sector->get_cost_field();
+
+				const auto sector_origin = sector->get_position().to_tile(sector_size);
+				const coord::tile_delta local{
+					tne - sector_origin.ne,
+					tse - sector_origin.se,
+				};
+
+				const auto field_size = static_cast<coord::tile_t>(cost_field->get_size());
+				if (local.ne < 0 || local.se < 0 || local.ne >= field_size || local.se >= field_size) {
+					continue;
+				}
+
+				const auto current = cost_field->get_cost(local);
+				if (current == path::COST_IMPASSABLE) {
+					continue;
+				}
+
+				const auto boosted = static_cast<path::cost_t>(
+					std::min<int>(path::COST_MAX, current + HAZARD_COST_DELTA));
+				cost_field->set_cost(local, boosted, time);
+			}
+		}
+	}
 }
 
 void GameState::update_fog_render_visibility(const time::time_t &time) {

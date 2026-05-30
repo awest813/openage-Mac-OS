@@ -21,6 +21,7 @@
 #include "gamestate/component/api/turn.h"
 #include "gamestate/component/internal/command_queue.h"
 #include "gamestate/component/internal/commands/move.h"
+#include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
@@ -124,7 +125,18 @@ const time::time_t Move::move_default(const std::shared_ptr<gamestate::GameEntit
 	auto map = state->get_map();
 	auto pathfinder = map->get_pathfinder();
 	auto grid_id = map->get_grid_id(move_path_grid->get_name());
+
+	player_id_t owner_id = player_id_t{0};
+	if (entity->has_component(component::component_t::OWNERSHIP)) {
+		auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+			entity->get_component(component::component_t::OWNERSHIP));
+		owner_id = ownership->get_owners().get(start_time);
+	}
+
+	map->restore_sector_costs(grid_id, start_time);
+	state->apply_hazard_path_costs(owner_id, grid_id, start_time);
 	auto waypoints = find_path(pathfinder, grid_id, current_pos, destination, start_time);
+	map->restore_sector_costs(grid_id, start_time);
 
 	// If no path was found, schedule a retry after a short delay.
 	if (waypoints.empty()) {

@@ -60,6 +60,36 @@ Map::Map(const std::shared_ptr<GameState> &state,
 		grid->init_portals();
 		grid->init_portal_nodes();
 	}
+
+	this->snapshot_sector_costs();
+}
+
+void Map::snapshot_sector_costs() {
+	for (const auto &[path_type, grid_id] : this->grid_lookup) {
+		(void) path_type;
+		const auto &grid = this->pathfinder->get_grid(grid_id);
+		std::vector<std::vector<path::cost_t>> grid_snaps;
+		grid_snaps.reserve(grid->get_sectors().size());
+		for (const auto &sector : grid->get_sectors()) {
+			grid_snaps.push_back(sector->get_cost_field()->get_costs());
+		}
+		this->sector_cost_snapshots.emplace(grid_id, std::move(grid_snaps));
+	}
+}
+
+void Map::restore_sector_costs(const path::grid_id_t grid_id, const time::time_t &time) const {
+	auto snap_it = this->sector_cost_snapshots.find(grid_id);
+	if (snap_it == this->sector_cost_snapshots.end()) {
+		return;
+	}
+
+	const auto &grid = this->pathfinder->get_grid(grid_id);
+	const auto &sectors = grid->get_sectors();
+	for (size_t i = 0; i < sectors.size(); ++i) {
+		sectors.at(i)->get_cost_field()->set_costs(
+			std::vector<path::cost_t>(snap_it->second.at(i)),
+			time);
+	}
 }
 
 const util::Vector2s &Map::get_size() const {

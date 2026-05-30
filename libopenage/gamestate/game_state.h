@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -12,10 +13,12 @@
 
 #include "coord/tile.h"
 #include "event/state.h"
+#include "pathfinding/types.h"
 #include "gamestate/fog_of_war.h"
 #include "gamestate/player.h"
 #include "gamestate/types.h"
 #include "time/time.h"
+#include "util/vector.h"
 
 
 namespace nyan {
@@ -59,6 +62,21 @@ struct ProductionRequest {
 	 * Simulation time at which the entity finishes training.
 	 */
 	time::time_t completion_time;
+};
+
+/**
+ * CPU-side fog map for terrain rendering (one RGBA texel per map tile).
+ *
+ * The red channel encodes visibility: 0 = unexplored, 128 = explored but not
+ * currently visible, 255 = in line of sight.
+ */
+struct FogTileTexture {
+	util::Vector2s size{0, 0};
+	std::vector<uint8_t> pixels;
+
+	bool empty() const {
+		return this->pixels.empty();
+	}
 };
 
 /**
@@ -392,6 +410,29 @@ public:
 	 */
 	void update_fog_render_visibility(const time::time_t &time);
 
+	/**
+	 * Get a snapshot of the fog tile texture for terrain rendering.
+	 *
+	 * Thread-safe. Returns an empty texture if no map is loaded yet.
+	 *
+	 * @return Fog texture data for the view player.
+	 */
+	FogTileTexture get_fog_tile_texture() const;
+
+	/**
+	 * Raise movement costs on tiles within range of enemy attackers.
+	 *
+	 * Used before pathfinding so units path around hostile towers and castles.
+	 * Call \p Map::restore_sector_costs() before and after applying hazards.
+	 *
+	 * @param for_player  Player whose units are pathfinding (enemies pose hazards).
+	 * @param grid_id     Pathfinding grid to modify.
+	 * @param time        Time stamp for cost-field invalidation.
+	 */
+	void apply_hazard_path_costs(player_id_t for_player,
+	                             path::grid_id_t grid_id,
+	                             const time::time_t &time);
+
 	// -----------------------------------------------------------------------
 	// Tile Occupancy (collision avoidance)
 	// -----------------------------------------------------------------------
@@ -486,6 +527,21 @@ private:
 	 * Player whose fog-of-war view is used for rendering (local player).
 	 */
 	player_id_t view_player_id;
+
+	/**
+	 * Per-tile fog values for terrain shading, rebuilt each visibility tick.
+	 */
+	FogTileTexture fog_tile_texture;
+
+	/**
+	 * Protects \p fog_tile_texture between simulation and presenter threads.
+	 */
+	mutable std::shared_mutex fog_texture_mutex;
+
+	/**
+	 * Rebuild \p fog_tile_texture from the current fog-of-war state.
+	 */
+	void update_fog_tile_texture();
 
 	/**
 	 * Tile occupancy: maps a tile to the entity currently occupying it.

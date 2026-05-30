@@ -32,7 +32,11 @@
 #include "fog_of_war.h"
 #include "game_entity.h"
 #include "game_state.h"
+#include "map.h"
+#include "pathfinding/types.h"
 #include "player.h"
+#include "terrain.h"
+#include "terrain_chunk.h"
 #include "renderer/stages/world/render_entity.h"
 #include "time/time.h"
 
@@ -592,6 +596,66 @@ void entity_visibility_query() {
 	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), false);
 }
 
+void fog_tile_texture() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	auto observer = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(observer);
+
+	auto make_scout = [&](entity_id_t id, coord::phys3 pos) {
+		auto entity = std::make_shared<GameEntity>(id);
+		auto position = std::make_shared<component::Position>(loop);
+		position->set_position(t0, pos);
+		entity->add_component(position);
+
+		auto ownership = std::make_shared<component::Ownership>(loop);
+		ownership->set_owner(t0, player_id_t{0});
+		entity->add_component(ownership);
+
+		state->add_game_entity(entity);
+	};
+
+	// Without a map the fog texture stays empty.
+	state->refresh_visibility(t0);
+	auto empty_fog = state->get_fog_tile_texture();
+	TESTEQUALS(empty_fog.empty(), true);
+
+	// Build a minimal 4x4 terrain and map.
+	std::vector<std::shared_ptr<TerrainChunk>> chunks;
+	auto chunk = std::make_shared<TerrainChunk>(
+		util::Vector2s{4, 4},
+		coord::tile_delta{0, 0},
+		std::vector<TerrainTile>{});
+	chunks.push_back(chunk);
+	auto terrain = std::make_shared<Terrain>(util::Vector2s{4, 4}, std::move(chunks));
+	state->set_map(std::make_shared<Map>(state, terrain));
+
+	make_scout(entity_id_t{1}, coord::phys3{2, 2, 0});
+
+	state->refresh_visibility(t0);
+	auto fog = state->get_fog_tile_texture();
+	TESTEQUALS(fog.empty(), false);
+	TESTEQUALS(fog.size[0], size_t{4});
+	TESTEQUALS(fog.size[1], size_t{4});
+	TESTEQUALS(fog.pixels.size(), size_t{4 * 4 * 4});
+
+	// Scout at tile (2,2) on a 4x4 map should be visible (default sight range 4).
+	TESTEQUALS(fog.pixels[(2 + 2 * 4) * 4] > 200, true);
+}
+
+void hazard_path_costs_no_map() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	// Safe no-op when no map or grids exist yet.
+	state->apply_hazard_path_costs(player_id_t{0}, path::grid_id_t{0}, t0);
+}
+
 void fog_render_visibility() {
 	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = std::make_shared<nyan::Database>();
@@ -627,19 +691,19 @@ void fog_render_visibility() {
 	auto enemy_render = enemy->get_render_entity();
 
 	state->refresh_visibility(t0);
-	TESTEQUALS(enemy_render->get_fog_display(), renderer::world::fog_display_t::VISIBLE);
+	TESTEQUALS(enemy_render->get_fog_display() == renderer::world::fog_display_t::VISIBLE, true);
 
 	auto enemy_pos = std::dynamic_pointer_cast<component::Position>(
 		enemy->get_component(component::component_t::POSITION));
 	enemy_pos->set_position(t0, coord::phys3{100, 100, 0});
 
 	state->refresh_visibility(t0);
-	TESTEQUALS(enemy_render->get_fog_display(), renderer::world::fog_display_t::GHOST);
+	TESTEQUALS(enemy_render->get_fog_display() == renderer::world::fog_display_t::GHOST, true);
 	TESTEQUALS(enemy_render->get_ghost_position().has_value(), true);
 
 	// Own units stay visible regardless of fog tiles.
 	auto own_render = state->get_game_entity(entity_id_t{1})->get_render_entity();
-	TESTEQUALS(own_render->get_fog_display(), renderer::world::fog_display_t::VISIBLE);
+	TESTEQUALS(own_render->get_fog_display() == renderer::world::fog_display_t::VISIBLE, true);
 }
 
 void next_command_build_test() {
