@@ -23,6 +23,7 @@ enum class command_t {
 	GUARD,
 	SET_STANCE,
 	FORMATION_MOVE,
+	SET_RALLY_POINT,
 };
 
 } // namespace openage::gamestate::component::command

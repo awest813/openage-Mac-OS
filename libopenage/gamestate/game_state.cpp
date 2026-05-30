@@ -54,6 +54,7 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 void GameState::remove_game_entity(entity_id_t id) {
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
+	this->rally_points.erase(id);
 	this->release_tile(id);
 }
 
@@ -83,6 +84,7 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
+	this->rally_points.erase(id);
 	this->release_tile(id);
 
 	// Release the population space a unit reserved when it was trained.
@@ -280,6 +282,27 @@ void GameState::set_carried_resource(entity_id_t id,
 
 void GameState::clear_carried_resource(entity_id_t id) {
 	this->carried_resources.erase(id);
+}
+
+bool GameState::has_rally_point(entity_id_t id) const {
+	return this->rally_points.contains(id);
+}
+
+std::optional<coord::phys3> GameState::get_rally_point(entity_id_t id) const {
+	auto it = this->rally_points.find(id);
+	if (it == this->rally_points.end()) {
+		return std::nullopt;
+	}
+	return it->second;
+}
+
+void GameState::set_rally_point(entity_id_t id, const coord::phys3 &target) {
+	// coord::phys3 is not default-constructible, so operator[] cannot be used.
+	this->rally_points.insert_or_assign(id, target);
+}
+
+void GameState::clear_rally_point(entity_id_t id) {
+	this->rally_points.erase(id);
 }
 
 const std::shared_ptr<assets::ModManager> &GameState::get_mod_manager() const {

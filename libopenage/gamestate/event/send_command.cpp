@@ -212,6 +212,12 @@ void SendCommandHandler::invoke(openage::event::EventLoop & /* loop */,
 					params.get("target", coord::phys3{0, 0, 0}),
 					coord::phys3_delta{0, 0, 0}));
 		} break;
+		case component::command::command_t::SET_RALLY_POINT: {
+			// SET_RALLY_POINT is immediate: record the producer's rally point in
+			// the game state. Units produced by this entity are sent there on
+			// spawn (see SpawnProductionHandler).
+			gstate->set_rally_point(id, params.get("target", coord::phys3{0, 0, 0}));
+		} break;
 		default:
 			break;
 		}

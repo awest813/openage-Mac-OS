@@ -295,6 +295,40 @@ public:
 	void clear_carried_resource(entity_id_t id);
 
 	/**
+	 * Check whether a producing entity (e.g. a building) has a rally point set.
+	 *
+	 * @param id Producer entity ID.
+	 *
+	 * @return true if a rally point is set, false otherwise.
+	 */
+	bool has_rally_point(entity_id_t id) const;
+
+	/**
+	 * Get the rally point of a producing entity. Newly produced units are sent
+	 * here automatically.
+	 *
+	 * @param id Producer entity ID.
+	 *
+	 * @return Rally point position, or std::nullopt if none is set.
+	 */
+	std::optional<coord::phys3> get_rally_point(entity_id_t id) const;
+
+	/**
+	 * Set the rally point of a producing entity.
+	 *
+	 * @param id     Producer entity ID.
+	 * @param target Rally point position.
+	 */
+	void set_rally_point(entity_id_t id, const coord::phys3 &target);
+
+	/**
+	 * Clear a producing entity's rally point (e.g. when it is destroyed).
+	 *
+	 * @param id Producer entity ID.
+	 */
+	void clear_rally_point(entity_id_t id);
+
+	/**
 	 * TODO: Only for testing.
 	 */
 	const std::shared_ptr<assets::ModManager> &get_mod_manager() const;
@@ -517,6 +551,15 @@ private:
 	 * simulation and is cleaned up when an entity is destroyed.
 	 */
 	std::unordered_map<entity_id_t, CarriedResource> carried_resources;
+
+	/**
+	 * Rally points of producing entities, keyed by entity ID. Units produced by
+	 * an entity with a rally point are automatically sent there on spawn.
+	 *
+	 * Part of the game state (rather than a global) so it is deterministic per
+	 * simulation and is cleaned up when an entity is destroyed.
+	 */
+	std::unordered_map<entity_id_t, coord::phys3> rally_points;
 
 	/**
 	 * Fog-of-war state for all players.

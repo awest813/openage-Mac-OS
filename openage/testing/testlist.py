@@ -107,6 +107,7 @@ def tests_cpp():
     yield "openage::curve::tests::curve_types"
     yield "openage::event::tests::eventtrigger"
     yield "openage::gamestate::tests::carried_resources_lifecycle"
+    yield "openage::gamestate::tests::rally_point_lifecycle"
     yield "openage::gamestate::tests::fog_of_war_exploration"
     yield "openage::gamestate::tests::fog_of_war_visibility"
     yield "openage::gamestate::tests::fog_of_war_refresh"

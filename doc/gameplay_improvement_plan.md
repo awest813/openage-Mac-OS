@@ -86,6 +86,14 @@ for queries/UI and tests, drained as units finish.
   `game.spawn_production` event is only scheduled once the builder has reached the
   site, so construction (the `creation_time` wait) starts on arrival rather than
   immediately. Builders without `MOVE` construct in place as before.
+- [x] **Rally points** — a producing building can be given a rally point;
+  units it produces are automatically sent there on spawn. `command_t::SET_RALLY_POINT`
+  is handled immediately in `SendCommandHandler` (like `SET_STANCE`) and stored on
+  `GameState` (`set_/get_/has_/clear_rally_point`, keyed by entity ID, cleared in
+  `remove_game_entity`). `SpawnProductionHandler` queues a `MoveCommand` to the
+  rally point on the new unit (if it has `MOVE` + a command queue) before its
+  activity is initialised, so it walks there immediately. Test:
+  `rally_point_lifecycle`.
 
 ### 1.4 Win / Loss Conditions
 

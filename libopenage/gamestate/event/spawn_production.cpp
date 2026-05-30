@@ -6,6 +6,8 @@
 
 #include "coord/phys.h"
 #include "gamestate/component/internal/activity.h"
+#include "gamestate/component/internal/command_queue.h"
+#include "gamestate/component/internal/commands/move.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
@@ -102,6 +104,23 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 	auto entity_owner = std::dynamic_pointer_cast<component::Ownership>(
 		entity->get_component(component::component_t::OWNERSHIP));
 	entity_owner->set_owner(time, owner_id);
+
+	// If the producing entity has a rally point set, send the new unit there.
+	// Queue the move before the activity is initialised so it is processed on
+	// the first activity pass. Only mobile units with a command queue qualify.
+	if (target
+	    and entity->has_component(component::component_t::MOVE)
+	    and entity->has_component(component::component_t::COMMANDQUEUE)) {
+		auto producer_id = static_cast<gamestate::entity_id_t>(target->id());
+		auto rally_point = gstate->get_rally_point(producer_id);
+		if (rally_point.has_value()) {
+			auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+				entity->get_component(component::component_t::COMMANDQUEUE));
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::MoveCommand>(rally_point.value()));
+		}
+	}
 
 	auto activity = std::dynamic_pointer_cast<component::Activity>(
 		entity->get_component(component::component_t::ACTIVITY));

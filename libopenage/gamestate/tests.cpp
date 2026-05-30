@@ -269,6 +269,43 @@ void carried_resources_lifecycle() {
 	TESTEQUALS(state->is_carrying_resources(5), false);
 }
 
+void rally_point_lifecycle() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	auto t0 = time::time_t::from_int(0);
+
+	// A producing building exists in the state.
+	auto building = std::make_shared<GameEntity>(7);
+	state->add_game_entity(building);
+
+	TESTEQUALS(state->has_rally_point(7), false);
+	TESTEQUALS(state->get_rally_point(7).has_value(), false);
+
+	coord::phys3 rally{20, 30, 0};
+	state->set_rally_point(7, rally);
+	TESTEQUALS(state->has_rally_point(7), true);
+	auto stored = state->get_rally_point(7);
+	TESTEQUALS(stored.has_value(), true);
+	TESTEQUALS(stored.value() == rally, true);
+
+	// Setting again overwrites the previous point.
+	coord::phys3 rally2{5, 6, 0};
+	state->set_rally_point(7, rally2);
+	TESTEQUALS(state->get_rally_point(7).value() == rally2, true);
+
+	// Explicit clear removes it.
+	state->clear_rally_point(7);
+	TESTEQUALS(state->has_rally_point(7), false);
+
+	// The rally point is cleaned up when the producing entity is destroyed.
+	state->set_rally_point(7, rally);
+	TESTEQUALS(state->has_rally_point(7), true);
+	state->remove_game_entity(7, t0);
+	TESTEQUALS(state->has_rally_point(7), false);
+}
+
 void player_state_transitions() {
 	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
