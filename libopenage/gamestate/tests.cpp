@@ -77,6 +77,55 @@ void player_resources() {
 	TESTEQUALS(player.get_resource(t0, resource), 25);
 }
 
+void player_population() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto view = db->new_view();
+	Player player{0, view, loop};
+
+	auto t0 = time::time_t::from_int(0);
+	auto t1 = time::time_t::from_int(1);
+	auto t2 = time::time_t::from_int(2);
+
+	// Fresh player: no demand, no capacity, no space — cannot support a unit.
+	TESTEQUALS(player.get_population_demand(t0), 0);
+	TESTEQUALS(player.get_population_capacity(t0), 0);
+	TESTEQUALS(player.get_population_space(t0), 0);
+	TESTEQUALS(player.has_population_space(t0, 1), false);
+
+	// Give the player headroom for 5 population.
+	player.init_population(t0, 5);
+	TESTEQUALS(player.get_population_capacity(t0), 5);
+	TESTEQUALS(player.get_population_space(t0), 5);
+	TESTEQUALS(player.has_population_space(t0, 5), true);
+	TESTEQUALS(player.has_population_space(t0, 6), false);
+
+	// Reserve 4 population (e.g. four villagers queued).
+	player.add_population_demand(t1, 4);
+	TESTEQUALS(player.get_population_demand(t1), 4);
+	TESTEQUALS(player.get_population_space(t1), 1);
+	TESTEQUALS(player.has_population_space(t1, 1), true);
+	TESTEQUALS(player.has_population_space(t1, 2), false);
+
+	// A house raises capacity; now there is room again.
+	player.add_population_capacity(t1, 5);
+	TESTEQUALS(player.get_population_capacity(t1), 10);
+	TESTEQUALS(player.get_population_space(t1), 6);
+
+	// A unit dies: demand drops, space recovers. Past values are unchanged.
+	player.add_population_demand(t2, -1);
+	TESTEQUALS(player.get_population_demand(t2), 3);
+	TESTEQUALS(player.get_population_demand(t1), 4);
+
+	// Demand never records below 0 even if over-released.
+	player.add_population_demand(t2, -100);
+	TESTEQUALS(player.get_population_demand(t2), 0);
+
+	// Capacity is clamped to POPULATION_MAX.
+	player.init_population(t2, POPULATION_MAX + 50);
+	TESTEQUALS(player.get_population_capacity(t2), POPULATION_MAX);
+}
+
 void next_command_conditions() {
 	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto entity = make_entity_with_command_queue(loop, 0);

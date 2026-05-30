@@ -120,6 +120,7 @@ def tests_cpp():
     yield "openage::gamestate::tests::no_defeat_for_unit_death"
     yield "openage::gamestate::tests::player_defeated_on_last_building_destroyed"
     yield "openage::gamestate::tests::player_resources"
+    yield "openage::gamestate::tests::player_population"
     yield "openage::gamestate::tests::player_state_transitions"
     yield "openage::gamestate::tests::production_requests"
     yield "openage::gamestate::tests::send_command_variants"

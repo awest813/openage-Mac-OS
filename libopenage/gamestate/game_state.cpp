@@ -25,6 +25,7 @@
 #include "pathfinding/sector.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/map.h"
+#include "gamestate/definitions.h"
 #include "gamestate/player.h"
 #include "renderer/stages/world/render_entity.h"
 
@@ -61,6 +62,7 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	// before erasing it from the index.
 	player_id_t owner_id = 0;
 	bool is_building = false;
+	bool is_owned_unit = false;
 
 	auto it = this->game_entities.find(id);
 	if (it != this->game_entities.end()) {
@@ -75,12 +77,18 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 			// TODO: classify buildings via an explicit nyan attribute/ability
 			//       once a unit/building type system exists, instead of "no MOVE".
 			is_building = not entity->has_component(component::component_t::MOVE);
+			is_owned_unit = not is_building;
 		}
 	}
 
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
 	this->release_tile(id);
+
+	// Release the population space a unit reserved when it was trained.
+	if (is_owned_unit and this->has_player(owner_id)) {
+		this->get_player(owner_id)->add_population_demand(time, -DEFAULT_POPULATION_COST);
+	}
 
 	if (is_building) {
 		this->check_defeat(owner_id, time);

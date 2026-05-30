@@ -113,6 +113,74 @@ public:
 	                  int64_t amount);
 
 	/**
+	 * Set the player's starting population capacity (headroom).
+	 *
+	 * Capacity is the amount of population the player can support; training is
+	 * blocked once demand reaches it. The effective capacity is always clamped
+	 * to \p POPULATION_MAX.
+	 *
+	 * @param time     Time at which the capacity is initialised.
+	 * @param capacity Starting capacity.
+	 */
+	void init_population(const time::time_t &time, int64_t capacity = 0);
+
+	/**
+	 * Get the current population demand (space consumed by living and
+	 * in-production units).
+	 *
+	 * @param time Time at which to read.
+	 *
+	 * @return Current population demand.
+	 */
+	int64_t get_population_demand(const time::time_t &time) const;
+
+	/**
+	 * Get the current population capacity, clamped to \p POPULATION_MAX.
+	 *
+	 * @param time Time at which to read.
+	 *
+	 * @return Effective population capacity.
+	 */
+	int64_t get_population_capacity(const time::time_t &time) const;
+
+	/**
+	 * Get the remaining population space (capacity minus demand, never below 0).
+	 *
+	 * @param time Time at which to read.
+	 *
+	 * @return Free population space.
+	 */
+	int64_t get_population_space(const time::time_t &time) const;
+
+	/**
+	 * Check whether the player can support \p amount additional population.
+	 *
+	 * @param time   Time at which to check.
+	 * @param amount Additional population required.
+	 *
+	 * @return true if demand + amount fits within the (clamped) capacity.
+	 */
+	bool has_population_space(const time::time_t &time, int64_t amount) const;
+
+	/**
+	 * Change the population demand (e.g. +cost when a unit is queued, -cost when
+	 * it dies). Demand is never recorded below 0.
+	 *
+	 * @param time   Simulation time of the change.
+	 * @param amount Amount to add (may be negative).
+	 */
+	void add_population_demand(const time::time_t &time, int64_t amount);
+
+	/**
+	 * Change the population capacity (e.g. +space when a house is built, -space
+	 * when it is destroyed). Capacity is never recorded below 0.
+	 *
+	 * @param time   Simulation time of the change.
+	 * @param amount Amount to add (may be negative).
+	 */
+	void add_population_capacity(const time::time_t &time, int64_t amount);
+
+	/**
 	 * Get the current lifecycle state of this player.
 	 *
 	 * @return Player lifecycle state.
@@ -165,6 +233,18 @@ private:
 	 * are recorded deterministically.
 	 */
 	std::unordered_map<nyan::fqon_t, std::shared_ptr<curve::Discrete<int64_t>>> resources;
+
+	/**
+	 * Population space consumed by the player's living and in-production units.
+	 * Time-indexed so the value is deterministic and rewindable.
+	 */
+	std::shared_ptr<curve::Discrete<int64_t>> population_demand;
+
+	/**
+	 * Population headroom provided to the player (e.g. by houses). The effective
+	 * capacity used for checks is this value clamped to \p POPULATION_MAX.
+	 */
+	std::shared_ptr<curve::Discrete<int64_t>> population_capacity;
 
 	/**
 	 * Event loop used for lazily creating resource curves.

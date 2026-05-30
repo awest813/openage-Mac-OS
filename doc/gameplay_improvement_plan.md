@@ -122,6 +122,38 @@ A correctness pass over all of Phase 1 fixed two leaks and several edge cases:
 - [x] New regression tests: `carried_resources_lifecycle`; defeat tests register the
   game-over handlers (these `create_event` paths would otherwise throw).
 
+### 1.6 Population Cap
+
+**Status:** ✅ Core complete (data-sourced costs/capacity pending)
+
+Population is modelled on `Player` with two time-indexed `Discrete<int64_t>`
+curves — `population_demand` (space consumed by living + in-production units)
+and `population_capacity` (headroom from buildings) — mirroring the resource
+model so it is deterministic and rewindable.
+
+- [x] `Player` population API: `init_population`, `get_population_demand`,
+  `get_population_capacity` (clamped to `POPULATION_MAX = 200`),
+  `get_population_space`, `has_population_space`, `add_population_demand`,
+  `add_population_capacity`. Demand and capacity are never recorded below 0.
+- [x] **Training gate** — `Production::train_command` blocks training (without
+  spending resources) when `has_population_space` is false, and reserves
+  `DEFAULT_POPULATION_COST` on a successful train so queued units count against
+  the cap immediately.
+- [x] **Release on death** — `GameState::remove_game_entity(id, time)` releases the
+  reserved population when an owned unit (has `MOVE`) dies.
+- [x] New unit test: `player_population` (demand/capacity/space, the gate, the
+  `POPULATION_MAX` clamp, and time-indexed history).
+- [ ] **Per-unit population cost from nyan** — currently every unit costs
+  `DEFAULT_POPULATION_COST = 1`; should come from a nyan `PopulationSpace`
+  ability once the API/data is wired (same constraint as the unit/building
+  heuristic).
+- [ ] **Building-provided capacity** — houses / town centres should raise
+  `population_capacity` on spawn and lower it on destruction. The `Player` API
+  supports this (`add_population_capacity`); auto-wiring needs nyan data to know
+  which buildings provide population space and how much. Pre-placed starting
+  units/buildings must register their demand/capacity at game setup via the same
+  API.
+
 ---
 
 ## Phase 2 — Quality-of-Life Improvements
