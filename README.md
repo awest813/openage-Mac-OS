@@ -48,27 +48,29 @@ source venv/bin/activate
 
 pip3 install --upgrade cython numpy mako lz4 pillow pygments setuptools toml
 
-# Build and test
+# Build and test (if pip install fails, see Troubleshooting in [macOS build guide](/doc/build_instructions/macos.md))
 ./configure --compiler="$(brew --prefix llvm)/bin/clang++" --download-nyan
 make
 make test
 make run
 ```
 
+**Before running the game:**
+- Copy your original Age of Empires game installation files to a location on this machine
+- Run the converter: `./run media-convert /path/to/game/files`
+- See [Asset Conversion](/doc/media_convert.md) for detailed instructions
+
 **Note:** 
-- For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
-- **Alternative approach:** If you prefer not to use a virtual environment, use `pip3 install --upgrade --break-system-packages ...` (as shown in the [macOS build guide](/doc/build_instructions/macos.md)).
-  - ⚠️ This may conflict with system Python packages, so venv is recommended if you have other Python-dependent tools.
+- For detailed macOS build guidance, including cross-architecture builds, custom compiler options, and error handling, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
+- A virtual environment is recommended to isolate Python dependencies. For alternative installation approaches, see the [macOS build guide](/doc/build_instructions/macos.md).
 
 ### Run the Game
 
-Once built:
+Once built and assets are prepared:
 
 ```bash
 cd bin && ./run main
 ```
-
-The game requires original Age of Empires assets (not included). The converter will help you extract them from your game installation if needed.
 
 ---
 
@@ -118,7 +120,7 @@ The game requires original Age of Empires assets (not included). The converter w
 - **Architecture Support:**
   - ✅ **Apple Silicon (arm64)** — Primary support
   - ✅ **Intel (x86_64)** — Primary support
-  - 🔄 **Universal 2 binaries** (single binary that runs natively on both architectures) — Planned for future release
+  - 🔄 **Universal 2 binaries** (single binary containing code for both architectures) — Planned for future release
 
 ---
 
