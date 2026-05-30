@@ -29,8 +29,7 @@ This is a **specialized fork** targeting native macOS development. It delivers:
 
 - **macOS 13.0** (Ventura) or later
 - **Xcode 14+** — Command Line Tools (minimal) or full Xcode (complete development environment)
-  - Required for macOS 13 SDK and C++20 support
-  - Check [macOS support matrix](/doc/macos-support-matrix.md) for latest version requirements
+  - Required for macOS 13 SDK and C++20 support (check [macOS support matrix](/doc/macos-support-matrix.md) for current version requirements)
 - **Homebrew** (for dependency management)
 
 ### Build & Run (macOS)
@@ -58,7 +57,7 @@ make run
 
 **Note:** 
 - For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
-- **Alternative approach:** If you prefer not to use a virtual environment, use `pip3 install --upgrade --break-system-packages ...` (as shown in the official build guide).
+- **Alternative approach:** If you prefer not to use a virtual environment, use `pip3 install --upgrade --break-system-packages ...` (as shown in the [macOS build guide](/doc/build_instructions/macos.md)).
   - ⚠️ This may conflict with system Python packages, so venv is recommended if you have other Python-dependent tools.
 
 ### Run the Game
@@ -119,7 +118,7 @@ The game requires original Age of Empires assets (not included). The converter w
 - **Architecture Support:**
   - ✅ **Apple Silicon (arm64)** — Primary support
   - ✅ **Intel (x86_64)** — Primary support
-  - 🔄 **Universal 2 binaries** (single binary for both arm64 + x86_64) — Planned for future release
+  - 🔄 **Universal 2 binaries** (single binary that runs natively on both architectures) — Planned for future release
 
 ---
 
