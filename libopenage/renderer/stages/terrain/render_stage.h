@@ -12,6 +12,10 @@
 
 namespace openage {
 
+namespace gamestate {
+struct FogTileTexture;
+}
+
 namespace time {
 class Clock;
 }
@@ -83,6 +87,13 @@ public:
 	void update();
 
 	/**
+	 * Upload a per-tile fog map used to darken unexplored and shrouded terrain.
+	 *
+	 * @param fog_tile_texture CPU-side RGBA fog data (one texel per map tile).
+	 */
+	void update_fog_overlay(const gamestate::FogTileTexture &fog_tile_texture);
+
+	/**
 	 * Resize the FBO for the terrain rendering. This basically updates the output
 	 * texture size.
 	 *
@@ -150,6 +161,21 @@ private:
 	 * Depth texture.
 	 */
 	std::shared_ptr<renderer::Texture2d> depth_texture;
+
+	/**
+	 * Per-tile fog-of-war overlay sampled in the terrain shader.
+	 */
+	std::shared_ptr<renderer::Texture2d> fog_texture;
+
+	/**
+	 * Map size in tiles (matches \p fog_texture resolution).
+	 */
+	util::Vector2s fog_map_size;
+
+	/**
+	 * Whether fog shading is active for terrain draws.
+	 */
+	bool fog_enabled;
 
 	/**
 	 * Mutex for protecting threaded access.

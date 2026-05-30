@@ -18,6 +18,7 @@
 #include "gamestate/component/types.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/game_entity.h"
+#include "gamestate/map.h"
 #include "gamestate/player.h"
 #include "renderer/stages/world/render_entity.h"
 
@@ -326,6 +327,7 @@ void GameState::refresh_visibility(const time::time_t &time) {
 	}
 
 	this->update_fog_render_visibility(time);
+	this->update_fog_tile_texture();
 }
 
 void GameState::update_player_visibility(player_id_t player,
@@ -392,6 +394,58 @@ void GameState::set_view_player(player_id_t player) {
 
 player_id_t GameState::get_view_player() const {
 	return this->view_player_id;
+}
+
+namespace {
+
+constexpr uint8_t FOG_TEX_UNEXPLORED = 0;
+constexpr uint8_t FOG_TEX_EXPLORED = 128;
+constexpr uint8_t FOG_TEX_VISIBLE = 255;
+
+} // namespace
+
+void GameState::update_fog_tile_texture() {
+	if (this->map == nullptr) {
+		return;
+	}
+
+	const auto &map_size = this->map->get_size();
+	const size_t width = map_size[0];
+	const size_t height = map_size[1];
+	if (width == 0 || height == 0) {
+		return;
+	}
+
+	const player_id_t observer = this->view_player_id;
+	std::vector<uint8_t> pixels(width * height * 4, 0);
+
+	for (size_t se = 0; se < height; ++se) {
+		for (size_t ne = 0; ne < width; ++ne) {
+			coord::tile tile{static_cast<coord::tile_t>(ne), static_cast<coord::tile_t>(se)};
+			uint8_t value = FOG_TEX_UNEXPLORED;
+			if (this->fog_of_war.is_visible(observer, tile)) {
+				value = FOG_TEX_VISIBLE;
+			}
+			else if (this->fog_of_war.is_explored(observer, tile)) {
+				value = FOG_TEX_EXPLORED;
+			}
+
+			const size_t idx = (se * width + ne) * 4;
+			pixels[idx] = value;
+			pixels[idx + 1] = value;
+			pixels[idx + 2] = value;
+			pixels[idx + 3] = 255;
+		}
+	}
+
+	std::unique_lock lock{this->fog_texture_mutex};
+	this->fog_tile_texture.size = map_size;
+	this->fog_tile_texture.pixels = std::move(pixels);
+}
+
+FogTileTexture GameState::get_fog_tile_texture() const {
+	std::shared_lock lock{this->fog_texture_mutex};
+	return this->fog_tile_texture;
 }
 
 void GameState::update_fog_render_visibility(const time::time_t &time) {

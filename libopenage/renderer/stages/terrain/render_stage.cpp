@@ -10,11 +10,15 @@
 #include "renderer/resources/shader_source.h"
 #include "renderer/resources/texture_info.h"
 #include "renderer/shader_program.h"
+#include "gamestate/game_state.h"
+#include "renderer/resources/texture_data.h"
 #include "renderer/stages/terrain/chunk.h"
 #include "renderer/stages/terrain/mesh.h"
 #include "renderer/stages/terrain/model.h"
 #include "renderer/window.h"
 #include "time/clock.h"
+
+#include <eigen3/Eigen/Dense>
 
 
 namespace openage::renderer::terrain {
@@ -29,7 +33,10 @@ TerrainRenderStage::TerrainRenderStage(const std::shared_ptr<Window> &window,
 	camera{camera},
 	render_entity{nullptr},
 	model{std::make_shared<TerrainRenderModel>(asset_manager)},
-	clock{clock} {
+	clock{clock},
+	fog_texture{nullptr},
+	fog_map_size{0, 0},
+	fog_enabled{false} {
 	renderer::opengl::GlContext::check_error();
 
 	auto size = window->get_size();
@@ -85,6 +92,57 @@ void TerrainRenderStage::update() {
 		}
 	}
 	this->model->update_uniforms(current_time);
+
+	if (this->fog_enabled && this->fog_texture != nullptr) {
+		const Eigen::Vector2f fog_map_size_f{
+			static_cast<float>(this->fog_map_size[0]),
+			static_cast<float>(this->fog_map_size[1]),
+		};
+		for (auto &chunk : this->model->get_chunks()) {
+			for (auto &mesh : chunk->get_meshes()) {
+				auto uniforms = mesh->get_uniforms();
+				if (uniforms != nullptr) {
+					uniforms->update("fog_tex", this->fog_texture);
+					uniforms->update("fog_map_size", fog_map_size_f);
+					uniforms->update("fog_enabled", true);
+				}
+			}
+		}
+	}
+}
+
+void TerrainRenderStage::update_fog_overlay(const gamestate::FogTileTexture &fog_tile_texture) {
+	std::unique_lock lock{this->mutex};
+
+	if (fog_tile_texture.empty()) {
+		this->fog_enabled = false;
+		return;
+	}
+
+	const auto width = fog_tile_texture.size[0];
+	const auto height = fog_tile_texture.size[1];
+	if (width == 0 || height == 0) {
+		this->fog_enabled = false;
+		return;
+	}
+
+	if (this->fog_texture == nullptr
+	    || this->fog_map_size[0] != width
+	    || this->fog_map_size[1] != height) {
+		this->fog_map_size = fog_tile_texture.size;
+		auto info = resources::Texture2dInfo(
+			width,
+			height,
+			resources::pixel_format::rgba8);
+		this->fog_texture = this->renderer->add_texture(
+			resources::Texture2dData(info, std::vector<uint8_t>(width * height * 4, 0)));
+	}
+
+	resources::Texture2dData upload_data{
+		resources::Texture2dInfo(width, height, resources::pixel_format::rgba8),
+		std::vector<uint8_t>(fog_tile_texture.pixels)};
+	this->fog_texture->upload(upload_data);
+	this->fog_enabled = true;
 }
 
 void TerrainRenderStage::resize(size_t width, size_t height) {

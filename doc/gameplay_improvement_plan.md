@@ -165,6 +165,8 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 - ✅ Rebuild visibility each simulation tick (`GameState::refresh_visibility`, called from `GameSimulation::run`)
 - ✅ Hide enemy units outside visible tiles (`GameState::update_fog_render_visibility` sets `fog_display_t::HIDDEN` on render entities; `WorldRenderStage` skips hidden objects)
 - ✅ Show last-known position of units that leave vision (`fog_display_t::GHOST` draws at `FogOfWar::last_known_positions` via `WorldObject::fetch_updates`)
+- ✅ Terrain fog overlay: per-tile fog texture rebuilt each tick (`FogTileTexture`, `GameState::update_fog_tile_texture`); terrain shader darkens explored tiles and blacks out unexplored areas (`TerrainRenderStage::update_fog_overlay`)
+- [ ] Minimap fog overlay (HUD minimap not implemented yet)
 
 ---
 

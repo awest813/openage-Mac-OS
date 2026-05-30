@@ -32,7 +32,10 @@
 #include "fog_of_war.h"
 #include "game_entity.h"
 #include "game_state.h"
+#include "map.h"
 #include "player.h"
+#include "terrain.h"
+#include "terrain_chunk.h"
 #include "renderer/stages/world/render_entity.h"
 #include "time/time.h"
 
@@ -590,6 +593,56 @@ void entity_visibility_query() {
 
 	state->refresh_visibility(t0);
 	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), false);
+}
+
+void fog_tile_texture() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	auto observer = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(observer);
+
+	auto make_scout = [&](entity_id_t id, coord::phys3 pos) {
+		auto entity = std::make_shared<GameEntity>(id);
+		auto position = std::make_shared<component::Position>(loop);
+		position->set_position(t0, pos);
+		entity->add_component(position);
+
+		auto ownership = std::make_shared<component::Ownership>(loop);
+		ownership->set_owner(t0, player_id_t{0});
+		entity->add_component(ownership);
+
+		state->add_game_entity(entity);
+	};
+
+	make_scout(entity_id_t{1}, coord::phys3{5, 5, 0});
+
+	// Without a map the fog texture stays empty.
+	state->refresh_visibility(t0);
+	auto empty_fog = state->get_fog_tile_texture();
+	TESTEQUALS(empty_fog.empty(), true);
+
+	// Build a minimal 4x4 terrain and map.
+	std::vector<std::shared_ptr<TerrainChunk>> chunks;
+	auto chunk = std::make_shared<TerrainChunk>(
+		util::Vector2s{4, 4},
+		coord::tile_delta{0, 0},
+		std::vector<TerrainTile>{});
+	chunks.push_back(chunk);
+	auto terrain = std::make_shared<Terrain>(util::Vector2s{4, 4}, std::move(chunks));
+	state->set_map(std::make_shared<Map>(state, terrain));
+
+	state->refresh_visibility(t0);
+	auto fog = state->get_fog_tile_texture();
+	TESTEQUALS(fog.empty(), false);
+	TESTEQUALS(fog.size[0], size_t{4});
+	TESTEQUALS(fog.size[1], size_t{4});
+	TESTEQUALS(fog.pixels.size(), size_t{4 * 4 * 4});
+
+	// Scout at (5,5) reveals tiles around it with default sight range 4.
+	TESTEQUALS(fog.pixels[(5 + 5 * 4) * 4] > 200, true);
 }
 
 void fog_render_visibility() {
