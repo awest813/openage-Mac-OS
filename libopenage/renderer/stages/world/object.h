@@ -145,6 +145,13 @@ public:
 	                const time::time_t &time);
 
 	/**
+	 * Check whether the object should be drawn (not hidden by fog of war).
+	 *
+	 * @return true if the object may be rendered, else false.
+	 */
+	bool is_fog_visible() const;
+
+	/**
 	 * Shader uniform IDs for setting uniform values.
 	 */
 	inline static uniform_id_t obj_world_position;

@@ -366,6 +366,32 @@ public:
 	std::optional<coord::phys3> get_last_known_position(player_id_t observer,
 	                                                    entity_id_t entity_id) const;
 
+	/**
+	 * Set the player whose fog-of-war view drives rendering.
+	 *
+	 * Defaults to player 0. Used by \p update_fog_render_visibility().
+	 *
+	 * @param player Local observer player ID.
+	 */
+	void set_view_player(player_id_t player);
+
+	/**
+	 * @return Player ID used for fog-of-war rendering queries.
+	 */
+	player_id_t get_view_player() const;
+
+	/**
+	 * Update each entity's render visibility from the view player's fog state.
+	 *
+	 * Own units are always shown. Enemy units outside line of sight are hidden;
+	 * units that left vision are drawn as ghosts at their last-known position.
+	 *
+	 * Call after \p refresh_visibility() each simulation tick.
+	 *
+	 * @param time Simulation time at which entity positions are sampled.
+	 */
+	void update_fog_render_visibility(const time::time_t &time);
+
 	// -----------------------------------------------------------------------
 	// Tile Occupancy (collision avoidance)
 	// -----------------------------------------------------------------------
@@ -455,6 +481,11 @@ private:
 	 * Fog-of-war state for all players.
 	 */
 	FogOfWar fog_of_war;
+
+	/**
+	 * Player whose fog-of-war view is used for rendering (local player).
+	 */
+	player_id_t view_player_id;
 
 	/**
 	 * Tile occupancy: maps a tile to the entity currently occupying it.

@@ -19,6 +19,7 @@
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/player.h"
+#include "renderer/stages/world/render_entity.h"
 
 
 namespace openage::gamestate {
@@ -27,7 +28,8 @@ GameState::GameState(const std::shared_ptr<nyan::Database> &db,
                      const std::shared_ptr<openage::event::EventLoop> &loop) :
 	event::State{loop},
 	event_loop{loop},
-	db_view{db->new_view()} {
+	db_view{db->new_view()},
+	view_player_id{0} {
 }
 
 const std::shared_ptr<nyan::View> &GameState::get_db_view() {
@@ -322,6 +324,8 @@ void GameState::refresh_visibility(const time::time_t &time) {
 
 		this->update_player_visibility(owner_id, center, DEFAULT_SIGHT_RANGE_TILES);
 	}
+
+	this->update_fog_render_visibility(time);
 }
 
 void GameState::update_player_visibility(player_id_t player,
@@ -380,6 +384,53 @@ bool GameState::is_entity_visible(player_id_t observer,
 std::optional<coord::phys3> GameState::get_last_known_position(player_id_t observer,
                                                                entity_id_t entity_id) const {
 	return this->fog_of_war.get_last_known_position(observer, entity_id);
+}
+
+void GameState::set_view_player(player_id_t player) {
+	this->view_player_id = player;
+}
+
+player_id_t GameState::get_view_player() const {
+	return this->view_player_id;
+}
+
+void GameState::update_fog_render_visibility(const time::time_t &time) {
+	const player_id_t observer = this->view_player_id;
+
+	for (const auto &[entity_id, entity] : this->game_entities) {
+		auto render_entity = entity->get_render_entity();
+		if (render_entity == nullptr) {
+			continue;
+		}
+
+		player_id_t owner_id = player_id_t{0};
+		bool has_owner = false;
+		if (entity->has_component(component::component_t::OWNERSHIP)) {
+			auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+				entity->get_component(component::component_t::OWNERSHIP));
+			owner_id = ownership->get_owners().get(time);
+			has_owner = true;
+		}
+
+		if (has_owner && owner_id == observer) {
+			render_entity->set_fog_display(renderer::world::fog_display_t::VISIBLE);
+			continue;
+		}
+
+		if (this->is_entity_visible(observer, entity_id, time)) {
+			render_entity->set_fog_display(renderer::world::fog_display_t::VISIBLE);
+			continue;
+		}
+
+		auto last_known = this->get_last_known_position(observer, entity_id);
+		if (last_known.has_value()) {
+			render_entity->set_fog_display(renderer::world::fog_display_t::GHOST,
+			                               last_known);
+		}
+		else {
+			render_entity->set_fog_display(renderer::world::fog_display_t::HIDDEN);
+		}
+	}
 }
 
 void GameState::occupy_tile(coord::tile tile, entity_id_t entity) {

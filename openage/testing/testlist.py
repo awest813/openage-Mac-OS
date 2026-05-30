@@ -111,6 +111,7 @@ def tests_cpp():
     yield "openage::gamestate::tests::fog_of_war_visibility"
     yield "openage::gamestate::tests::fog_of_war_refresh"
     yield "openage::gamestate::tests::entity_visibility_query"
+    yield "openage::gamestate::tests::fog_render_visibility"
     yield "openage::gamestate::tests::next_command_conditions"
     yield "openage::gamestate::tests::next_command_conditions_extended"
     yield "openage::gamestate::tests::next_command_formation_move_test"
