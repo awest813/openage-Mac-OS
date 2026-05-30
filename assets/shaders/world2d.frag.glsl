@@ -7,6 +7,7 @@ layout(location=1) out uint id;
 
 uniform sampler2D tex;
 uniform uint u_id;
+uniform bool fog_ghost;
 
 // position (top left corner) and size: (x, y, width, height)
 uniform vec4 tile_params;
@@ -39,5 +40,12 @@ void main() {
 			col = tex_val;
 			break;
 	}
+
+	if (fog_ghost) {
+		float gray = dot(col.rgb, vec3(0.299, 0.587, 0.114));
+		col.rgb = mix(vec3(gray), col.rgb, 0.35);
+		col.a *= 0.65;
+	}
+
 	id = u_id;
 }

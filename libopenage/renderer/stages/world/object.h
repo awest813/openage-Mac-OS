@@ -162,6 +162,7 @@ public:
 	inline static uniform_id_t scale;
 	inline static uniform_id_t subtex_size;
 	inline static uniform_id_t anchor_offset;
+	inline static uniform_id_t fog_ghost;
 
 private:
 	/**
