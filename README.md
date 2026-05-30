@@ -27,7 +27,7 @@ This is a **specialized fork** targeting native macOS development. It delivers:
 
 ### System Requirements
 
-- **macOS 13.0** (Ventura) or later — Hard requirement for this fork (check [macOS support matrix](/doc/macos-support-matrix.md) for architecture-specific details)
+- **macOS 13.0** (Ventura) or later — Minimum supported version; earlier versions are not compatible (check [macOS support matrix](/doc/macos-support-matrix.md) for architecture-specific details)
 - **Xcode 14+** — Command Line Tools (minimal) or full Xcode (complete development environment)
   - Required for macOS 13 SDK and C++20 support (check [macOS support matrix](/doc/macos-support-matrix.md) for current version requirements)
 - **Homebrew** (for dependency management)
@@ -55,7 +55,7 @@ make test
 make run
 ```
 
-> **If pip install fails:** See the [Troubleshooting](/doc/troubleshooting.md) section in the build guide for common issues and solutions.
+> **If pip install fails:** See the [Troubleshooting guide](/doc/troubleshooting.md) or the [macOS build guide](/doc/build_instructions/macos.md) for common issues and solutions.
 
 **Before running the game:**
 - Copy your original Age of Empires game installation files to a location on this machine
