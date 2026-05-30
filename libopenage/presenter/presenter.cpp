@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "gamestate/game.h"
+#include "gamestate/game_state.h"
 #include "gamestate/simulation.h"
 #include "input/controller/camera/binding_context.h"
 #include "input/controller/camera/controller.h"
