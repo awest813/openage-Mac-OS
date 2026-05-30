@@ -40,7 +40,12 @@ cd openage-Mac-OS
 
 # Install dependencies (run these commands from the repo directory)
 brew install cmake python3 libepoxy freetype fontconfig harfbuzz opus opusfile qt6 libogg libpng toml11 eigen llvm
-pip3 install --upgrade --break-system-packages cython numpy mako lz4 pillow pygments setuptools toml
+
+# Set up a Python virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate
+
+pip3 install --upgrade cython numpy mako lz4 pillow pygments setuptools toml
 
 # Build and test
 ./configure --compiler="$(brew --prefix llvm)/bin/clang++" --download-nyan
@@ -51,7 +56,7 @@ make run
 
 **Note:** 
 - For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
-- The `--break-system-packages` flag is used for Homebrew Python workflows. Prefer a virtual environment (`python3 -m venv venv && source venv/bin/activate`) if you have other Python-dependent tools to protect.
+- Alternative: If you prefer not to use a virtual environment, you can use `pip3 install --upgrade --break-system-packages ...` (used by the project's official build guide for Homebrew Python workflows).
 
 ### Run the Game
 
