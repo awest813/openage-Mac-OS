@@ -12,6 +12,7 @@
 #include "renderer/shader_program.h"
 #include "gamestate/game_state.h"
 #include "renderer/resources/texture_data.h"
+#include "renderer/texture.h"
 #include "renderer/stages/terrain/chunk.h"
 #include "renderer/stages/terrain/mesh.h"
 #include "renderer/stages/terrain/model.h"
