@@ -28,7 +28,7 @@ This is a **specialized fork** targeting native macOS development. It delivers:
 ### System Requirements
 
 - **macOS 13.0** (Ventura) or later
-- **Xcode 14+** (for C++20 support)
+- **Xcode 14+** (Command Line Tools or full Xcode installation; required for macOS 13 SDK and C++20 support)
 - **Homebrew** (for dependency management)
 
 ### Build & Run (macOS)
@@ -49,7 +49,9 @@ make test
 make run
 ```
 
-**Note:** For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
+**Note:** 
+- For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
+- The `--break-system-packages` flag is used to allow pip to install packages outside Homebrew's managed Python. This is consistent with Homebrew's Python workflow on macOS.
 
 ### Run the Game
 
