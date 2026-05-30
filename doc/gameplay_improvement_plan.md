@@ -77,6 +77,15 @@ for queries/UI and tests, drained as units finish.
   back to the producer-derived position (TRAIN). Previously buildings appeared one
   tile from the villager instead of where the player clicked. Test:
   `build_command_placement`.
+- [x] **Walk to the build site before constructing** — `Build::build_command` now
+  checks the builder's distance to the target. While farther than `BUILD_RANGE`
+  (2 tiles) and the builder has `MOVE`, it steps toward the site via
+  `Move::move_default` and re-enqueues the `BuildCommand` (the same self-re-enqueue
+  pattern as `AttackMove` / `Patrol`, wired through `build → wait_for_build →
+  {idle | condition_cmd_type}`). Resources are only spent and the
+  `game.spawn_production` event is only scheduled once the builder has reached the
+  site, so construction (the `creation_time` wait) starts on arrival rather than
+  immediately. Builders without `MOVE` construct in place as before.
 
 ### 1.4 Win / Loss Conditions
 
