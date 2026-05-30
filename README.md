@@ -28,7 +28,9 @@ This is a **specialized fork** targeting native macOS development. It delivers:
 ### System Requirements
 
 - **macOS 13.0** (Ventura) or later
-- **Xcode 14+** — Command Line Tools (minimal) or full Xcode (complete development environment) for macOS 13 SDK and C++20 support (check [macOS support matrix](/doc/macos-support-matrix.md) for latest version requirements)
+- **Xcode 14+** — Command Line Tools (minimal) or full Xcode (complete development environment)
+  - Required for macOS 13 SDK and C++20 support
+  - Check [macOS support matrix](/doc/macos-support-matrix.md) for latest version requirements
 - **Homebrew** (for dependency management)
 
 ### Build & Run (macOS)
@@ -56,7 +58,8 @@ make run
 
 **Note:** 
 - For detailed macOS build guidance, including cross-architecture builds and custom compiler options, see [doc/build_instructions/macos.md](/doc/build_instructions/macos.md).
-- Alternative: If you prefer not to use a virtual environment, you can use `pip3 install --upgrade --break-system-packages ...` (used by the project's official build guide). However, this may conflict with system Python packages, so a virtual environment is recommended for systems with other Python-dependent tools.
+- **Alternative approach:** If you prefer not to use a virtual environment, use `pip3 install --upgrade --break-system-packages ...` (as shown in the official build guide).
+  - ⚠️ This may conflict with system Python packages, so venv is recommended if you have other Python-dependent tools.
 
 ### Run the Game
 
