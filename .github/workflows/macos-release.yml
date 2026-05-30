@@ -121,6 +121,10 @@ jobs:
         id: version
         run: |
           VERSION=$(git describe --tags --always)
+          # Strip a leading "v" so the artifact matches the documented
+          # naming scheme (openage-<version>-macos-<arch>); see
+          # doc/macos-support-matrix.md "Release Artifact Policy".
+          VERSION=${VERSION#v}
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create tarball
@@ -136,6 +140,25 @@ jobs:
           test -s "${ARTIFACT}.tar.gz"
           echo "ARTIFACT_NAME=${ARTIFACT}" >> "$GITHUB_ENV"
           echo "ARTIFACT_FILE=${ARTIFACT}.tar.gz" >> "$GITHUB_ENV"
+
+      # Verify the *packaged* artifact actually launches before we publish it.
+      # `make test` only exercises the in-tree build; this re-extracts the
+      # tarball into a clean directory and runs the embedded launcher, so a
+      # broken package (missing run binary, lost in-place python modules) fails
+      # the release here instead of in a tester's hands on the M1.
+      - name: Smoke-test packaged artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d)"
+          tar -xzf "${ARTIFACT_FILE}" -C "${WORK}"
+          cd "${WORK}/${ARTIFACT_NAME}"
+          test -x ./run
+          # --help loads the openage python package and argparse, then exits 0
+          # without needing converted game assets. This confirms the packaged
+          # launcher and its in-place modules survived packaging and link
+          # against the runner's Homebrew libraries.
+          ./run --help
 
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
