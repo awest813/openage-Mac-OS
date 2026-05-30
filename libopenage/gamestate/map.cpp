@@ -23,7 +23,15 @@ Map::Map(const std::shared_ptr<GameState> &state,
 	// Create a grid for each path type
 	// TODO: This is non-deterministic because of the unordered set. Is this a problem?
 	auto nyan_db = state->get_db_view();
-	std::unordered_set<nyan::fqon_t> path_types = nyan_db->get_obj_children_all("engine.util.path_type.PathType");
+	// A degenerate database — e.g. in unit tests, or a modpack that defines no
+	// movement types — may not contain the PathType base object. Guard the
+	// lookup so the map can still be constructed (with no pathfinding grids)
+	// instead of throwing nyan::InternalError during construction.
+	static const nyan::fqon_t PATH_TYPE_BASE = "engine.util.path_type.PathType";
+	std::unordered_set<nyan::fqon_t> path_types;
+	if (nyan_db->get_database().get_info().has_object(PATH_TYPE_BASE)) {
+		path_types = nyan_db->get_obj_children_all(PATH_TYPE_BASE);
+	}
 	size_t grid_idx = 0;
 	auto chunk_size = this->terrain->get_chunk(0)->get_size();
 	auto side_length = std::max(chunk_size[0], chunk_size[1]);

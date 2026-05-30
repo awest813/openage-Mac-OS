@@ -372,18 +372,13 @@ bool GameState::is_entity_visible(player_id_t observer,
 
 	bool visible = this->fog_of_war.is_visible(observer, tile);
 
-	// When visibility changes from visible→hidden, record the last-known
-	// position.  When it changes from hidden→visible, clear the stale entry.
+	// Remember the entity's position whenever it is visible to the observer.
+	// Once it leaves vision we keep that remembered spot untouched so it can
+	// be rendered as a "ghost" at the place it was last seen. Entities the
+	// observer has never seen have no recorded position and stay hidden.
 	// Because is_entity_visible is a const query we use mutable fog_of_war.
 	if (visible) {
-		const_cast<FogOfWar &>(this->fog_of_war).clear_last_known_position(observer, entity_id);
-	}
-	else {
-		// Only record if the entity's current tile has been explored by
-		// the observer (i.e. the observer has seen this area before).
-		if (this->fog_of_war.is_explored(observer, tile)) {
-			const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
-		}
+		const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
 	}
 
 	return visible;

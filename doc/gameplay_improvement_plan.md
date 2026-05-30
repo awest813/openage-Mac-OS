@@ -175,6 +175,12 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 - ✅ Terrain fog overlay: per-tile fog texture rebuilt each tick (`FogTileTexture`, `GameState::update_fog_tile_texture`); terrain shader darkens explored tiles and blacks out unexplored areas (`TerrainRenderStage::update_fog_overlay`)
 - [ ] Minimap fog overlay (HUD minimap not implemented yet)
 - ✅ Ghost unit visuals: last-known units render desaturated and semi-transparent (`fog_ghost` uniform in `world2d.frag.glsl`)
+- ✅ **Ghost recording fix** — `GameState::is_entity_visible` now records an entity's
+  position whenever it *is* visible (the spot it was last seen) and leaves that
+  entry untouched once it goes out of vision, so it renders as a `GHOST`.
+  Previously a last-known position was only stored if the entity's *new, hidden*
+  tile happened to be explored, so a unit moving into unexplored fog incorrectly
+  showed as `HIDDEN`. Fixed the `fog_render_visibility` test (was failing).
 
 ---
 
@@ -218,6 +224,29 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 - [ ] Skill-based matchmaking via the openage master server
 
 ---
+
+## Build & Test Environment
+
+The full suite builds and runs green on Ubuntu 24.04 (matching CI's devenv):
+
+```
+# system deps: see packaging/docker/devenv/Dockerfile.ubuntu.2404
+python3.12 -m pip install "cython>=3.0.10,<4.0.0" --break-system-packages
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3.12 \
+      -DDOWNLOAD_NYAN=YES -G Ninja ..
+cmake --build . --parallel "$(nproc)"
+./run test -a          # all 54 tests pass (exit 0)
+```
+
+Notes:
+- Ubuntu 24.04's default `python3` may be a 3.11 that lacks numpy/mako; point
+  CMake at 3.12 with `-DPython3_EXECUTABLE=/usr/bin/python3.12`. Cython must be
+  installed for *that* interpreter.
+- `Map` construction is robust to a database without the `engine.util.path_type.PathType`
+  base object (it builds with no pathfinding grids) so gamestate unit tests can
+  construct a `Map` without loading the full nyan API. This fixed an abort in the
+  `fog_tile_texture` test that previously took down the whole `./run test -a` run.
 
 ## Implementation Notes
 
