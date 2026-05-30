@@ -78,6 +78,6 @@ protected:
 	/**
 	 * Mutex for protecting threaded access.
 	 */
-	std::shared_mutex mutex;
+	mutable std::shared_mutex mutex;
 };
 } // namespace openage::renderer
