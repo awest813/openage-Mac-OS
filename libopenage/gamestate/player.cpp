@@ -1,4 +1,4 @@
-// Copyright 2018-2024 the openage authors. See copying.md for legal info.
+// Copyright 2018-2026 the openage authors. See copying.md for legal info.
 
 #include "player.h"
 

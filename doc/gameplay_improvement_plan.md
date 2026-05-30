@@ -288,7 +288,7 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3.12 \
       -DDOWNLOAD_NYAN=YES -G Ninja ..
 cmake --build . --parallel "$(nproc)"
-./run test -a          # all 54 tests pass (exit 0)
+./run test -a          # all 58 tests pass (exit 0)
 ```
 
 Notes:

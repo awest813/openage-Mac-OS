@@ -102,7 +102,8 @@ public:
 	/**
 	 * Add an amount to a resource.
 	 *
-	 * If the resource type is not yet tracked it is silently ignored.
+	 * If the resource type is not yet tracked, it is silently initialized to 0
+	 * before the amount is added.
 	 *
 	 * @param time     Simulation time of the change.
 	 * @param resource Resource type identifier (nyan fqon).
