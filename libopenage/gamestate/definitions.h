@@ -43,9 +43,22 @@ constexpr int64_t POPULATION_MAX = 200;
 constexpr int64_t DEFAULT_BUILDING_POPULATION_SPACE = 5;
 
 /**
- * Fraction of a building's construction cost returned as a salvage pile.
+ * Default fraction of construction cost returned as salvage when a building is
+ * destroyed (combat, delete, etc.). Overridden per creatable via nyan
+ * CreatableGameEntity.salvage_recovery_fraction when set.
  */
 constexpr double SALVAGE_RECOVERY_FRACTION = 0.5;
+
+/**
+ * Default fraction recovered when a building is deconstructed (slower, higher yield).
+ * Overridden per creatable via CreatableGameEntity.deconstruct_recovery_fraction.
+ */
+constexpr double DECONSTRUCT_RECOVERY_FRACTION = 0.75;
+
+/**
+ * Multiplier applied to creation_time when CreatableGameEntity.deconstruct_time is unset.
+ */
+constexpr double DECONSTRUCT_TIME_FACTOR = 1.5;
 
 /**
  * Seconds of game time between each unit of salvage decay (1 resource / interval).

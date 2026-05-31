@@ -121,7 +121,10 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 
 	if (is_building) {
 		if (have_building_pos && building_cost.has_value()) {
-			this->spawn_salvage_from_building(building_pos, building_cost.value(), time);
+			this->spawn_salvage_pile(building_pos,
+			                         building_cost.value(),
+			                         building_cost->destroy_recovery_fraction,
+			                         time);
 		}
 		this->check_defeat(owner_id, time);
 	}
@@ -362,15 +365,15 @@ entity_id_t GameState::allocate_entity_id() const {
 	return max_id + 1;
 }
 
-void GameState::spawn_salvage_from_building(const coord::phys3 &position,
-                                            const BuildingCostRecord &cost,
-                                            const time::time_t &time) {
-	if (cost.amount <= 0 || cost.resource_type.empty()) {
+void GameState::spawn_salvage_pile(const coord::phys3 &position,
+                                   const BuildingCostRecord &cost,
+                                   double recovery_fraction,
+                                   const time::time_t &time) {
+	if (cost.amount <= 0 || cost.resource_type.empty() || recovery_fraction <= 0) {
 		return;
 	}
 
-	int64_t salvage_amount = static_cast<int64_t>(
-		std::floor(cost.amount * SALVAGE_RECOVERY_FRACTION));
+	int64_t salvage_amount = static_cast<int64_t>(std::floor(cost.amount * recovery_fraction));
 	if (salvage_amount <= 0) {
 		return;
 	}
@@ -436,6 +439,11 @@ void GameState::tick_salvage_decay(const time::time_t &time) {
 	for (entity_id_t id : depleted) {
 		this->remove_game_entity(id);
 	}
+}
+
+void GameState::finish_deconstruct(entity_id_t building_id, const time::time_t &time) {
+	// Cost was cleared when deconstruction started so destroy salvage is not spawned.
+	this->remove_game_entity(building_id, time);
 }
 
 const std::shared_ptr<assets::ModManager> &GameState::get_mod_manager() const {

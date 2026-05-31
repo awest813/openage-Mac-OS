@@ -96,6 +96,8 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	auto wait_for_create = std::make_shared<activity::XorEventGate>(12);
 	auto build = std::make_shared<activity::TaskSystemNode>(22, "Build");
 	auto wait_for_build = std::make_shared<activity::XorEventGate>(23);
+	auto deconstruct = std::make_shared<activity::TaskSystemNode>(24, "Deconstruct");
+	auto wait_for_deconstruct = std::make_shared<activity::XorEventGate>(25);
 	auto end = std::make_shared<activity::EndNode>(13);
 	auto attack_move = std::make_shared<activity::TaskSystemNode>(14, "AttackMove");
 	auto wait_for_attack_move = std::make_shared<activity::XorEventGate>(15);
@@ -135,6 +137,7 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	condition_cmd_type->add_output(gather, gamestate::activity::next_command_gather);
 	condition_cmd_type->add_output(create, gamestate::activity::next_command_train);
 	condition_cmd_type->add_output(build, gamestate::activity::next_command_build);
+	condition_cmd_type->add_output(deconstruct, gamestate::activity::next_command_deconstruct);
 	condition_cmd_type->add_output(attack_move, gamestate::activity::next_command_attack_move);
 	condition_cmd_type->add_output(patrol, gamestate::activity::next_command_patrol);
 	condition_cmd_type->add_output(guard, gamestate::activity::next_command_guard);
@@ -178,6 +181,12 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 
 	wait_for_build->add_output(idle, gamestate::activity::primer_wait);
 	wait_for_build->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	deconstruct->add_output(wait_for_deconstruct);
+	deconstruct->set_system_id(system::system_id_t::DECONSTRUCT_COMMAND);
+
+	wait_for_deconstruct->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_deconstruct->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
 	// Attack-move system node: move toward destination, attacking enemies along the way
 	attack_move->add_output(wait_for_attack_move);

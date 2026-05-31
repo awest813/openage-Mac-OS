@@ -17,6 +17,7 @@
 #include "component/internal/commands/attack.h"
 #include "component/internal/commands/attack_move.h"
 #include "component/internal/commands/build.h"
+#include "component/internal/commands/deconstruct.h"
 #include "component/internal/commands/formation_move.h"
 #include "component/internal/commands/gather.h"
 #include "component/internal/commands/guard.h"
@@ -202,6 +203,21 @@ void send_command_variants() {
 		command_queue->pop_command(t0));
 	TESTEQUALS(train_command != nullptr, true);
 	TESTEQUALS(train_command->get_game_entity(), std::string{"test.unit.Spearman"});
+
+	handler.invoke(*loop,
+	               nullptr,
+	               state,
+	               t0,
+	               openage::event::EventHandler::param_map{
+	                   {"type", component::command::command_t::DECONSTRUCT},
+	                   {"target_entity_id", entity_id_t{88}},
+	                   {"entity_ids", std::vector<entity_id_t>{7}},
+	               });
+
+	auto deconstruct_command = std::dynamic_pointer_cast<component::command::DeconstructCommand>(
+		command_queue->pop_command(t0));
+	TESTEQUALS(deconstruct_command != nullptr, true);
+	TESTEQUALS(deconstruct_command->get_target(), 88);
 }
 
 void production_requests() {
@@ -486,6 +502,13 @@ void next_command_conditions_extended() {
 	TESTEQUALS(activity::next_command_attack_move(t0, entity), false);
 	TESTEQUALS(activity::next_command_patrol(t0, entity), false);
 	TESTEQUALS(activity::next_command_guard(t0, entity), true);
+	command_queue->pop_command(t0);
+
+	// DECONSTRUCT
+	command_queue->add_command(t0,
+	                           std::make_shared<component::command::DeconstructCommand>(entity_id_t{55}));
+	TESTEQUALS(activity::next_command_deconstruct(t0, entity), true);
+	TESTEQUALS(activity::next_command_build(t0, entity), false);
 	command_queue->pop_command(t0);
 }
 
@@ -905,7 +928,10 @@ void building_cost_and_salvage_spawn() {
 	auto state = std::make_shared<GameState>(db, loop);
 	auto t0 = time::time_t::from_int(0);
 
-	BuildingCostRecord cost{"test.resource.Wood", 200};
+	BuildingCostRecord cost;
+	cost.resource_type = "test.resource.Wood";
+	cost.amount = 200;
+	cost.destroy_recovery_fraction = 0.5;
 	state->set_building_cost(10, cost);
 
 	auto building = std::make_shared<GameEntity>(10);
@@ -933,6 +959,37 @@ void building_cost_and_salvage_spawn() {
 		salvage_entity->get_component(component::component_t::SALVAGE));
 	TESTEQUALS(salvage->get_resource_type(), std::string{"test.resource.Wood"});
 	TESTEQUALS(salvage->get_amount(t0), 100);
+}
+
+void building_cost_custom_salvage_fraction() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	BuildingCostRecord cost;
+	cost.resource_type = "test.resource.Stone";
+	cost.amount = 100;
+	cost.destroy_recovery_fraction = 0.3;
+	state->set_building_cost(20, cost);
+
+	auto building = std::make_shared<GameEntity>(20);
+	building->add_component(std::make_shared<component::Ownership>(loop));
+	building->add_component(std::make_shared<component::Position>(loop));
+	auto pos = std::dynamic_pointer_cast<component::Position>(
+		building->get_component(component::component_t::POSITION));
+	pos->set_position(t0, coord::phys3{1, 1, 0});
+	state->add_game_entity(building);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	state->remove_game_entity(20, t0);
+
+	const auto &salvage_entity = state->get_game_entities().begin()->second;
+	auto salvage = std::dynamic_pointer_cast<component::Salvage>(
+		salvage_entity->get_component(component::component_t::SALVAGE));
+	TESTEQUALS(salvage->get_amount(t0), 30);
 }
 
 void salvage_decay() {

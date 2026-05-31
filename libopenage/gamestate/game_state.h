@@ -13,6 +13,7 @@
 
 #include "coord/tile.h"
 #include "event/state.h"
+#include "gamestate/definitions.h"
 #include "pathfinding/types.h"
 #include "gamestate/fog_of_war.h"
 #include "gamestate/player.h"
@@ -100,7 +101,13 @@ struct CarriedResource {
  */
 struct BuildingCostRecord {
 	std::string resource_type;
-	int64_t amount;
+	int64_t amount = 0;
+	/** Salvage fraction when the building is destroyed (not deconstructed). */
+	double destroy_recovery_fraction = SALVAGE_RECOVERY_FRACTION;
+	/** Salvage fraction when the player deconstructs the building. */
+	double deconstruct_recovery_fraction = DECONSTRUCT_RECOVERY_FRACTION;
+	/** Villager deconstruct duration in seconds. */
+	double deconstruct_time = 0.0;
 };
 
 /**
@@ -542,9 +549,15 @@ private:
 	/**
 	 * Spawn a neutral salvage pile at \p position from a destroyed building's cost.
 	 */
-	void spawn_salvage_from_building(const coord::phys3 &position,
-	                                 const BuildingCostRecord &cost,
-	                                 const time::time_t &time);
+	void spawn_salvage_pile(const coord::phys3 &position,
+	                        const BuildingCostRecord &cost,
+	                        double recovery_fraction,
+	                        const time::time_t &time);
+
+	/**
+	 * Remove a building after deconstruction (salvage already scheduled separately).
+	 */
+	void finish_deconstruct(entity_id_t building_id, const time::time_t &time);
 
 	entity_id_t allocate_entity_id() const;
 

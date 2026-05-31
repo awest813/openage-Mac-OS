@@ -19,6 +19,7 @@ enum class command_t {
 	GATHER,
 	TRAIN,
 	BUILD,
+	DECONSTRUCT,
 	PATROL,
 	GUARD,
 	SET_STANCE,

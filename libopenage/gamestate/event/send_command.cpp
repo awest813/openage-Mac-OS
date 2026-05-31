@@ -11,6 +11,7 @@
 #include "gamestate/component/internal/commands/attack.h"
 #include "gamestate/component/internal/commands/attack_move.h"
 #include "gamestate/component/internal/commands/build.h"
+#include "gamestate/component/internal/commands/deconstruct.h"
 #include "gamestate/component/internal/commands/formation_move.h"
 #include "gamestate/component/internal/commands/gather.h"
 #include "gamestate/component/internal/commands/guard.h"
@@ -172,6 +173,13 @@ void SendCommandHandler::invoke(openage::event::EventLoop & /* loop */,
 			                   std::string{}),
 					params.get("target",
 			                   coord::phys3{0, 0, 0})));
+			break;
+		case component::command::command_t::DECONSTRUCT:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::DeconstructCommand>(
+					params.get("target_entity_id",
+			                   gamestate::entity_id_t{})));
 			break;
 		case component::command::command_t::ATTACK_MOVE:
 			command_queue->add_command(

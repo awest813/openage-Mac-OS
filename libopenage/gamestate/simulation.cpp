@@ -10,6 +10,7 @@
 #include "gamestate/event/process_command.h"
 #include "gamestate/event/send_command.h"
 #include "gamestate/event/spawn_entity.h"
+#include "gamestate/event/deconstruct_complete.h"
 #include "gamestate/event/spawn_production.h"
 #include "gamestate/event/wait.h"
 #include "gamestate/terrain_factory.h"
@@ -149,6 +150,7 @@ void GameSimulation::init_event_handlers() {
 	auto wait_handler = std::make_shared<gamestate::event::WaitHandler>();
 	auto player_defeated_handler = std::make_shared<gamestate::event::PlayerDefeatedHandler>();
 	auto game_over_handler = std::make_shared<gamestate::event::GameOverHandler>();
+	auto deconstruct_complete_handler = std::make_shared<gamestate::event::DeconstructCompleteHandler>();
 	this->event_loop->add_event_handler(drag_select_handler);
 	this->event_loop->add_event_handler(spawn_handler);
 	this->event_loop->add_event_handler(spawn_production_handler);
@@ -157,6 +159,7 @@ void GameSimulation::init_event_handlers() {
 	this->event_loop->add_event_handler(wait_handler);
 	this->event_loop->add_event_handler(player_defeated_handler);
 	this->event_loop->add_event_handler(game_over_handler);
+	this->event_loop->add_event_handler(deconstruct_complete_handler);
 }
 
 } // namespace openage::gamestate

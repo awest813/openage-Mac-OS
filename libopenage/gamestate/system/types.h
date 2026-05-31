@@ -26,6 +26,8 @@ enum class system_id_t {
 
 	BUILD_COMMAND,
 
+	DECONSTRUCT_COMMAND,
+
 	PATROL_COMMAND,
 
 	GUARD_COMMAND,
