@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 
 #include "coord/phys.h"
@@ -64,5 +65,17 @@ constexpr double DECONSTRUCT_TIME_FACTOR = 1.5;
  * Seconds of game time between each unit of salvage decay (1 resource / interval).
  */
 constexpr double SALVAGE_DECAY_INTERVAL_SEC = 10.0;
+
+/**
+ * Maximum distance (in tiles) for builders to start build or deconstruct actions.
+ */
+constexpr double BUILDER_INTERACTION_RANGE = 2.0;
+
+/**
+ * Clamp a resource recovery fraction to [0, 1].
+ */
+inline double clamp_recovery_fraction(double fraction) {
+	return std::clamp(fraction, 0.0, 1.0);
+}
 
 } // namespace openage::gamestate

@@ -4,6 +4,7 @@
 
 #include <optional>
 
+#include "event/eventhandler.h"
 #include "gamestate/definitions.h"
 #include "gamestate/game_state.h"
 
@@ -48,11 +49,11 @@ CreatableCostInfo lookup_creatable(const std::shared_ptr<nyan::View> &db_view,
 
 		if (auto salvage_frac = optional_float_member(creatable_obj,
 		                                              "CreatableGameEntity.salvage_recovery_fraction")) {
-			info.salvage_recovery_fraction = *salvage_frac;
+			info.salvage_recovery_fraction = clamp_recovery_fraction(*salvage_frac);
 		}
 		if (auto decon_frac = optional_float_member(
 			    creatable_obj, "CreatableGameEntity.deconstruct_recovery_fraction")) {
-			info.deconstruct_recovery_fraction = *decon_frac;
+			info.deconstruct_recovery_fraction = clamp_recovery_fraction(*decon_frac);
 		}
 		if (auto decon_time = optional_float_member(creatable_obj,
 		                                            "CreatableGameEntity.deconstruct_time")) {
@@ -80,7 +81,45 @@ BuildingCostRecord building_cost_from_creatable(const CreatableCostInfo &info) {
 	else {
 		record.deconstruct_time = DECONSTRUCT_TIME_FACTOR;
 	}
-	return record;
+	return normalize_building_cost(record);
+}
+
+BuildingCostRecord normalize_building_cost(BuildingCostRecord cost) {
+	cost.destroy_recovery_fraction = clamp_recovery_fraction(cost.destroy_recovery_fraction);
+	cost.deconstruct_recovery_fraction = clamp_recovery_fraction(cost.deconstruct_recovery_fraction);
+	if (cost.deconstruct_time < 0) {
+		cost.deconstruct_time = 0;
+	}
+	return cost;
+}
+
+std::optional<BuildingCostRecord> building_cost_from_event_params(
+    const openage::event::EventHandler::param_map &params) {
+	if (not params.check_type<std::string>("build_cost_resource")
+	    || not params.check_type<int64_t>("build_cost_amount")) {
+		return std::nullopt;
+	}
+
+	BuildingCostRecord cost_record;
+	cost_record.resource_type = params.get("build_cost_resource", std::string{});
+	cost_record.amount = params.get("build_cost_amount", int64_t{0});
+	if (params.check_type<double>("salvage_recovery_fraction")) {
+		cost_record.destroy_recovery_fraction =
+			params.get("salvage_recovery_fraction", SALVAGE_RECOVERY_FRACTION);
+	}
+	if (params.check_type<double>("deconstruct_recovery_fraction")) {
+		cost_record.deconstruct_recovery_fraction =
+			params.get("deconstruct_recovery_fraction", DECONSTRUCT_RECOVERY_FRACTION);
+	}
+	if (params.check_type<double>("deconstruct_time")) {
+		cost_record.deconstruct_time = params.get("deconstruct_time", 0.0);
+	}
+
+	if (cost_record.amount <= 0 || cost_record.resource_type.empty()) {
+		return std::nullopt;
+	}
+
+	return normalize_building_cost(cost_record);
 }
 
 } // namespace openage::gamestate::api

@@ -32,14 +32,13 @@ void DeconstructCompleteHandler::invoke(openage::event::EventLoop & /* loop */,
 	auto cost_amount = params.get("cost_amount", int64_t{0});
 	auto recovery_fraction = params.get("recovery_fraction", gamestate::DECONSTRUCT_RECOVERY_FRACTION);
 
-	if (not gstate->get_game_entities().contains(building_id)) {
-		log::log(MSG(warn) << "DeconstructComplete: building " << building_id << " already removed.");
+	if (cost_amount <= 0 || cost_resource.empty()) {
+		log::log(MSG(warn) << "DeconstructComplete: missing cost data for building " << building_id << ".");
 		return;
 	}
 
 	BuildingCostRecord cost{cost_resource, cost_amount};
-	gstate->spawn_salvage_pile(building_pos, cost, recovery_fraction, time);
-	gstate->finish_deconstruct(building_id, time);
+	gstate->complete_deconstruction(building_id, building_pos, cost, recovery_fraction, time);
 
 	log::log(MSG(info) << "Deconstruction of building " << building_id << " completed.");
 }

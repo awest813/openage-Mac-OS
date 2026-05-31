@@ -15,6 +15,7 @@
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
+#include "gamestate/definitions.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
 #include "gamestate/manager.h"
@@ -25,12 +26,7 @@
 namespace openage::gamestate::system {
 
 static constexpr const char *SPAWN_PRODUCTION_EVENT = "game.spawn_production";
-
-/**
- * Maximum distance (in tiles) between the builder and the build site at which
- * construction may begin. Farther than this, the builder walks toward the site.
- */
-static constexpr double BUILD_RANGE = 2.0;
+static constexpr double BUILD_RANGE = BUILDER_INTERACTION_RANGE;
 
 const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEntity> &entity,
                                         const std::shared_ptr<openage::event::EventLoop> &loop,

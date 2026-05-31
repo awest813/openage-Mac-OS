@@ -361,6 +361,16 @@ public:
 	void tick_salvage_decay(const time::time_t &time);
 
 	/**
+	 * Complete a scheduled deconstruction: spawn salvage at \p position and remove
+	 * the building if it still exists (e.g. not destroyed by combat in the meantime).
+	 */
+	void complete_deconstruction(entity_id_t building_id,
+	                             const coord::phys3 &position,
+	                             const BuildingCostRecord &cost,
+	                             double recovery_fraction,
+	                             const time::time_t &time);
+
+	/**
 	 * TODO: Only for testing.
 	 */
 	const std::shared_ptr<assets::ModManager> &get_mod_manager() const;
@@ -546,17 +556,11 @@ private:
 	 */
 	void check_defeat(player_id_t owner_id, const time::time_t &time);
 
-	/**
-	 * Spawn a neutral salvage pile at \p position from a destroyed building's cost.
-	 */
 	void spawn_salvage_pile(const coord::phys3 &position,
 	                        const BuildingCostRecord &cost,
 	                        double recovery_fraction,
 	                        const time::time_t &time);
 
-	/**
-	 * Remove a building after deconstruction (salvage already scheduled separately).
-	 */
 	void finish_deconstruct(entity_id_t building_id, const time::time_t &time);
 
 	entity_id_t allocate_entity_id() const;

@@ -259,7 +259,8 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 - [x] Building deconstruction to recover materials — `DECONSTRUCT` command: villager
   walks to an owned building, waits `deconstruct_time`, then spawns salvage at
   `deconstruct_recovery_fraction` (default 75%, per-creatable in nyan) and removes
-  the building without combat destroy-salvage.
+  the building without combat destroy-salvage. Salvage still spawns if the building
+  is destroyed by combat before the timer ends (cost snapshot is in the event).
 - [ ] Infinite forest regeneration (configurable)
 
 ### 3.3 New Buildings

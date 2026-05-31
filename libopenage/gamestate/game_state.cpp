@@ -339,7 +339,7 @@ void GameState::clear_rally_point(entity_id_t id) {
 }
 
 void GameState::set_building_cost(entity_id_t id, BuildingCostRecord cost) {
-	this->building_costs[id] = std::move(cost);
+	this->building_costs[id] = api::normalize_building_cost(std::move(cost));
 }
 
 std::optional<BuildingCostRecord> GameState::get_building_cost(entity_id_t id) const {
@@ -369,11 +369,12 @@ void GameState::spawn_salvage_pile(const coord::phys3 &position,
                                    const BuildingCostRecord &cost,
                                    double recovery_fraction,
                                    const time::time_t &time) {
-	if (cost.amount <= 0 || cost.resource_type.empty() || recovery_fraction <= 0) {
+	const double fraction = clamp_recovery_fraction(recovery_fraction);
+	if (cost.amount <= 0 || cost.resource_type.empty() || fraction <= 0) {
 		return;
 	}
 
-	int64_t salvage_amount = static_cast<int64_t>(std::floor(cost.amount * recovery_fraction));
+	int64_t salvage_amount = static_cast<int64_t>(std::floor(cost.amount * fraction));
 	if (salvage_amount <= 0) {
 		return;
 	}
@@ -442,8 +443,27 @@ void GameState::tick_salvage_decay(const time::time_t &time) {
 }
 
 void GameState::finish_deconstruct(entity_id_t building_id, const time::time_t &time) {
+	if (not this->game_entities.contains(building_id)) {
+		return;
+	}
 	// Cost was cleared when deconstruction started so destroy salvage is not spawned.
 	this->remove_game_entity(building_id, time);
+}
+
+void GameState::complete_deconstruction(entity_id_t building_id,
+                                        const coord::phys3 &position,
+                                        const BuildingCostRecord &cost,
+                                        double recovery_fraction,
+                                        const time::time_t &time) {
+	this->spawn_salvage_pile(position, cost, recovery_fraction, time);
+
+	if (this->game_entities.contains(building_id)) {
+		this->finish_deconstruct(building_id, time);
+	}
+	else {
+		log::log(MSG(dbg) << "Deconstruction salvage spawned at " << position
+		                  << "; building " << building_id << " was already removed.");
+	}
 }
 
 const std::shared_ptr<assets::ModManager> &GameState::get_mod_manager() const {

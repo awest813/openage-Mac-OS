@@ -8,6 +8,9 @@
 
 #include <nyan/nyan.h>
 
+#include <optional>
+
+#include "event/eventhandler.h"
 #include "gamestate/definitions.h"
 
 namespace openage::gamestate {
@@ -50,5 +53,17 @@ CreatableCostInfo lookup_creatable(const std::shared_ptr<nyan::View> &db_view,
  * Build a \p BuildingCostRecord from resolved creatable data.
  */
 openage::gamestate::BuildingCostRecord building_cost_from_creatable(const CreatableCostInfo &info);
+
+/**
+ * Normalize recovery fractions and deconstruct time on a building cost record.
+ */
+openage::gamestate::BuildingCostRecord normalize_building_cost(
+    openage::gamestate::BuildingCostRecord cost);
+
+/**
+ * Parse a building cost record from spawn-production event parameters, if present.
+ */
+std::optional<openage::gamestate::BuildingCostRecord> building_cost_from_event_params(
+    const openage::event::EventHandler::param_map &params);
 
 } // namespace openage::gamestate::api

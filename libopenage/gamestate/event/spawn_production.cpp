@@ -142,25 +142,9 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 
 	// Record construction cost for salvage/deconstruct (buildings only).
 	if (not entity->has_component(component::component_t::MOVE)) {
-		BuildingCostRecord cost_record;
+		std::optional<BuildingCostRecord> cost_record = api::building_cost_from_event_params(params);
 
-		if (params.check_type<std::string>("build_cost_resource")
-		    && params.check_type<int64_t>("build_cost_amount")) {
-			cost_record.resource_type = params.get("build_cost_resource", std::string{});
-			cost_record.amount = params.get("build_cost_amount", int64_t{0});
-			if (params.check_type<double>("salvage_recovery_fraction")) {
-				cost_record.destroy_recovery_fraction =
-					params.get("salvage_recovery_fraction", SALVAGE_RECOVERY_FRACTION);
-			}
-			if (params.check_type<double>("deconstruct_recovery_fraction")) {
-				cost_record.deconstruct_recovery_fraction = params.get(
-					"deconstruct_recovery_fraction", DECONSTRUCT_RECOVERY_FRACTION);
-			}
-			if (params.check_type<double>("deconstruct_time")) {
-				cost_record.deconstruct_time = params.get("deconstruct_time", 0.0);
-			}
-		}
-		else if (target && gstate->has_player(owner_id)) {
+		if (not cost_record.has_value() && target && gstate->has_player(owner_id)) {
 			auto producer_id = static_cast<gamestate::entity_id_t>(target->id());
 			const auto &entities = gstate->get_game_entities();
 			auto producer_it = entities.find(producer_id);
@@ -177,8 +161,8 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 			}
 		}
 
-		if (cost_record.amount > 0 && not cost_record.resource_type.empty()) {
-			gstate->set_building_cost(entity->get_id(), cost_record);
+		if (cost_record.has_value()) {
+			gstate->set_building_cost(entity->get_id(), cost_record.value());
 		}
 	}
 

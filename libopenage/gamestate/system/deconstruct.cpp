@@ -20,7 +20,7 @@
 namespace openage::gamestate::system {
 
 static constexpr const char *DECONSTRUCT_COMPLETE_EVENT = "game.deconstruct_complete";
-static constexpr double DECONSTRUCT_RANGE = 2.0;
+static constexpr double DECONSTRUCT_RANGE = gamestate::BUILDER_INTERACTION_RANGE;
 
 const time::time_t Deconstruct::deconstruct_command(
     const std::shared_ptr<gamestate::GameEntity> &entity,
@@ -60,6 +60,8 @@ const time::time_t Deconstruct::deconstruct_command(
 
 	if (not entity->has_component(component::component_t::OWNERSHIP)
 	    || not target->has_component(component::component_t::OWNERSHIP)) {
+		log::log(MSG(warn) << "Entity " << entity->get_id()
+		                   << " or deconstruct target " << target_id << " lacks ownership.");
 		return time::time_t::from_int(0);
 	}
 
@@ -99,13 +101,13 @@ const time::time_t Deconstruct::deconstruct_command(
 		return time::time_t::from_int(0);
 	}
 
-	double deconstruct_duration = building_cost->deconstruct_time;
+	auto cost_snapshot = building_cost.value();
+	double deconstruct_duration = cost_snapshot.deconstruct_time;
 	if (deconstruct_duration <= 0) {
 		deconstruct_duration = DECONSTRUCT_TIME_FACTOR;
 	}
 
 	auto completion_time = start_time + deconstruct_duration;
-	auto cost_snapshot = building_cost.value();
 
 	// Prevent destroy-salvage when the building is removed after deconstruction.
 	state->clear_building_cost(target_id);

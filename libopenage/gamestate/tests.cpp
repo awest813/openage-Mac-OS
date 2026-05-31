@@ -30,8 +30,10 @@
 #include "component/internal/salvage.h"
 #include "component/internal/stance.h"
 #include "definitions.h"
+#include "event/deconstruct_complete.h"
 #include "event/game_over.h"
 #include "event/send_command.h"
+#include "api/creatable.h"
 #include "fog_of_war.h"
 #include "game_entity.h"
 #include "game_state.h"
@@ -959,6 +961,45 @@ void building_cost_and_salvage_spawn() {
 		salvage_entity->get_component(component::component_t::SALVAGE));
 	TESTEQUALS(salvage->get_resource_type(), std::string{"test.resource.Wood"});
 	TESTEQUALS(salvage->get_amount(t0), 100);
+}
+
+void building_cost_fraction_clamped() {
+	BuildingCostRecord cost;
+	cost.resource_type = "test.resource.Food";
+	cost.amount = 100;
+	cost.destroy_recovery_fraction = 2.5;
+	cost.deconstruct_recovery_fraction = -0.2;
+
+	auto normalized = api::normalize_building_cost(cost);
+	TESTEQUALS(normalized.destroy_recovery_fraction, 1.0);
+	TESTEQUALS(normalized.deconstruct_recovery_fraction, 0.0);
+}
+
+void deconstruct_complete_spawns_salvage_if_building_gone() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	gamestate::event::DeconstructCompleteHandler handler;
+	handler.invoke(*loop,
+	               nullptr,
+	               state,
+	               t0,
+	               openage::event::EventHandler::param_map{
+	                   {"building_id", entity_id_t{99}},
+	                   {"building_pos", coord::phys3{3, 4, 0}},
+	                   {"cost_resource", std::string{"test.resource.Wood"}},
+	                   {"cost_amount", int64_t{80}},
+	                   {"recovery_fraction", 0.75},
+	               });
+
+	TESTEQUALS(state->get_game_entities().size(), 1);
+	const auto &pile = state->get_game_entities().begin()->second;
+	TESTEQUALS(pile->has_component(component::component_t::SALVAGE), true);
+	auto salvage = std::dynamic_pointer_cast<component::Salvage>(
+		pile->get_component(component::component_t::SALVAGE));
+	TESTEQUALS(salvage->get_amount(t0), 60);
 }
 
 void building_cost_custom_salvage_fraction() {
