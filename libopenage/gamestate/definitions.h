@@ -42,4 +42,14 @@ constexpr int64_t POPULATION_MAX = 200;
  */
 constexpr int64_t DEFAULT_BUILDING_POPULATION_SPACE = 5;
 
+/**
+ * Fraction of a building's construction cost returned as a salvage pile.
+ */
+constexpr double SALVAGE_RECOVERY_FRACTION = 0.5;
+
+/**
+ * Seconds of game time between each unit of salvage decay (1 resource / interval).
+ */
+constexpr double SALVAGE_DECAY_INTERVAL_SEC = 10.0;
+
 } // namespace openage::gamestate

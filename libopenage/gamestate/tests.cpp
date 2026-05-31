@@ -26,6 +26,7 @@
 #include "component/internal/commands/train.h"
 #include "component/internal/ownership.h"
 #include "component/internal/position.h"
+#include "component/internal/salvage.h"
 #include "component/internal/stance.h"
 #include "definitions.h"
 #include "event/game_over.h"
@@ -896,6 +897,68 @@ void build_command_placement() {
 		{"game_entity", std::string{"test.unit.Villager"}},
 	};
 	TESTEQUALS(train_params.check_type<coord::phys3>("spawn_pos"), false);
+}
+
+void building_cost_and_salvage_spawn() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	BuildingCostRecord cost{"test.resource.Wood", 200};
+	state->set_building_cost(10, cost);
+
+	auto building = std::make_shared<GameEntity>(10);
+	building->add_component(std::make_shared<component::Ownership>(loop));
+	building->add_component(std::make_shared<component::Position>(loop));
+	auto pos = std::dynamic_pointer_cast<component::Position>(
+		building->get_component(component::component_t::POSITION));
+	pos->set_position(t0, coord::phys3{5, 5, 0});
+	state->add_game_entity(building);
+
+	TESTEQUALS(state->get_building_cost(10).has_value(), true);
+	TESTEQUALS(state->get_building_cost(10)->amount, 200);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	state->remove_game_entity(10, t0);
+
+	TESTEQUALS(state->get_building_cost(10).has_value(), false);
+	TESTEQUALS(state->get_game_entities().size(), 1);
+
+	const auto &salvage_entity = state->get_game_entities().begin()->second;
+	TESTEQUALS(salvage_entity->has_component(component::component_t::SALVAGE), true);
+	auto salvage = std::dynamic_pointer_cast<component::Salvage>(
+		salvage_entity->get_component(component::component_t::SALVAGE));
+	TESTEQUALS(salvage->get_resource_type(), std::string{"test.resource.Wood"});
+	TESTEQUALS(salvage->get_amount(t0), 100);
+}
+
+void salvage_decay() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+	auto t_decay = t0 + SALVAGE_DECAY_INTERVAL_SEC;
+
+	auto entity = std::make_shared<GameEntity>(1);
+	entity->add_component(std::make_shared<component::Position>(loop));
+	auto salvage = std::make_shared<component::Salvage>(loop, "test.resource.Stone", 5, t0);
+	entity->add_component(salvage);
+	state->add_game_entity(entity);
+
+	state->tick_salvage_decay(t0);
+	TESTEQUALS(state->get_game_entities().size(), 1);
+	TESTEQUALS(salvage->get_amount(t0), 5);
+
+	state->tick_salvage_decay(t_decay);
+	TESTEQUALS(state->get_game_entities().size(), 1);
+	TESTEQUALS(salvage->get_amount(t_decay), 4);
+
+	auto t_gone = t0 + SALVAGE_DECAY_INTERVAL_SEC * 6;
+	state->tick_salvage_decay(t_gone);
+	TESTEQUALS(state->get_game_entities().size(), 0);
 }
 
 } // namespace openage::gamestate::tests

@@ -96,6 +96,14 @@ struct CarriedResource {
 };
 
 /**
+ * Construction cost recorded for a completed building (used for salvage).
+ */
+struct BuildingCostRecord {
+	std::string resource_type;
+	int64_t amount;
+};
+
+/**
  * State of the game.
  *
  * Contains index structures for looking up game entities and other
@@ -329,6 +337,23 @@ public:
 	void clear_rally_point(entity_id_t id);
 
 	/**
+	 * Record the construction cost of a completed building (for salvage on destroy).
+	 */
+	void set_building_cost(entity_id_t id, BuildingCostRecord cost);
+
+	/**
+	 * @return Recorded construction cost, or std::nullopt if unknown.
+	 */
+	std::optional<BuildingCostRecord> get_building_cost(entity_id_t id) const;
+
+	void clear_building_cost(entity_id_t id);
+
+	/**
+	 * Decay salvage piles and remove depleted ones. Call once per simulation tick.
+	 */
+	void tick_salvage_decay(const time::time_t &time);
+
+	/**
 	 * TODO: Only for testing.
 	 */
 	const std::shared_ptr<assets::ModManager> &get_mod_manager() const;
@@ -515,6 +540,15 @@ private:
 	void check_defeat(player_id_t owner_id, const time::time_t &time);
 
 	/**
+	 * Spawn a neutral salvage pile at \p position from a destroyed building's cost.
+	 */
+	void spawn_salvage_from_building(const coord::phys3 &position,
+	                                 const BuildingCostRecord &cost,
+	                                 const time::time_t &time);
+
+	entity_id_t allocate_entity_id() const;
+
+	/**
 	 * Event loop — used to fire player-defeated and game-over events.
 	 */
 	std::shared_ptr<openage::event::EventLoop> event_loop;
@@ -560,6 +594,16 @@ private:
 	 * simulation and is cleaned up when an entity is destroyed.
 	 */
 	std::unordered_map<entity_id_t, coord::phys3> rally_points;
+
+	/**
+	 * Construction costs of completed buildings, keyed by entity ID.
+	 */
+	std::unordered_map<entity_id_t, BuildingCostRecord> building_costs;
+
+	/**
+	 * Entity IDs of active salvage piles (for periodic decay).
+	 */
+	std::unordered_set<entity_id_t> salvage_pile_ids;
 
 	/**
 	 * Fog-of-war state for all players.

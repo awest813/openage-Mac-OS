@@ -51,6 +51,7 @@ void GameSimulation::run() {
 		auto state = this->game->get_state();
 		this->event_loop->reach_time(current_time, state);
 		state->refresh_visibility(current_time);
+		state->tick_salvage_decay(current_time);
 	}
 	log::log(MSG(info) << "Game simulation loop exited");
 }

@@ -138,6 +138,19 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 
 	gstate->add_game_entity(entity);
 
+	// Record construction cost for salvage when this building is destroyed.
+	if (not entity->has_component(component::component_t::MOVE)) {
+		if (params.check_type<std::string>("build_cost_resource")
+		    && params.check_type<int64_t>("build_cost_amount")) {
+			auto cost_resource = params.get("build_cost_resource", std::string{});
+			auto cost_amount = params.get("build_cost_amount", int64_t{0});
+			if (cost_amount > 0 && not cost_resource.empty()) {
+				gstate->set_building_cost(entity->get_id(),
+				                          BuildingCostRecord{cost_resource, cost_amount});
+			}
+		}
+	}
+
 	log::log(MSG(info) << "Spawned produced unit " << nyan_entity
 	                   << " (id=" << entity->get_id()
 	                   << ") for player " << owner_id

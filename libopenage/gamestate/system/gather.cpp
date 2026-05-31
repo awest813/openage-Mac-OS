@@ -19,6 +19,7 @@
 #include "gamestate/component/internal/commands/gather.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
+#include "gamestate/component/internal/salvage.h"
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
@@ -190,30 +191,50 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 		}
 	}
 
-	// Read current resource amount from the resource entity's Live component
-	if (not resource_entity->has_component(component::component_t::LIVE)) [[unlikely]] {
-		log::log(MSG(warn) << "Gather target " << target_id << " has no live component.");
+	int64_t current_amount = 0;
+	int64_t new_amount = 0;
+	nyan::fqon_t cargo_resource = resource_type->get_name();
+
+	if (resource_entity->has_component(component::component_t::SALVAGE)) {
+		auto salvage_component = std::dynamic_pointer_cast<component::Salvage>(
+			resource_entity->get_component(component::component_t::SALVAGE));
+		current_amount = salvage_component->get_amount(start_time);
+		cargo_resource = nyan::fqon_t{salvage_component->get_resource_type()};
+	}
+	else if (resource_entity->has_component(component::component_t::LIVE)) {
+		auto live_component = std::dynamic_pointer_cast<component::Live>(
+			resource_entity->get_component(component::component_t::LIVE));
+		current_amount = live_component->get_attribute(start_time, RESOURCE_AMOUNT_ATTRIBUTE);
+	}
+	else [[unlikely]] {
+		log::log(MSG(warn) << "Gather target " << target_id
+		                   << " has no live or salvage component.");
 		return time::time_t::from_int(0);
 	}
 
-	auto live_component = std::dynamic_pointer_cast<component::Live>(
-		resource_entity->get_component(component::component_t::LIVE));
-
-	int64_t current_amount = live_component->get_attribute(start_time, RESOURCE_AMOUNT_ATTRIBUTE);
 	int64_t gathered = gather_rate->get();
 	if (gathered > current_amount) {
 		gathered = current_amount;
 	}
-	int64_t new_amount = current_amount - gathered;
-	live_component->set_attribute(start_time, RESOURCE_AMOUNT_ATTRIBUTE, new_amount);
+	new_amount = current_amount - gathered;
+
+	if (resource_entity->has_component(component::component_t::SALVAGE)) {
+		auto salvage_component = std::dynamic_pointer_cast<component::Salvage>(
+			resource_entity->get_component(component::component_t::SALVAGE));
+		salvage_component->set_amount(start_time, new_amount);
+	}
+	else {
+		auto live_component = std::dynamic_pointer_cast<component::Live>(
+			resource_entity->get_component(component::component_t::LIVE));
+		live_component->set_attribute(start_time, RESOURCE_AMOUNT_ATTRIBUTE, new_amount);
+	}
 
 	// Store gathered resources as carried cargo.
 	if (gathered > 0 && entity->has_component(component::component_t::OWNERSHIP)) {
-		auto resource_fqon = resource_type->get_name();
-		state->set_carried_resource(entity->get_id(), resource_fqon, gathered);
+		state->set_carried_resource(entity->get_id(), std::string{cargo_resource}, gathered);
 
 		log::log(MSG(dbg) << "Entity " << entity->get_id()
-		                  << " gathered and is now carrying " << gathered << " of " << resource_fqon
+		                  << " gathered and is now carrying " << gathered << " of " << cargo_resource
 		                  << " from entity " << target_id
 		                  << " (remaining=" << new_amount << ").");
 	}

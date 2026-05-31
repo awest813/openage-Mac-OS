@@ -152,6 +152,8 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 		{"owner", owner_id},
 		{"game_entity", target_building},
 		{"spawn_pos", build_site},
+		{"build_cost_resource", std::string{cost_resource}},
+		{"build_cost_amount", cost_amount},
 	};
 	loop->create_event(SPAWN_PRODUCTION_EVENT,
 	                   entity->get_manager(),
