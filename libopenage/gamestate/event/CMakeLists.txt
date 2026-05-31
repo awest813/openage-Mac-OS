@@ -5,5 +5,6 @@ add_sources(libopenage
     send_command.cpp
     spawn_entity.cpp
     spawn_production.cpp
+    deconstruct_complete.cpp
     wait.cpp
 )

@@ -15,6 +15,7 @@ enum class component_t {
 	OWNERSHIP,
 	ACTIVITY,
 	STANCE,
+	SALVAGE,
 
 	// API
 	IDLE,

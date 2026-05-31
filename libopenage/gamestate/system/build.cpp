@@ -8,12 +8,14 @@
 #include "log/log.h"
 #include "log/message.h"
 
+#include "gamestate/api/creatable.h"
 #include "gamestate/component/api/create.h"
 #include "gamestate/component/internal/command_queue.h"
 #include "gamestate/component/internal/commands/build.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
+#include "gamestate/definitions.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
 #include "gamestate/manager.h"
@@ -24,12 +26,7 @@
 namespace openage::gamestate::system {
 
 static constexpr const char *SPAWN_PRODUCTION_EVENT = "game.spawn_production";
-
-/**
- * Maximum distance (in tiles) between the builder and the build site at which
- * construction may begin. Farther than this, the builder walks toward the site.
- */
-static constexpr double BUILD_RANGE = 2.0;
+static constexpr double BUILD_RANGE = BUILDER_INTERACTION_RANGE;
 
 const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEntity> &entity,
                                         const std::shared_ptr<openage::event::EventLoop> &loop,
@@ -91,67 +88,43 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 	auto &player = state->get_player(owner_id);
 	auto db_view = player->get_db_view();
 
-	// Retrieve nyan Create ability data — buildings share the creatables
-	// list with TRAIN, differentiated by the building's nyan type.
 	auto create_component = std::dynamic_pointer_cast<component::Create>(
 		entity->get_component(component::component_t::CREATE));
 	auto create_ability = create_component->get_ability();
 
-	// Find the creatable whose game entity matches the requested building.
-	auto creatables = create_ability.get_set("Create.creatables");
-	bool found = false;
-	nyan::fqon_t cost_resource{};
-	int64_t cost_amount = 0;
-	double creation_time = 0.0;
-	for (const auto &creatable_val : creatables) {
-		auto creatable_fqon = std::dynamic_pointer_cast<nyan::ObjectValue>(
-			creatable_val.get_ptr())->get_name();
-		auto creatable_obj = db_view->get_object(creatable_fqon);
-
-		auto game_entity = creatable_obj.get<nyan::ObjectValue>("CreatableGameEntity.game_entity");
-		if (game_entity->get_name() != target_building) {
-			continue;
-		}
-
-		creation_time = creatable_obj.get<nyan::Float>("CreatableGameEntity.creation_time")->get();
-		cost_resource = creatable_obj.get<nyan::ObjectValue>("CreatableGameEntity.cost_resource")->get_name();
-		cost_amount = creatable_obj.get<nyan::Int>("CreatableGameEntity.cost_amount")->get();
-		found = true;
-		break;
-	}
-
-	if (not found) [[unlikely]] {
+	auto creatable = api::lookup_creatable(db_view, create_ability, target_building);
+	if (not creatable.found) [[unlikely]] {
 		log::log(MSG(warn) << "Entity " << entity->get_id()
 		                   << " cannot build unknown building " << target_building << ".");
 		return time::time_t::from_int(0);
 	}
 
-	// Resource cost check.
-	int64_t available = player->get_resource(start_time, cost_resource);
-	if (available < cost_amount) {
+	auto cost_record = api::building_cost_from_creatable(creatable);
+
+	int64_t available = player->get_resource(start_time, nyan::fqon_t{cost_record.resource_type});
+	if (available < cost_record.amount) {
 		log::log(MSG(dbg) << "Player " << owner_id
 		                  << " cannot afford " << target_building
-		                  << " (cost=" << cost_amount << " of " << cost_resource
+		                  << " (cost=" << cost_record.amount << " of " << cost_record.resource_type
 		                  << ", available=" << available << ").");
 		return time::time_t::from_int(0);
 	}
 
-	// Deduct resources.
-	player->add_resource(start_time, cost_resource, -cost_amount);
+	player->add_resource(start_time, nyan::fqon_t{cost_record.resource_type}, -cost_record.amount);
 
-	auto completion_time = start_time + creation_time;
+	auto completion_time = start_time + creatable.creation_time;
 
-	// Queue as a production request — the same SpawnProductionHandler
-	// used for TRAIN will spawn the building entity.
 	state->request_production(owner_id, target_building, completion_time);
 
-	// Unlike TRAIN (where the produced unit appears next to the producer), a
-	// building must be placed at the position the player selected. Pass the
-	// build site through to the spawn handler so it is honoured.
 	openage::event::EventHandler::param_map params{
 		{"owner", owner_id},
 		{"game_entity", target_building},
 		{"spawn_pos", build_site},
+		{"build_cost_resource", cost_record.resource_type},
+		{"build_cost_amount", cost_record.amount},
+		{"salvage_recovery_fraction", cost_record.destroy_recovery_fraction},
+		{"deconstruct_recovery_fraction", cost_record.deconstruct_recovery_fraction},
+		{"deconstruct_time", cost_record.deconstruct_time},
 	};
 	loop->create_event(SPAWN_PRODUCTION_EVENT,
 	                   entity->get_manager(),
@@ -162,11 +135,11 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 	log::log(MSG(info) << "Entity " << entity->get_id()
 	                   << " started building " << target_building
 	                   << " for player " << owner_id
-	                   << " (cost=" << cost_amount << " of " << cost_resource
+	                   << " (cost=" << cost_record.amount << " of " << cost_record.resource_type
 	                   << ", at " << build_site
 	                   << ", ready at t=" << completion_time << ").");
 
-	return creation_time;
+	return creatable.creation_time;
 }
 
 } // namespace openage::gamestate::system

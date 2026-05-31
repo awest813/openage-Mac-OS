@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <utility>
+#include <vector>
 
 #include <nyan/nyan.h>
 
@@ -19,6 +20,7 @@
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
 #include "gamestate/component/internal/ownership.h"
+#include "gamestate/component/internal/salvage.h"
 #include "pathfinding/cost_field.h"
 #include "pathfinding/definitions.h"
 #include "pathfinding/grid.h"
@@ -49,12 +51,17 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 		throw Error(MSG(err) << "Game entity with ID " << entity->get_id() << " already exists");
 	}
 	this->game_entities[entity->get_id()] = entity;
+	if (entity->has_component(component::component_t::SALVAGE)) {
+		this->salvage_pile_ids.insert(entity->get_id());
+	}
 }
 
 void GameState::remove_game_entity(entity_id_t id) {
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
 	this->rally_points.erase(id);
+	this->building_costs.erase(id);
+	this->salvage_pile_ids.erase(id);
 	this->release_tile(id);
 }
 
@@ -64,6 +71,10 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	player_id_t owner_id = 0;
 	bool is_building = false;
 	bool is_owned_unit = false;
+
+	coord::phys3 building_pos = WORLD_ORIGIN;
+	bool have_building_pos = false;
+	std::optional<BuildingCostRecord> building_cost;
 
 	auto it = this->game_entities.find(id);
 	if (it != this->game_entities.end()) {
@@ -80,11 +91,22 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 			is_building = not entity->has_component(component::component_t::MOVE);
 			is_owned_unit = not is_building;
 		}
+
+		if (is_building && entity->has_component(component::component_t::POSITION)) {
+			auto pos_comp = std::dynamic_pointer_cast<component::Position>(
+				entity->get_component(component::component_t::POSITION));
+			building_pos = pos_comp->get_positions().get(time);
+			have_building_pos = true;
+		}
+
+		building_cost = this->get_building_cost(id);
 	}
 
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
 	this->rally_points.erase(id);
+	this->building_costs.erase(id);
+	this->salvage_pile_ids.erase(id);
 	this->release_tile(id);
 
 	// Release the population space a unit reserved when it was trained.
@@ -98,6 +120,12 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	}
 
 	if (is_building) {
+		if (have_building_pos && building_cost.has_value()) {
+			this->spawn_salvage_pile(building_pos,
+			                         building_cost.value(),
+			                         building_cost->destroy_recovery_fraction,
+			                         time);
+		}
 		this->check_defeat(owner_id, time);
 	}
 }
@@ -308,6 +336,134 @@ void GameState::set_rally_point(entity_id_t id, const coord::phys3 &target) {
 
 void GameState::clear_rally_point(entity_id_t id) {
 	this->rally_points.erase(id);
+}
+
+void GameState::set_building_cost(entity_id_t id, BuildingCostRecord cost) {
+	this->building_costs[id] = api::normalize_building_cost(std::move(cost));
+}
+
+std::optional<BuildingCostRecord> GameState::get_building_cost(entity_id_t id) const {
+	auto it = this->building_costs.find(id);
+	if (it == this->building_costs.end()) {
+		return std::nullopt;
+	}
+	return it->second;
+}
+
+void GameState::clear_building_cost(entity_id_t id) {
+	this->building_costs.erase(id);
+}
+
+entity_id_t GameState::allocate_entity_id() const {
+	entity_id_t max_id = 0;
+	for (const auto &[id, entity] : this->game_entities) {
+		(void) entity;
+		if (id > max_id) {
+			max_id = id;
+		}
+	}
+	return max_id + 1;
+}
+
+void GameState::spawn_salvage_pile(const coord::phys3 &position,
+                                   const BuildingCostRecord &cost,
+                                   double recovery_fraction,
+                                   const time::time_t &time) {
+	const double fraction = clamp_recovery_fraction(recovery_fraction);
+	if (cost.amount <= 0 || cost.resource_type.empty() || fraction <= 0) {
+		return;
+	}
+
+	int64_t salvage_amount = static_cast<int64_t>(std::floor(cost.amount * fraction));
+	if (salvage_amount <= 0) {
+		return;
+	}
+
+	auto entity_id = this->allocate_entity_id();
+	auto entity = std::make_shared<GameEntity>(entity_id);
+
+	auto position_comp = std::make_shared<component::Position>(this->event_loop);
+	position_comp->set_position(time, position);
+	entity->add_component(position_comp);
+
+	auto salvage_comp = std::make_shared<component::Salvage>(
+		this->event_loop, cost.resource_type, salvage_amount, time);
+	entity->add_component(salvage_comp);
+
+	this->add_game_entity(entity);
+
+	log::log(MSG(info) << "Spawned salvage pile " << entity_id
+	                   << " with " << salvage_amount << " of " << cost.resource_type
+	                   << " at " << position << ".");
+}
+
+void GameState::tick_salvage_decay(const time::time_t &time) {
+	std::vector<entity_id_t> depleted;
+
+	for (entity_id_t id : this->salvage_pile_ids) {
+		auto it = this->game_entities.find(id);
+		if (it == this->game_entities.end()) {
+			depleted.push_back(id);
+			continue;
+		}
+
+		if (not it->second->has_component(component::component_t::SALVAGE)) {
+			depleted.push_back(id);
+			continue;
+		}
+
+		auto salvage = std::dynamic_pointer_cast<component::Salvage>(
+			it->second->get_component(component::component_t::SALVAGE));
+
+		int64_t current = salvage->get_amount(time);
+		if (current <= 0) {
+			depleted.push_back(id);
+			continue;
+		}
+
+		auto last_decay = salvage->get_last_decay_time();
+		double elapsed = time.to_double() - last_decay.to_double();
+		if (elapsed < SALVAGE_DECAY_INTERVAL_SEC) {
+			continue;
+		}
+
+		int64_t decay_units = static_cast<int64_t>(elapsed / SALVAGE_DECAY_INTERVAL_SEC);
+		int64_t new_amount = std::max(int64_t{0}, current - decay_units);
+		salvage->set_amount(time, new_amount);
+		salvage->set_last_decay_time(time);
+
+		if (new_amount == 0) {
+			depleted.push_back(id);
+		}
+	}
+
+	for (entity_id_t id : depleted) {
+		this->remove_game_entity(id);
+	}
+}
+
+void GameState::finish_deconstruct(entity_id_t building_id, const time::time_t &time) {
+	if (not this->game_entities.contains(building_id)) {
+		return;
+	}
+	// Cost was cleared when deconstruction started so destroy salvage is not spawned.
+	this->remove_game_entity(building_id, time);
+}
+
+void GameState::complete_deconstruction(entity_id_t building_id,
+                                        const coord::phys3 &position,
+                                        const BuildingCostRecord &cost,
+                                        double recovery_fraction,
+                                        const time::time_t &time) {
+	this->spawn_salvage_pile(position, cost, recovery_fraction, time);
+
+	if (this->game_entities.contains(building_id)) {
+		this->finish_deconstruct(building_id, time);
+	}
+	else {
+		log::log(MSG(dbg) << "Deconstruction salvage spawned at " << position
+		                  << "; building " << building_id << " was already removed.");
+	}
 }
 
 const std::shared_ptr<assets::ModManager> &GameState::get_mod_manager() const {

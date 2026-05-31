@@ -11,6 +11,8 @@
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
+#include "gamestate/api/creatable.h"
+#include "gamestate/component/api/create.h"
 #include "gamestate/definitions.h"
 #include "gamestate/entity_factory.h"
 #include "gamestate/game_entity.h"
@@ -137,6 +139,32 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 	entity->get_manager()->run_activity_system(time);
 
 	gstate->add_game_entity(entity);
+
+	// Record construction cost for salvage/deconstruct (buildings only).
+	if (not entity->has_component(component::component_t::MOVE)) {
+		std::optional<BuildingCostRecord> cost_record = api::building_cost_from_event_params(params);
+
+		if (not cost_record.has_value() && target && gstate->has_player(owner_id)) {
+			auto producer_id = static_cast<gamestate::entity_id_t>(target->id());
+			const auto &entities = gstate->get_game_entities();
+			auto producer_it = entities.find(producer_id);
+			if (producer_it != entities.end()
+			    && producer_it->second->has_component(component::component_t::CREATE)) {
+				auto &player = gstate->get_player(owner_id);
+				auto create_comp = std::dynamic_pointer_cast<component::Create>(
+					producer_it->second->get_component(component::component_t::CREATE));
+				auto creatable = api::lookup_creatable(
+					player.get_db_view(), create_comp->get_ability(), nyan_entity);
+				if (creatable.found) {
+					cost_record = api::building_cost_from_creatable(creatable);
+				}
+			}
+		}
+
+		if (cost_record.has_value()) {
+			gstate->set_building_cost(entity->get_id(), cost_record.value());
+		}
+	}
 
 	log::log(MSG(info) << "Spawned produced unit " << nyan_entity
 	                   << " (id=" << entity->get_id()

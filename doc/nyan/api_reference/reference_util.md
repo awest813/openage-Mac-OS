@@ -632,6 +632,9 @@ CreatableGameEntity(Object):
     creation_sounds : set(Sound)
     condition       : set(LogicElement)
     placement_modes : set(PlacementMode)
+    salvage_recovery_fraction     : float   # optional; default 0.5 on destroy
+    deconstruct_recovery_fraction : float   # optional; default 0.75 when deconstructed
+    deconstruct_time              : float   # optional; seconds to deconstruct
 ```
 
 Defines preconditions, placement and spawn configurations for a new instance of a game entity created by a `Create` ability.
@@ -656,6 +659,15 @@ Conditions that unlock the creatable game entity for the creating game entity. O
 
 **placement_modes**
 Decides where and how the game entity instance is spawned.
+
+**salvage_recovery_fraction** (optional)
+Fraction of `cost` returned as a salvage pile when the building is destroyed. Engine default: 0.5.
+
+**deconstruct_recovery_fraction** (optional)
+Fraction of `cost` returned when the player deconstructs the building. Engine default: 0.75.
+
+**deconstruct_time** (optional)
+Seconds a villager spends deconstructing. If unset, `creation_time * 1.5` is used.
 
 ## util.diplomatic_stance.DiplomaticStance
 

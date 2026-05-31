@@ -4,6 +4,7 @@ add_sources(libopenage
     ownership.cpp
     position.cpp
     stance.cpp
+    salvage.cpp
 )
 
 add_subdirectory(commands/)

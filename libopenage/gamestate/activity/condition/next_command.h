@@ -79,6 +79,9 @@ bool next_command_train(const time::time_t &time,
 bool next_command_build(const time::time_t &time,
                         const std::shared_ptr<gamestate::GameEntity> &entity);
 
+bool next_command_deconstruct(const time::time_t &time,
+                              const std::shared_ptr<gamestate::GameEntity> &entity);
+
 /**
  * Condition for next command check in the activity system.
  *

@@ -13,6 +13,7 @@
 
 #include "coord/tile.h"
 #include "event/state.h"
+#include "gamestate/definitions.h"
 #include "pathfinding/types.h"
 #include "gamestate/fog_of_war.h"
 #include "gamestate/player.h"
@@ -93,6 +94,20 @@ struct CarriedResource {
 	 * Amount carried.
 	 */
 	int64_t amount;
+};
+
+/**
+ * Construction cost recorded for a completed building (used for salvage).
+ */
+struct BuildingCostRecord {
+	std::string resource_type;
+	int64_t amount = 0;
+	/** Salvage fraction when the building is destroyed (not deconstructed). */
+	double destroy_recovery_fraction = SALVAGE_RECOVERY_FRACTION;
+	/** Salvage fraction when the player deconstructs the building. */
+	double deconstruct_recovery_fraction = DECONSTRUCT_RECOVERY_FRACTION;
+	/** Villager deconstruct duration in seconds. */
+	double deconstruct_time = 0.0;
 };
 
 /**
@@ -329,6 +344,33 @@ public:
 	void clear_rally_point(entity_id_t id);
 
 	/**
+	 * Record the construction cost of a completed building (for salvage on destroy).
+	 */
+	void set_building_cost(entity_id_t id, BuildingCostRecord cost);
+
+	/**
+	 * @return Recorded construction cost, or std::nullopt if unknown.
+	 */
+	std::optional<BuildingCostRecord> get_building_cost(entity_id_t id) const;
+
+	void clear_building_cost(entity_id_t id);
+
+	/**
+	 * Decay salvage piles and remove depleted ones. Call once per simulation tick.
+	 */
+	void tick_salvage_decay(const time::time_t &time);
+
+	/**
+	 * Complete a scheduled deconstruction: spawn salvage at \p position and remove
+	 * the building if it still exists (e.g. not destroyed by combat in the meantime).
+	 */
+	void complete_deconstruction(entity_id_t building_id,
+	                             const coord::phys3 &position,
+	                             const BuildingCostRecord &cost,
+	                             double recovery_fraction,
+	                             const time::time_t &time);
+
+	/**
 	 * TODO: Only for testing.
 	 */
 	const std::shared_ptr<assets::ModManager> &get_mod_manager() const;
@@ -514,6 +556,15 @@ private:
 	 */
 	void check_defeat(player_id_t owner_id, const time::time_t &time);
 
+	void spawn_salvage_pile(const coord::phys3 &position,
+	                        const BuildingCostRecord &cost,
+	                        double recovery_fraction,
+	                        const time::time_t &time);
+
+	void finish_deconstruct(entity_id_t building_id, const time::time_t &time);
+
+	entity_id_t allocate_entity_id() const;
+
 	/**
 	 * Event loop — used to fire player-defeated and game-over events.
 	 */
@@ -560,6 +611,16 @@ private:
 	 * simulation and is cleaned up when an entity is destroyed.
 	 */
 	std::unordered_map<entity_id_t, coord::phys3> rally_points;
+
+	/**
+	 * Construction costs of completed buildings, keyed by entity ID.
+	 */
+	std::unordered_map<entity_id_t, BuildingCostRecord> building_costs;
+
+	/**
+	 * Entity IDs of active salvage piles (for periodic decay).
+	 */
+	std::unordered_set<entity_id_t> salvage_pile_ids;
 
 	/**
 	 * Fog-of-war state for all players.

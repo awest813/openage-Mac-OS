@@ -1,5 +1,6 @@
 add_sources(libopenage
     ability.cpp
+    creatable.cpp
     activity.cpp
     animation.cpp
     definitions.cpp
