@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <nyan/nyan.h>
 
@@ -12,14 +13,14 @@
 
 #include "event/eventhandler.h"
 #include "gamestate/definitions.h"
-
-namespace openage::gamestate {
-struct BuildingCostRecord;
-}
-
+#include "gamestate/game_state.h"
 
 namespace nyan {
 class View;
+}
+
+namespace openage::gamestate {
+class Player;
 }
 
 namespace openage::gamestate::api {
@@ -30,8 +31,7 @@ namespace openage::gamestate::api {
 struct CreatableCostInfo {
 	bool found = false;
 	std::string game_entity;
-	std::string cost_resource;
-	int64_t cost_amount = 0;
+	std::vector<ResourceCostEntry> cost_entries;
 	double creation_time = 0.0;
 	/**
 	 * Seconds for a villager to deconstruct; 0 means use creation_time *
@@ -65,5 +65,19 @@ openage::gamestate::BuildingCostRecord normalize_building_cost(
  */
 std::optional<openage::gamestate::BuildingCostRecord> building_cost_from_event_params(
     const openage::event::EventHandler::param_map &params);
+
+/**
+ * Return true if the player can afford every entry in \p cost at \p time.
+ */
+bool player_can_afford(const openage::gamestate::Player &player,
+                       const openage::gamestate::BuildingCostRecord &cost,
+                       const time::time_t &time);
+
+/**
+ * Deduct every entry in \p cost from the player's resources at \p time.
+ */
+void player_pay_cost(openage::gamestate::Player &player,
+                     const openage::gamestate::BuildingCostRecord &cost,
+                     const time::time_t &time);
 
 } // namespace openage::gamestate::api

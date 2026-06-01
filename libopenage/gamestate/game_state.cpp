@@ -15,6 +15,7 @@
 #include "log/message.h"
 
 #include "coord/tile.h"
+#include "gamestate/api/creatable.h"
 #include "gamestate/component/api/attack.h"
 #include "gamestate/component/api/live.h"
 #include "gamestate/component/internal/position.h"
@@ -370,31 +371,45 @@ void GameState::spawn_salvage_pile(const coord::phys3 &position,
                                    double recovery_fraction,
                                    const time::time_t &time) {
 	const double fraction = clamp_recovery_fraction(recovery_fraction);
-	if (cost.amount <= 0 || cost.resource_type.empty() || fraction <= 0) {
+	if (fraction <= 0 || cost.empty()) {
 		return;
 	}
 
-	int64_t salvage_amount = static_cast<int64_t>(std::floor(cost.amount * fraction));
-	if (salvage_amount <= 0) {
-		return;
+	size_t pile_index = 0;
+	for (const auto &entry : cost.entries) {
+		if (entry.amount <= 0 || entry.resource_type.empty()) {
+			continue;
+		}
+
+		int64_t salvage_amount = static_cast<int64_t>(std::floor(entry.amount * fraction));
+		if (salvage_amount <= 0) {
+			continue;
+		}
+
+		coord::phys3 pile_pos = position;
+		if (pile_index > 0) {
+			pile_pos.ne += static_cast<coord::phys_t>(pile_index) * 0.5;
+		}
+
+		auto entity_id = this->allocate_entity_id();
+		auto entity = std::make_shared<GameEntity>(entity_id);
+
+		auto position_comp = std::make_shared<component::Position>(this->event_loop);
+		position_comp->set_position(time, pile_pos);
+		entity->add_component(position_comp);
+
+		auto salvage_comp = std::make_shared<component::Salvage>(
+			this->event_loop, entry.resource_type, salvage_amount, time);
+		entity->add_component(salvage_comp);
+
+		this->add_game_entity(entity);
+
+		log::log(MSG(info) << "Spawned salvage pile " << entity_id
+		                   << " with " << salvage_amount << " of " << entry.resource_type
+		                   << " at " << pile_pos << ".");
+
+		++pile_index;
 	}
-
-	auto entity_id = this->allocate_entity_id();
-	auto entity = std::make_shared<GameEntity>(entity_id);
-
-	auto position_comp = std::make_shared<component::Position>(this->event_loop);
-	position_comp->set_position(time, position);
-	entity->add_component(position_comp);
-
-	auto salvage_comp = std::make_shared<component::Salvage>(
-		this->event_loop, cost.resource_type, salvage_amount, time);
-	entity->add_component(salvage_comp);
-
-	this->add_game_entity(entity);
-
-	log::log(MSG(info) << "Spawned salvage pile " << entity_id
-	                   << " with " << salvage_amount << " of " << cost.resource_type
-	                   << " at " << position << ".");
 }
 
 void GameState::tick_salvage_decay(const time::time_t &time) {

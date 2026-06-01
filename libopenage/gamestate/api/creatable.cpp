@@ -3,10 +3,12 @@
 #include "creatable.h"
 
 #include <optional>
+#include <vector>
 
 #include "event/eventhandler.h"
 #include "gamestate/definitions.h"
 #include "gamestate/game_state.h"
+#include "gamestate/player.h"
 
 
 namespace openage::gamestate::api {
@@ -20,6 +22,56 @@ std::optional<double> optional_float_member(const nyan::Object &obj, const char 
 	catch (...) {
 		return std::nullopt;
 	}
+}
+
+bool is_resource_cost(const nyan::Object &cost_obj) {
+	try {
+		return cost_obj.get_parents()[0] == "engine.util.cost.type.ResourceCost";
+	}
+	catch (...) {
+		return false;
+	}
+}
+
+std::vector<ResourceCostEntry> resource_cost_entries(const std::shared_ptr<nyan::View> &db_view,
+                                                     const nyan::Object &cost_obj) {
+	std::vector<ResourceCostEntry> entries;
+	if (not is_resource_cost(cost_obj)) {
+		return entries;
+	}
+
+	auto amounts = cost_obj.get_set("ResourceCost.amount");
+	for (const auto &amount_val : amounts) {
+		auto amount_fqon = std::dynamic_pointer_cast<nyan::ObjectValue>(amount_val.get_ptr())->get_name();
+		auto amount_obj = db_view->get_object(amount_fqon);
+
+		ResourceCostEntry entry;
+		entry.resource_type = std::string{
+			amount_obj.get<nyan::ObjectValue>("ResourceAmount.type")->get_name()};
+		entry.amount = amount_obj.get<nyan::Int>("ResourceAmount.amount")->get();
+		if (entry.amount > 0 && not entry.resource_type.empty()) {
+			entries.push_back(std::move(entry));
+		}
+	}
+
+	return entries;
+}
+
+std::vector<ResourceCostEntry> legacy_cost_entry(const nyan::Object &creatable_obj) {
+	std::vector<ResourceCostEntry> entries;
+	try {
+		ResourceCostEntry entry;
+		entry.resource_type = std::string{
+			creatable_obj.get<nyan::ObjectValue>("CreatableGameEntity.cost_resource")->get_name()};
+		entry.amount = creatable_obj.get<nyan::Int>("CreatableGameEntity.cost_amount")->get();
+		if (entry.amount > 0 && not entry.resource_type.empty()) {
+			entries.push_back(std::move(entry));
+		}
+	}
+	catch (...) {
+	}
+
+	return entries;
 }
 
 } // namespace
@@ -43,9 +95,19 @@ CreatableCostInfo lookup_creatable(const std::shared_ptr<nyan::View> &db_view,
 		info.found = true;
 		info.game_entity = target_game_entity;
 		info.creation_time = creatable_obj.get<nyan::Float>("CreatableGameEntity.creation_time")->get();
-		info.cost_resource = std::string{
-			creatable_obj.get<nyan::ObjectValue>("CreatableGameEntity.cost_resource")->get_name()};
-		info.cost_amount = creatable_obj.get<nyan::Int>("CreatableGameEntity.cost_amount")->get();
+
+		try {
+			auto cost_fqon = creatable_obj.get<nyan::ObjectValue>("CreatableGameEntity.cost")->get_name();
+			auto cost_obj = db_view->get_object(cost_fqon);
+			info.cost_entries = resource_cost_entries(db_view, cost_obj);
+		}
+		catch (...) {
+			info.cost_entries = legacy_cost_entry(creatable_obj);
+		}
+
+		if (info.cost_entries.empty()) {
+			info.cost_entries = legacy_cost_entry(creatable_obj);
+		}
 
 		if (auto salvage_frac = optional_float_member(creatable_obj,
 		                                              "CreatableGameEntity.salvage_recovery_fraction")) {
@@ -68,8 +130,7 @@ CreatableCostInfo lookup_creatable(const std::shared_ptr<nyan::View> &db_view,
 
 BuildingCostRecord building_cost_from_creatable(const CreatableCostInfo &info) {
 	BuildingCostRecord record;
-	record.resource_type = info.cost_resource;
-	record.amount = info.cost_amount;
+	record.entries = info.cost_entries;
 	record.destroy_recovery_fraction = info.salvage_recovery_fraction;
 	record.deconstruct_recovery_fraction = info.deconstruct_recovery_fraction;
 	if (info.deconstruct_time > 0) {
@@ -95,14 +156,21 @@ BuildingCostRecord normalize_building_cost(BuildingCostRecord cost) {
 
 std::optional<BuildingCostRecord> building_cost_from_event_params(
     const openage::event::EventHandler::param_map &params) {
+	if (params.check_type<BuildingCostRecord>("build_cost")) {
+		return normalize_building_cost(params.get("build_cost", BuildingCostRecord{}));
+	}
+
 	if (not params.check_type<std::string>("build_cost_resource")
 	    || not params.check_type<int64_t>("build_cost_amount")) {
 		return std::nullopt;
 	}
 
 	BuildingCostRecord cost_record;
-	cost_record.resource_type = params.get("build_cost_resource", std::string{});
-	cost_record.amount = params.get("build_cost_amount", int64_t{0});
+	ResourceCostEntry entry;
+	entry.resource_type = params.get("build_cost_resource", std::string{});
+	entry.amount = params.get("build_cost_amount", int64_t{0});
+	cost_record.entries.push_back(std::move(entry));
+
 	if (params.check_type<double>("salvage_recovery_fraction")) {
 		cost_record.destroy_recovery_fraction =
 			params.get("salvage_recovery_fraction", SALVAGE_RECOVERY_FRACTION);
@@ -115,11 +183,36 @@ std::optional<BuildingCostRecord> building_cost_from_event_params(
 		cost_record.deconstruct_time = params.get("deconstruct_time", 0.0);
 	}
 
-	if (cost_record.amount <= 0 || cost_record.resource_type.empty()) {
+	if (cost_record.empty()) {
 		return std::nullopt;
 	}
 
 	return normalize_building_cost(cost_record);
+}
+
+bool player_can_afford(const Player &player,
+                       const BuildingCostRecord &cost,
+                       const time::time_t &time) {
+	if (cost.empty()) {
+		return false;
+	}
+
+	for (const auto &entry : cost.entries) {
+		auto available = player.get_resource(time, nyan::fqon_t{entry.resource_type});
+		if (available < entry.amount) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void player_pay_cost(Player &player,
+                     const BuildingCostRecord &cost,
+                     const time::time_t &time) {
+	for (const auto &entry : cost.entries) {
+		player.add_resource(time, nyan::fqon_t{entry.resource_type}, -entry.amount);
+	}
 }
 
 } // namespace openage::gamestate::api

@@ -97,17 +97,28 @@ struct CarriedResource {
 };
 
 /**
+ * One resource line in a building's recorded construction cost.
+ */
+struct ResourceCostEntry {
+	std::string resource_type;
+	int64_t amount = 0;
+};
+
+/**
  * Construction cost recorded for a completed building (used for salvage).
  */
 struct BuildingCostRecord {
-	std::string resource_type;
-	int64_t amount = 0;
+	std::vector<ResourceCostEntry> entries;
 	/** Salvage fraction when the building is destroyed (not deconstructed). */
 	double destroy_recovery_fraction = SALVAGE_RECOVERY_FRACTION;
 	/** Salvage fraction when the player deconstructs the building. */
 	double deconstruct_recovery_fraction = DECONSTRUCT_RECOVERY_FRACTION;
 	/** Villager deconstruct duration in seconds. */
 	double deconstruct_time = 0.0;
+
+	bool empty() const {
+		return this->entries.empty();
+	}
 };
 
 /**
