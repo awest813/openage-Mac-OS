@@ -123,6 +123,7 @@ def tests_cpp():
     yield "openage::gamestate::tests::player_defeated_on_last_building_destroyed"
     yield "openage::gamestate::tests::building_population_capacity"
     yield "openage::gamestate::tests::building_cost_and_salvage_spawn"
+    yield "openage::gamestate::tests::building_cost_multi_resource_salvage"
     yield "openage::gamestate::tests::building_cost_fraction_clamped"
     yield "openage::gamestate::tests::building_cost_custom_salvage_fraction"
     yield "openage::gamestate::tests::deconstruct_complete_spawns_salvage_if_building_gone"

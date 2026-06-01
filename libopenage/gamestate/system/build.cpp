@@ -101,16 +101,13 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 
 	auto cost_record = api::building_cost_from_creatable(creatable);
 
-	int64_t available = player->get_resource(start_time, nyan::fqon_t{cost_record.resource_type});
-	if (available < cost_record.amount) {
+	if (not api::player_can_afford(*player, cost_record, start_time)) {
 		log::log(MSG(dbg) << "Player " << owner_id
-		                  << " cannot afford " << target_building
-		                  << " (cost=" << cost_record.amount << " of " << cost_record.resource_type
-		                  << ", available=" << available << ").");
+		                  << " cannot afford " << target_building << ".");
 		return time::time_t::from_int(0);
 	}
 
-	player->add_resource(start_time, nyan::fqon_t{cost_record.resource_type}, -cost_record.amount);
+	api::player_pay_cost(*player, cost_record, start_time);
 
 	auto completion_time = start_time + creatable.creation_time;
 
@@ -120,11 +117,7 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 		{"owner", owner_id},
 		{"game_entity", target_building},
 		{"spawn_pos", build_site},
-		{"build_cost_resource", cost_record.resource_type},
-		{"build_cost_amount", cost_record.amount},
-		{"salvage_recovery_fraction", cost_record.destroy_recovery_fraction},
-		{"deconstruct_recovery_fraction", cost_record.deconstruct_recovery_fraction},
-		{"deconstruct_time", cost_record.deconstruct_time},
+		{"build_cost", cost_record},
 	};
 	loop->create_event(SPAWN_PRODUCTION_EVENT,
 	                   entity->get_manager(),
@@ -135,9 +128,8 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 	log::log(MSG(info) << "Entity " << entity->get_id()
 	                   << " started building " << target_building
 	                   << " for player " << owner_id
-	                   << " (cost=" << cost_record.amount << " of " << cost_record.resource_type
-	                   << ", at " << build_site
-	                   << ", ready at t=" << completion_time << ").");
+	                   << " at " << build_site
+	                   << " (ready at t=" << completion_time << ").");
 
 	return creatable.creation_time;
 }

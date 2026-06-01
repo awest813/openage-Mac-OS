@@ -154,7 +154,7 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 				auto create_comp = std::dynamic_pointer_cast<component::Create>(
 					producer_it->second->get_component(component::component_t::CREATE));
 				auto creatable = api::lookup_creatable(
-					player.get_db_view(), create_comp->get_ability(), nyan_entity);
+					player->get_db_view(), create_comp->get_ability(), nyan_entity);
 				if (creatable.found) {
 					cost_record = api::building_cost_from_creatable(creatable);
 				}

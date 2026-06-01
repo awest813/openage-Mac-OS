@@ -252,10 +252,11 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 ### 3.2 New Resources and Economy
 
 - [x] Resource salvage piles from destroyed buildings — when a building with a
-  recorded construction cost is destroyed, a neutral salvage pile spawns at the
-  site (50% of cost by default, overridable per creatable via nyan). Villagers
-  can gather it; the pile decays at 1 resource per 10 s. Cost is recorded when
-  a building is placed via BUILD or trained from a Create producer.
+  recorded construction cost is destroyed, neutral salvage pile(s) spawn at the
+  site (50% of cost by default, overridable per creatable via nyan). Multi-resource
+  costs spawn one pile per resource type. Villagers can gather them; each pile
+  decays at 1 resource per 10 s. Cost is recorded when a building is placed via
+  BUILD or trained from a Create producer (parsed from nyan `ResourceCost`).
 - [x] Building deconstruction to recover materials — `DECONSTRUCT` command: villager
   walks to an owned building, waits `deconstruct_time`, then spawns salvage at
   `deconstruct_recovery_fraction` (default 75%, per-creatable in nyan) and removes

@@ -931,8 +931,7 @@ void building_cost_and_salvage_spawn() {
 	auto t0 = time::time_t::from_int(0);
 
 	BuildingCostRecord cost;
-	cost.resource_type = "test.resource.Wood";
-	cost.amount = 200;
+	cost.entries.push_back(ResourceCostEntry{"test.resource.Wood", 200});
 	cost.destroy_recovery_fraction = 0.5;
 	state->set_building_cost(10, cost);
 
@@ -945,7 +944,8 @@ void building_cost_and_salvage_spawn() {
 	state->add_game_entity(building);
 
 	TESTEQUALS(state->get_building_cost(10).has_value(), true);
-	TESTEQUALS(state->get_building_cost(10)->amount, 200);
+	TESTEQUALS(state->get_building_cost(10)->entries.size(), 1);
+	TESTEQUALS(state->get_building_cost(10)->entries[0].amount, 200);
 
 	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
 	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
@@ -965,8 +965,7 @@ void building_cost_and_salvage_spawn() {
 
 void building_cost_fraction_clamped() {
 	BuildingCostRecord cost;
-	cost.resource_type = "test.resource.Food";
-	cost.amount = 100;
+	cost.entries.push_back(ResourceCostEntry{"test.resource.Food", 100});
 	cost.destroy_recovery_fraction = 2.5;
 	cost.deconstruct_recovery_fraction = -0.2;
 
@@ -989,8 +988,13 @@ void deconstruct_complete_spawns_salvage_if_building_gone() {
 	               openage::event::EventHandler::param_map{
 	                   {"building_id", entity_id_t{99}},
 	                   {"building_pos", coord::phys3{3, 4, 0}},
-	                   {"cost_resource", std::string{"test.resource.Wood"}},
-	                   {"cost_amount", int64_t{80}},
+	                   {"build_cost",
+	                    BuildingCostRecord{
+	                        {ResourceCostEntry{"test.resource.Wood", 80}},
+	                        SALVAGE_RECOVERY_FRACTION,
+	                        0.75,
+	                        0.0,
+	                    }},
 	                   {"recovery_fraction", 0.75},
 	               });
 
@@ -1009,8 +1013,7 @@ void building_cost_custom_salvage_fraction() {
 	auto t0 = time::time_t::from_int(0);
 
 	BuildingCostRecord cost;
-	cost.resource_type = "test.resource.Stone";
-	cost.amount = 100;
+	cost.entries.push_back(ResourceCostEntry{"test.resource.Stone", 100});
 	cost.destroy_recovery_fraction = 0.3;
 	state->set_building_cost(20, cost);
 
@@ -1031,6 +1034,50 @@ void building_cost_custom_salvage_fraction() {
 	auto salvage = std::dynamic_pointer_cast<component::Salvage>(
 		salvage_entity->get_component(component::component_t::SALVAGE));
 	TESTEQUALS(salvage->get_amount(t0), 30);
+}
+
+void building_cost_multi_resource_salvage() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	BuildingCostRecord cost;
+	cost.entries.push_back(ResourceCostEntry{"test.resource.Wood", 200});
+	cost.entries.push_back(ResourceCostEntry{"test.resource.Stone", 100});
+	cost.destroy_recovery_fraction = 0.5;
+	state->set_building_cost(30, cost);
+
+	auto building = std::make_shared<GameEntity>(30);
+	building->add_component(std::make_shared<component::Ownership>(loop));
+	building->add_component(std::make_shared<component::Position>(loop));
+	auto pos = std::dynamic_pointer_cast<component::Position>(
+		building->get_component(component::component_t::POSITION));
+	pos->set_position(t0, coord::phys3{0, 0, 0});
+	state->add_game_entity(building);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	state->remove_game_entity(30, t0);
+
+	TESTEQUALS(state->get_game_entities().size(), 2);
+
+	int64_t wood = 0;
+	int64_t stone = 0;
+	for (const auto &[id, entity] : state->get_game_entities()) {
+		(void) id;
+		auto salvage = std::dynamic_pointer_cast<component::Salvage>(
+			entity->get_component(component::component_t::SALVAGE));
+		if (salvage->get_resource_type() == "test.resource.Wood") {
+			wood = salvage->get_amount(t0);
+		}
+		else if (salvage->get_resource_type() == "test.resource.Stone") {
+			stone = salvage->get_amount(t0);
+		}
+	}
+	TESTEQUALS(wood, 100);
+	TESTEQUALS(stone, 50);
 }
 
 void salvage_decay() {

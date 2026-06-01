@@ -14,6 +14,7 @@
 #include "gamestate/definitions.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
+#include "gamestate/manager.h"
 #include "gamestate/system/move.h"
 
 
@@ -115,8 +116,7 @@ const time::time_t Deconstruct::deconstruct_command(
 	openage::event::EventHandler::param_map params{
 		{"building_id", target_id},
 		{"building_pos", target_pos},
-		{"cost_resource", cost_snapshot.resource_type},
-		{"cost_amount", cost_snapshot.amount},
+		{"build_cost", cost_snapshot},
 		{"recovery_fraction", cost_snapshot.deconstruct_recovery_fraction},
 	};
 	loop->create_event(DECONSTRUCT_COMPLETE_EVENT,

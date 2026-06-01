@@ -3,6 +3,7 @@
 #include "deconstruct_complete.h"
 
 #include "coord/phys.h"
+#include "gamestate/api/creatable.h"
 #include "gamestate/definitions.h"
 #include "gamestate/game_state.h"
 #include "log/log.h"
@@ -28,17 +29,15 @@ void DeconstructCompleteHandler::invoke(openage::event::EventLoop & /* loop */,
 
 	auto building_id = params.get("building_id", gamestate::entity_id_t{0});
 	auto building_pos = params.get("building_pos", coord::phys3{0, 0, 0});
-	auto cost_resource = params.get("cost_resource", std::string{});
-	auto cost_amount = params.get("cost_amount", int64_t{0});
 	auto recovery_fraction = params.get("recovery_fraction", gamestate::DECONSTRUCT_RECOVERY_FRACTION);
 
-	if (cost_amount <= 0 || cost_resource.empty()) {
+	auto cost = api::building_cost_from_event_params(params);
+	if (not cost.has_value() || cost->empty()) {
 		log::log(MSG(warn) << "DeconstructComplete: missing cost data for building " << building_id << ".");
 		return;
 	}
 
-	BuildingCostRecord cost{cost_resource, cost_amount};
-	gstate->complete_deconstruction(building_id, building_pos, cost, recovery_fraction, time);
+	gstate->complete_deconstruction(building_id, building_pos, cost.value(), recovery_fraction, time);
 
 	log::log(MSG(info) << "Deconstruction of building " << building_id << " completed.");
 }
