@@ -26,6 +26,21 @@ Item {
 
 	readonly property string iconsPrefix: "image://by-filename/converted/interface/"
 	readonly property string iconsBorder: "image://by-filename/converted/interface/53003.slp.png.1"
+	readonly property real ownerFieldWidthRatio: 0.35
+
+	function prettifyLabel(label) {
+		if (!label)
+			return ""
+
+		var withSpaces = ("" + label).replace(/_/g, " ")
+		var words = withSpaces.split(" ")
+		for (var i = 0; i < words.length; ++i) {
+			if (words[i].length > 0) {
+				words[i] = words[i].charAt(0).toUpperCase() + words[i].slice(1)
+			}
+		}
+		return words.join(" ")
+	}
 
 	width: 1289
 	height: 960
@@ -284,12 +299,14 @@ Item {
 						anchors.leftMargin: metricsUnit * 1.2
 
 						id: selected_name
+						property real ownerFieldReserveWidth: (parent.width * root.ownerFieldWidthRatio) + (metricsUnit * 3)
 
 						color: "black"
 						text: root.actionMode.selection_name
 						font.pointSize: 15
 						font.bold: true
-						width: parent.width - selected_icon.width - (metricsUnit * 8)
+						anchors.right: parent.right
+						anchors.rightMargin: ownerFieldReserveWidth
 						elide: Text.ElideRight
 					}
 
@@ -341,7 +358,7 @@ Item {
 						color: "black"
 						text: root.actionMode.selection_owner
 						horizontalAlignment: Text.AlignRight
-						width: parent.width * 0.35
+						width: parent.width * root.ownerFieldWidthRatio
 						wrapMode: Text.WordWrap
 						font.pointSize: 11
 					}
@@ -380,7 +397,7 @@ Item {
 					Text {
 						anchors.centerIn: parent
 
-						text: "Command: " + actionMode.ability
+						text: "Ability: " + root.prettifyLabel(actionMode.ability)
 						font.pointSize: 12
 						color: "white"
 					}
@@ -434,7 +451,7 @@ Item {
 						horizontalAlignment: Text.AlignHCenter
 						wrapMode: Text.WordWrap
 						color: "#CCFFFFFF"
-						text: "Map preview unavailable in this HUD build."
+						text: "Map preview unavailable in this HUD build"
 					}
 				}
 			}

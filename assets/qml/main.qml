@@ -16,7 +16,20 @@ Item {
 			return ""
 
 		var withSpaces = ("" + label).replace(/_/g, " ")
-		return withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1)
+		var words = withSpaces.split(" ")
+		for (var i = 0; i < words.length; ++i) {
+			if (words[i].length > 0) {
+				words[i] = words[i].charAt(0).toUpperCase() + words[i].slice(1)
+			}
+		}
+		return words.join(" ")
+	}
+
+	function selectMode(modeObj) {
+		var modeIndex = gameControlObj.modes.indexOf(modeObj)
+		if (modeIndex >= 0) {
+			gameControlObj.modeIndex = modeIndex
+		}
 	}
 
 	/*
@@ -103,15 +116,6 @@ Item {
 
 		state: gameControlObj.mode ? gameControlObj.mode.name : ""
 
-		Component {
-			id: changeMode
-
-			ButtonFlat {
-				text: "Next mode"
-				onClicked: gameControlObj.modeIndex = (gameControlObj.effectiveModeIndex + 1) % gameControlObj.modes.length
-			}
-		}
-
 		OA.CreateMode {
 			id: createModeObj
 			LR.tag: "createMode"
@@ -151,9 +155,6 @@ Item {
 				name: createModeObj.name
 
 				property list<Item> content: [
-					Loader {
-						sourceComponent: changeMode
-					},
 					GeneratorParametersConfiguration {
 						generatorParameters: genParamsObj
 					},
@@ -181,9 +182,6 @@ Item {
 				name: editorModeObj.name
 
 				property list<Item> content: [
-					Loader {
-						sourceComponent: changeMode
-					},
 					TypePicker {
 						id: typePicker
 
@@ -260,21 +258,21 @@ Item {
 				text: "Create"
 				checkable: true
 				checked: gameControlObj.mode === createModeObj
-				onClicked: gameControlObj.modeIndex = gameControlObj.modes.indexOf(createModeObj)
+				onClicked: root.selectMode(createModeObj)
 			}
 
 			ButtonFlat {
 				text: "Editor"
 				checkable: true
 				checked: gameControlObj.mode === editorModeObj
-				onClicked: gameControlObj.modeIndex = gameControlObj.modes.indexOf(editorModeObj)
+				onClicked: root.selectMode(editorModeObj)
 			}
 
 			ButtonFlat {
 				text: "Play"
 				checkable: true
 				checked: gameControlObj.mode === actionModeObj
-				onClicked: gameControlObj.modeIndex = gameControlObj.modes.indexOf(actionModeObj)
+				onClicked: root.selectMode(actionModeObj)
 			}
 		}
 	}
