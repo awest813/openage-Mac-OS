@@ -11,6 +11,14 @@ import yay.sfttech.openage 1.0 as OA
 Item {
 	id: root
 
+	function prettifyLabel(label) {
+		if (!label)
+			return ""
+
+		var withSpaces = ("" + label).replace(/_/g, " ")
+		return withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1)
+	}
+
 	/*
 	 * Global metric declaration.
 	 */
@@ -99,7 +107,7 @@ Item {
 			id: changeMode
 
 			ButtonFlat {
-				text: "change_mode"
+				text: "Next mode"
 				onClicked: gameControlObj.modeIndex = (gameControlObj.effectiveModeIndex + 1) % gameControlObj.modes.length
 			}
 		}
@@ -156,7 +164,7 @@ Item {
 					},
 					CheckBoxFlat {
 						id: createWhenReady
-						text: "create_when_ready"
+						text: "Create when ready"
 						visible: specObj.state == OA.GameSpec.Loading
 					}
 				]
@@ -189,7 +197,7 @@ Item {
 					},
 					Text {
 						color: "white"
-						text: typePicker.currentHighlighted != -1 ? typePicker.currentHighlighted : ""
+						text: typePicker.currentHighlighted != -1 ? root.prettifyLabel(typePicker.currentHighlighted) : ""
 					}
 				]
 
@@ -219,6 +227,56 @@ Item {
 				}
 			}
 		]
+	}
+
+	Rectangle {
+		anchors.left: parent.left
+		anchors.right: parent.right
+		anchors.top: parent.top
+
+		height: fontMetrics.averageCharacterWidth * 3.6
+		color: "#B3000000"
+		border.color: "#66FFFFFF"
+		border.width: 1
+
+		RowLayout {
+			anchors.fill: parent
+			anchors.leftMargin: fontMetrics.averageCharacterWidth * 1.5
+			anchors.rightMargin: fontMetrics.averageCharacterWidth * 1.5
+			spacing: fontMetrics.averageCharacterWidth
+
+			Text {
+				color: "white"
+				text: "Openage"
+				font.pointSize: 13
+				font.bold: true
+			}
+
+			Item {
+				Layout.fillWidth: true
+			}
+
+			ButtonFlat {
+				text: "Create"
+				checkable: true
+				checked: gameControlObj.mode === createModeObj
+				onClicked: gameControlObj.modeIndex = gameControlObj.modes.indexOf(createModeObj)
+			}
+
+			ButtonFlat {
+				text: "Editor"
+				checkable: true
+				checked: gameControlObj.mode === editorModeObj
+				onClicked: gameControlObj.modeIndex = gameControlObj.modes.indexOf(editorModeObj)
+			}
+
+			ButtonFlat {
+				text: "Play"
+				checkable: true
+				checked: gameControlObj.mode === actionModeObj
+				onClicked: gameControlObj.modeIndex = gameControlObj.modes.indexOf(actionModeObj)
+			}
+		}
 	}
 
 	ColumnLayout {

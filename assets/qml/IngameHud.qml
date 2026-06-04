@@ -248,6 +248,14 @@ Item {
 					id: selection_single_panel
 					visible: root.actionMode.selection_size == 1
 
+					Rectangle {
+						anchors.fill: parent
+						anchors.margins: metricsUnit * 0.8
+						color: "#66FFF6DD"
+						border.width: 1
+						border.color: "#66422C19"
+					}
+
 					Image {
 						anchors.top: parent.top
 						anchors.topMargin: metricsUnit * 2
@@ -279,39 +287,49 @@ Item {
 
 						color: "black"
 						text: root.actionMode.selection_name
-						font.pointSize: 16
+						font.pointSize: 15
+						font.bold: true
+						width: parent.width - selected_icon.width - (metricsUnit * 8)
+						elide: Text.ElideRight
 					}
 
 					Text {
-						anchors.verticalCenter: selected_name.verticalCenter
-						anchors.left: selected_name.right
-						anchors.leftMargin: metricsUnit * 1.2
+						anchors.top: selected_name.bottom
+						anchors.left: selected_name.left
+						anchors.topMargin: metricsUnit * 0.5
 
 						id: selected_type
 
 						color: "black"
 						opacity: 0.8
 						text: root.actionMode.selection_type
+						font.pointSize: 11
+						width: selected_name.width
+						elide: Text.ElideRight
 					}
 
 					Text {
-						anchors.top: selected_name.bottom
+						anchors.top: selected_type.bottom
 						anchors.left: selected_name.left
-						anchors.topMargin: metricsUnit
+						anchors.topMargin: metricsUnit * 0.8
 
 						id: selected_hp
 
 						color: "black"
 						text: root.actionMode.selection_hp
+						font.bold: true
 					}
 
 					Text {
 						anchors.top: selected_hp.bottom
 						anchors.left: selected_icon.left
-						anchors.topMargin: metricsUnit * 2
+						anchors.topMargin: metricsUnit * 1.5
 
 						color: "black"
 						text: root.actionMode.selection_attrs
+						width: parent.width - metricsUnit * 4
+						wrapMode: Text.WordWrap
+						font.pointSize: 11
 					}
 
 					Text {
@@ -323,6 +341,9 @@ Item {
 						color: "black"
 						text: root.actionMode.selection_owner
 						horizontalAlignment: Text.AlignRight
+						width: parent.width * 0.35
+						wrapMode: Text.WordWrap
+						font.pointSize: 11
 					}
 
 				}
@@ -341,21 +362,27 @@ Item {
 						color: "black"
 						text: root.actionMode.selection_name
 						font.pointSize: 14
+						font.bold: true
 					}
 				}
 
-				Item {
+				Rectangle {
 					anchors.left: parent.left
 					anchors.right: parent.right
 					anchors.bottom: parent.bottom
 					anchors.bottomMargin: metricsUnit * 3
 					visible: actionMode.ability.length
+					height: metricsUnit * 3
+					color: "#66000000"
+					border.color: "#44FFFFFF"
+					border.width: 1
 
 					Text {
 						anchors.centerIn: parent
 
-						text: actionMode.ability
-						font.pointSize: 14
+						text: "Command: " + actionMode.ability
+						font.pointSize: 12
+						color: "white"
 					}
 				}
 			}
@@ -372,6 +399,45 @@ Item {
 
 			source: hudImageSource + "." + root.rightRectSubid
 			fillMode: Image.Stretch
+
+			Rectangle {
+				anchors.top: parent.top
+				anchors.left: parent.left
+				anchors.right: parent.right
+				anchors.margins: metricsUnit * 2
+				anchors.topMargin: metricsUnit * 2.8
+				height: parent.height * 0.58
+
+				color: "#30000000"
+				border.color: "#AAFFFFFF"
+				border.width: 1
+
+				Rectangle {
+					anchors.fill: parent
+					anchors.margins: metricsUnit
+					color: "#22000000"
+					border.color: "#55FFFFFF"
+					border.width: 1
+
+					Text {
+						anchors.top: parent.top
+						anchors.horizontalCenter: parent.horizontalCenter
+						anchors.topMargin: metricsUnit * 0.8
+						text: "Minimap"
+						font.bold: true
+						color: "white"
+					}
+
+					Text {
+						anchors.centerIn: parent
+						width: parent.width - metricsUnit * 2
+						horizontalAlignment: Text.AlignHCenter
+						wrapMode: Text.WordWrap
+						color: "#CCFFFFFF"
+						text: "Map preview unavailable in this HUD build."
+					}
+				}
+			}
 		}
 	}
 
