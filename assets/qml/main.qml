@@ -11,6 +11,27 @@ import yay.sfttech.openage 1.0 as OA
 Item {
 	id: root
 
+	function prettifyLabel(label) {
+		if (!label)
+			return ""
+
+		var withSpaces = ("" + label).replace(/_/g, " ")
+		var words = withSpaces.split(" ")
+		for (var i = 0; i < words.length; ++i) {
+			if (words[i].length > 0) {
+				words[i] = words[i].charAt(0).toUpperCase() + words[i].slice(1)
+			}
+		}
+		return words.join(" ")
+	}
+
+	function selectMode(modeObj) {
+		var modeIndex = gameControlObj.modes.indexOf(modeObj)
+		if (modeIndex >= 0) {
+			gameControlObj.modeIndex = modeIndex
+		}
+	}
+
 	/*
 	 * Global metric declaration.
 	 */
@@ -95,15 +116,6 @@ Item {
 
 		state: gameControlObj.mode ? gameControlObj.mode.name : ""
 
-		Component {
-			id: changeMode
-
-			ButtonFlat {
-				text: "change_mode"
-				onClicked: gameControlObj.modeIndex = (gameControlObj.effectiveModeIndex + 1) % gameControlObj.modes.length
-			}
-		}
-
 		OA.CreateMode {
 			id: createModeObj
 			LR.tag: "createMode"
@@ -143,9 +155,6 @@ Item {
 				name: createModeObj.name
 
 				property list<Item> content: [
-					Loader {
-						sourceComponent: changeMode
-					},
 					GeneratorParametersConfiguration {
 						generatorParameters: genParamsObj
 					},
@@ -156,7 +165,7 @@ Item {
 					},
 					CheckBoxFlat {
 						id: createWhenReady
-						text: "create_when_ready"
+						text: "Create when ready"
 						visible: specObj.state == OA.GameSpec.Loading
 					}
 				]
@@ -173,9 +182,6 @@ Item {
 				name: editorModeObj.name
 
 				property list<Item> content: [
-					Loader {
-						sourceComponent: changeMode
-					},
 					TypePicker {
 						id: typePicker
 
@@ -189,7 +195,7 @@ Item {
 					},
 					Text {
 						color: "white"
-						text: typePicker.currentHighlighted != -1 ? typePicker.currentHighlighted : ""
+						text: typePicker.currentHighlighted != -1 ? root.prettifyLabel(typePicker.currentHighlighted) : ""
 					}
 				]
 
@@ -219,6 +225,56 @@ Item {
 				}
 			}
 		]
+	}
+
+	Rectangle {
+		anchors.left: parent.left
+		anchors.right: parent.right
+		anchors.top: parent.top
+
+		height: fontMetrics.averageCharacterWidth * 3.6
+		color: "#B3000000"
+		border.color: "#66FFFFFF"
+		border.width: 1
+
+		RowLayout {
+			anchors.fill: parent
+			anchors.leftMargin: fontMetrics.averageCharacterWidth * 1.5
+			anchors.rightMargin: fontMetrics.averageCharacterWidth * 1.5
+			spacing: fontMetrics.averageCharacterWidth
+
+			Text {
+				color: "white"
+				text: "Openage"
+				font.pointSize: 13
+				font.bold: true
+			}
+
+			Item {
+				Layout.fillWidth: true
+			}
+
+			ButtonFlat {
+				text: "Create"
+				checkable: true
+				checked: gameControlObj.mode === createModeObj
+				onClicked: root.selectMode(createModeObj)
+			}
+
+			ButtonFlat {
+				text: "Editor"
+				checkable: true
+				checked: gameControlObj.mode === editorModeObj
+				onClicked: root.selectMode(editorModeObj)
+			}
+
+			ButtonFlat {
+				text: "Play"
+				checkable: true
+				checked: gameControlObj.mode === actionModeObj
+				onClicked: root.selectMode(actionModeObj)
+			}
+		}
 	}
 
 	ColumnLayout {

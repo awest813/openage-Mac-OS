@@ -34,7 +34,7 @@ Item {
 			ButtonFlat {
 				Layout.fillWidth: true
 
-				text: "save_game"
+				text: "Save game"
 				onClicked: gameSaver.activate()
 			}
 
@@ -49,7 +49,7 @@ Item {
 			ButtonFlat {
 				Layout.fillWidth: true
 
-				text: "generate_game"
+				text: "Generate game"
 				onClicked: {
 					gameCreator.activate()
 					gameSaver.clearErrors()
@@ -59,7 +59,7 @@ Item {
 			ButtonFlat {
 				Layout.fillWidth: true
 
-				text: "end_game"
+				text: "End game"
 				onClicked: {
 					game.clear()
 					gameCreator.clearErrors()
@@ -69,14 +69,14 @@ Item {
 			ButtonFlat {
 				Layout.fillWidth: true
 
-				text: "reload_assets"
+				text: "Reload assets"
 				onClicked: gameSpec.invalidate()
 			}
 
 			ButtonFlat {
 				Layout.fillWidth: true
 
-				text: "quit"
+				text: "Quit"
 				onClicked: game.engine.stop()
 			}
 		}
