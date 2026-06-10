@@ -151,19 +151,18 @@ model so it is deterministic and rewindable.
   reserved population when an owned unit (has `MOVE`) dies.
 - [x] New unit test: `player_population` (demand/capacity/space, the gate, the
   `POPULATION_MAX` clamp, and time-indexed history).
-- [ ] **Per-unit population cost from nyan** — currently every unit costs
-  `DEFAULT_POPULATION_COST = 1`; should come from a nyan `PopulationSpace`
-  ability once the API/data is wired (same constraint as the unit/building
-  heuristic).
-- [x] **Building-provided capacity** — a completed building raises its owner's
-  `population_capacity` by `DEFAULT_BUILDING_POPULATION_SPACE` (`SpawnProductionHandler`)
-  and `GameState::remove_game_entity` lowers it again on destruction, using the
-  same `OWNERSHIP` + no-`MOVE` building heuristic. So houses/town centres now lift
-  the cap and losing them lowers it. Test: `building_population_capacity`.
-  *Limitation:* until nyan `PopulationSpace` data is wired, **every** building
-  contributes the same default (not just houses/TCs), and by a fixed amount.
-  Pre-placed starting units/buildings must still register their demand/capacity at
-  game setup via the `Player` API.
+- [x] **Per-unit population cost from nyan** — `Production::train_command` reads
+  `UseContingent` PopulationSpace amounts via `api::lookup_population_demand`;
+  units without the ability cost 0. Reserved demand is passed through the spawn
+  event and recorded on the entity for correct release on death. Test:
+  `entity_population_tracking`, `population_lookup_missing_entity`.
+- [x] **Building-provided capacity** — `SpawnProductionHandler` reads
+  `ProvideContingent` PopulationSpace amounts via `api::lookup_population_provision`
+  and `GameState::remove_game_entity` lowers the recorded amount on destruction.
+  Buildings without ProvideContingent no longer add a blanket default. Test:
+  `building_population_capacity`, `entity_population_tracking`.
+  *Note:* pre-placed starting units/buildings must still register demand/capacity
+  at game setup via the `Player` API when they bypass the spawn handler.
 
 ---
 

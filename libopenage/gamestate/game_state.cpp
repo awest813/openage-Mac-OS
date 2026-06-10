@@ -62,6 +62,8 @@ void GameState::remove_game_entity(entity_id_t id) {
 	this->carried_resources.erase(id);
 	this->rally_points.erase(id);
 	this->building_costs.erase(id);
+	this->entity_population_demand.erase(id);
+	this->entity_population_provision.erase(id);
 	this->salvage_pile_ids.erase(id);
 	this->release_tile(id);
 }
@@ -76,6 +78,8 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	coord::phys3 building_pos = WORLD_ORIGIN;
 	bool have_building_pos = false;
 	std::optional<BuildingCostRecord> building_cost;
+	std::optional<int64_t> population_demand;
+	std::optional<int64_t> population_provision;
 
 	auto it = this->game_entities.find(id);
 	if (it != this->game_entities.end()) {
@@ -103,21 +107,32 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 		building_cost = this->get_building_cost(id);
 	}
 
+	population_demand = this->get_entity_population_demand(id);
+	population_provision = this->get_entity_population_provision(id);
+
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
 	this->rally_points.erase(id);
 	this->building_costs.erase(id);
+	this->entity_population_demand.erase(id);
+	this->entity_population_provision.erase(id);
 	this->salvage_pile_ids.erase(id);
 	this->release_tile(id);
 
 	// Release the population space a unit reserved when it was trained.
 	if (is_owned_unit and this->has_player(owner_id)) {
-		this->get_player(owner_id)->add_population_demand(time, -DEFAULT_POPULATION_COST);
+		int64_t demand = population_demand.value_or(DEFAULT_POPULATION_COST);
+		if (demand > 0) {
+			this->get_player(owner_id)->add_population_demand(time, -demand);
+		}
 	}
 
 	// Remove the population headroom a destroyed building had provided.
 	if (is_building and this->has_player(owner_id)) {
-		this->get_player(owner_id)->add_population_capacity(time, -DEFAULT_BUILDING_POPULATION_SPACE);
+		int64_t provision = population_provision.value_or(DEFAULT_BUILDING_POPULATION_SPACE);
+		if (provision > 0) {
+			this->get_player(owner_id)->add_population_capacity(time, -provision);
+		}
 	}
 
 	if (is_building) {
@@ -353,6 +368,34 @@ std::optional<BuildingCostRecord> GameState::get_building_cost(entity_id_t id) c
 
 void GameState::clear_building_cost(entity_id_t id) {
 	this->building_costs.erase(id);
+}
+
+void GameState::set_entity_population_demand(entity_id_t id, int64_t amount) {
+	if (amount > 0) {
+		this->entity_population_demand[id] = amount;
+	}
+}
+
+std::optional<int64_t> GameState::get_entity_population_demand(entity_id_t id) const {
+	auto it = this->entity_population_demand.find(id);
+	if (it == this->entity_population_demand.end()) {
+		return std::nullopt;
+	}
+	return it->second;
+}
+
+void GameState::set_entity_population_provision(entity_id_t id, int64_t amount) {
+	if (amount > 0) {
+		this->entity_population_provision[id] = amount;
+	}
+}
+
+std::optional<int64_t> GameState::get_entity_population_provision(entity_id_t id) const {
+	auto it = this->entity_population_provision.find(id);
+	if (it == this->entity_population_provision.end()) {
+		return std::nullopt;
+	}
+	return it->second;
 }
 
 entity_id_t GameState::allocate_entity_id() const {

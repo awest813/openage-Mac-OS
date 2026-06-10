@@ -20,10 +20,8 @@ namespace openage::gamestate {
 constexpr coord::phys3 WORLD_ORIGIN = coord::phys3{0, 0, 0};
 
 /**
- * Default population space a unit consumes (and reserves while in production).
- *
- * TODO: source the per-unit population cost from nyan data (a PopulationSpace
- *       ability) once it is available, instead of assuming every unit costs 1.
+ * Fallback population demand when an entity has no recorded or nyan-sourced
+ * value (e.g. test helpers that bypass SpawnProductionHandler).
  */
 constexpr int64_t DEFAULT_POPULATION_COST = 1;
 
@@ -34,12 +32,8 @@ constexpr int64_t DEFAULT_POPULATION_COST = 1;
 constexpr int64_t POPULATION_MAX = 200;
 
 /**
- * Population headroom each completed building contributes to its owner.
- *
- * TODO: in the original game only some buildings (houses, town centres) raise
- *       the cap, by building-specific amounts. Until a nyan PopulationSpace
- *       ability is wired up, every building (the `OWNERSHIP` + no `MOVE`
- *       heuristic) contributes this same default.
+ * Fallback population headroom when a building has no recorded or nyan-sourced
+ * ProvideContingent value (e.g. test helpers that bypass SpawnProductionHandler).
  */
 constexpr int64_t DEFAULT_BUILDING_POPULATION_SPACE = 5;
 

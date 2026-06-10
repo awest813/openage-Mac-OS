@@ -367,6 +367,26 @@ public:
 	void clear_building_cost(entity_id_t id);
 
 	/**
+	 * Record population demand reserved for a living or in-production unit.
+	 */
+	void set_entity_population_demand(entity_id_t id, int64_t amount);
+
+	/**
+	 * @return Recorded population demand, or std::nullopt if unknown.
+	 */
+	std::optional<int64_t> get_entity_population_demand(entity_id_t id) const;
+
+	/**
+	 * Record population headroom provided by a completed building.
+	 */
+	void set_entity_population_provision(entity_id_t id, int64_t amount);
+
+	/**
+	 * @return Recorded population provision, or std::nullopt if unknown.
+	 */
+	std::optional<int64_t> get_entity_population_provision(entity_id_t id) const;
+
+	/**
 	 * Decay salvage piles and remove depleted ones. Call once per simulation tick.
 	 */
 	void tick_salvage_decay(const time::time_t &time);
@@ -627,6 +647,16 @@ private:
 	 * Construction costs of completed buildings, keyed by entity ID.
 	 */
 	std::unordered_map<entity_id_t, BuildingCostRecord> building_costs;
+
+	/**
+	 * Population demand reserved by units, keyed by entity ID.
+	 */
+	std::unordered_map<entity_id_t, int64_t> entity_population_demand;
+
+	/**
+	 * Population headroom provided by buildings, keyed by entity ID.
+	 */
+	std::unordered_map<entity_id_t, int64_t> entity_population_provision;
 
 	/**
 	 * Entity IDs of active salvage piles (for periodic decay).

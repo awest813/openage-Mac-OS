@@ -34,6 +34,7 @@
 #include "event/game_over.h"
 #include "event/send_command.h"
 #include "api/creatable.h"
+#include "api/population.h"
 #include "fog_of_war.h"
 #include "game_entity.h"
 #include "game_state.h"
@@ -1078,6 +1079,43 @@ void building_cost_multi_resource_salvage() {
 	}
 	TESTEQUALS(wood, 100);
 	TESTEQUALS(stone, 50);
+}
+
+void population_lookup_missing_entity() {
+	auto db = nyan::Database::create();
+	auto view = db->new_view();
+
+	TESTEQUALS(api::lookup_population_demand(view, "test.unit.Missing"), 0);
+	TESTEQUALS(api::lookup_population_provision(view, "test.building.Missing"), 0);
+}
+
+void entity_population_tracking() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	auto view = db->new_view();
+	auto player = std::make_shared<Player>(0, view, loop);
+	state->add_player(player);
+
+	auto t0 = time::time_t::from_int(0);
+	player->init_population(t0, 20);
+
+	state->set_entity_population_demand(1, 3);
+	TESTEQUALS(state->get_entity_population_demand(1).value_or(0), 3);
+
+	// Building with a non-default recorded provision.
+	auto building = std::make_shared<GameEntity>(2);
+	auto building_owner = std::make_shared<component::Ownership>(loop);
+	building_owner->set_owner(t0, 0);
+	building->add_component(building_owner);
+	state->set_entity_population_provision(2, 10);
+	player->add_population_capacity(t0, 10);
+	state->add_game_entity(building);
+
+	state->remove_game_entity(2, t0);
+	TESTEQUALS(player->get_population_capacity(t0), 20);
+	TESTEQUALS(state->get_entity_population_provision(2).has_value(), false);
 }
 
 void salvage_decay() {

@@ -130,6 +130,8 @@ def tests_cpp():
     yield "openage::gamestate::tests::salvage_decay"
     yield "openage::gamestate::tests::player_resources"
     yield "openage::gamestate::tests::player_population"
+    yield "openage::gamestate::tests::population_lookup_missing_entity"
+    yield "openage::gamestate::tests::entity_population_tracking"
     yield "openage::gamestate::tests::player_state_transitions"
     yield "openage::gamestate::tests::production_requests"
     yield "openage::gamestate::tests::send_command_variants"
