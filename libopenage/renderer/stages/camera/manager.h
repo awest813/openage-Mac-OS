@@ -7,7 +7,7 @@
 
 #include <optional>
 
-#include "coord/input.h"
+#include "coord/pixel.h"
 #include "renderer/camera/camera.h"
 #include "renderer/camera/definitions.h"
 

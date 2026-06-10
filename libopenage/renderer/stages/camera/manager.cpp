@@ -3,8 +3,6 @@
 #include "manager.h"
 
 #include <eigen3/Eigen/Dense>
-
-#include "coord/input.h"
 #include <numbers>
 
 #include "renderer/uniform_buffer.h"

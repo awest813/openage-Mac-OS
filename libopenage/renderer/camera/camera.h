@@ -10,7 +10,6 @@
 
 #include <eigen3/Eigen/Dense>
 
-#include "coord/input.h"
 #include "coord/pixel.h"
 #include "coord/scene.h"
 #include "util/vector.h"
