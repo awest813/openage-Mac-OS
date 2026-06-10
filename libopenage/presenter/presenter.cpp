@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "cvar/cvar.h"
 #include "gamestate/game.h"
 #include "gamestate/game_state.h"
 #include "gamestate/simulation.h"
