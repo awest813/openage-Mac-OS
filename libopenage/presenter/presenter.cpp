@@ -20,6 +20,7 @@
 #include "input/input_manager.h"
 #include "log/log.h"
 #include "renderer/camera/camera.h"
+#include "renderer/camera/definitions.h"
 #include "renderer/gui/gui.h"
 #include "renderer/gui/integration/public/gui_application_with_logger.h"
 #include "renderer/render_factory.h"
