@@ -267,6 +267,14 @@ void Presenter::init_input() {
 		auto camera_controller = std::make_shared<input::camera::Controller>();
 		auto camera_context = std::make_shared<input::camera::BindingContext>();
 		input::camera::setup_defaults(camera_context, this->camera, this->camera_manager);
+
+		if (this->simulation) {
+			auto anchor = this->simulation->get_cvar_manager()->get("CAMERA_ZOOM_ANCHOR");
+			if (anchor == "screen_center") {
+				this->camera_manager->set_zoom_anchor(renderer::camera::ZoomAnchor::SCREEN_CENTER);
+			}
+		}
+
 		this->input_manager->set_camera_controller(camera_controller);
 		input_ctx->set_camera_bindings(camera_context);
 	}

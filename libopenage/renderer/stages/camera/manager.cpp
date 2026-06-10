@@ -58,16 +58,15 @@ void CameraManager::move_frame(MoveDirection direction, float speed) {
 void CameraManager::zoom_frame(ZoomDirection direction,
                                float speed,
                                const std::optional<coord::input> &mouse_pos) {
-	coord::input anchor;
-	if (this->zoom_anchor == ZoomAnchor::MOUSE_CURSOR && mouse_pos.has_value()) {
-		anchor = mouse_pos.value();
-	}
-	else {
+	const coord::input anchor = [&]() -> coord::input {
+		if (this->zoom_anchor == ZoomAnchor::MOUSE_CURSOR && mouse_pos.has_value()) {
+			return mouse_pos.value();
+		}
 		auto viewport = this->camera->get_viewport_size();
-		anchor = coord::input{
+		return coord::input{
 			coord::pixel_t{static_cast<int64_t>(viewport[0] / 2)},
 			coord::pixel_t{static_cast<int64_t>(viewport[1] / 2)}};
-	}
+	}();
 
 	switch (direction) {
 	case ZoomDirection::IN:

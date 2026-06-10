@@ -224,8 +224,8 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 - [ ] After-game statistics screen (kills, resources gathered, APM)
 - [x] **Zoom towards mouse cursor** — wheel zoom uses `Camera::zoom_towards` anchored
   on the cursor by default (`CameraManager::ZoomAnchor::MOUSE_CURSOR`). Set
-  `CAMERA_ZOOM_ANCHOR screen_center` in `cfg/camera.oac` for legacy centre zoom once
-  runtime cvar → camera wiring lands. Zoom towards selected units is still pending.
+  `CAMERA_ZOOM_ANCHOR screen_center` in `cfg/camera.oac` for legacy centre zoom.
+  Zoom towards selected units is still pending.
 
 ### 2.4 Fog of War
 
