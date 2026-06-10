@@ -12,6 +12,7 @@
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
 #include "gamestate/api/creatable.h"
+#include "gamestate/api/population.h"
 #include "gamestate/component/api/create.h"
 #include "gamestate/definitions.h"
 #include "gamestate/entity_factory.h"
@@ -125,12 +126,27 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 		}
 	}
 
-	// A completed building raises its owner's population capacity. Buildings are
-	// identified by the same heuristic used elsewhere (owned, no MOVE component).
+	auto db_view = gstate->has_player(owner_id)
+	                   ? gstate->get_player(owner_id)->get_db_view()
+	                   : nullptr;
+
+	if (params.check_type<int64_t>("population_demand")) {
+		auto population_demand = params.get("population_demand", int64_t{0});
+		if (population_demand > 0) {
+			gstate->set_entity_population_demand(entity->get_id(), population_demand);
+		}
+	}
+
+	// A completed building raises its owner's population capacity when its nyan
+	// data includes ProvideContingent PopulationSpace amounts.
 	if (not entity->has_component(component::component_t::MOVE)
-	    and gstate->has_player(owner_id)) {
-		gstate->get_player(owner_id)->add_population_capacity(
-			time, gamestate::DEFAULT_BUILDING_POPULATION_SPACE);
+	    and gstate->has_player(owner_id)
+	    and db_view) {
+		auto population_provision = api::lookup_population_provision(db_view, nyan_entity);
+		if (population_provision > 0) {
+			gstate->set_entity_population_provision(entity->get_id(), population_provision);
+			gstate->get_player(owner_id)->add_population_capacity(time, population_provision);
+		}
 	}
 
 	auto activity = std::dynamic_pointer_cast<component::Activity>(

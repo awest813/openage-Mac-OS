@@ -9,12 +9,12 @@
 #include "log/message.h"
 
 #include "gamestate/api/creatable.h"
+#include "gamestate/api/population.h"
 #include "gamestate/component/api/create.h"
 #include "gamestate/component/internal/command_queue.h"
 #include "gamestate/component/internal/commands/train.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/types.h"
-#include "gamestate/definitions.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
 #include "gamestate/manager.h"
@@ -81,7 +81,9 @@ const time::time_t Production::train_command(const std::shared_ptr<gamestate::Ga
 		return time::time_t::from_int(0);
 	}
 
-	if (not player->has_population_space(start_time, DEFAULT_POPULATION_COST)) {
+	auto population_demand = api::lookup_population_demand(db_view, target);
+	if (population_demand > 0
+	    and not player->has_population_space(start_time, population_demand)) {
 		log::log(MSG(dbg) << "Player " << owner_id
 		                  << " cannot train " << target
 		                  << ": population cap reached (demand="
@@ -91,7 +93,9 @@ const time::time_t Production::train_command(const std::shared_ptr<gamestate::Ga
 	}
 
 	api::player_pay_cost(*player, cost_record, start_time);
-	player->add_population_demand(start_time, DEFAULT_POPULATION_COST);
+	if (population_demand > 0) {
+		player->add_population_demand(start_time, population_demand);
+	}
 
 	auto completion_time = start_time + creatable.creation_time;
 
@@ -103,6 +107,7 @@ const time::time_t Production::train_command(const std::shared_ptr<gamestate::Ga
 		{"owner", owner_id},
 		{"game_entity", target},
 		{"build_cost", cost_record},
+		{"population_demand", population_demand},
 	};
 	loop->create_event(SPAWN_PRODUCTION_EVENT,
 	                   entity->get_manager(),
