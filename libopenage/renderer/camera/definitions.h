@@ -79,4 +79,14 @@ static constexpr float Y_BOUND_MAX = 20.0f;
 static constexpr float Z_BOUND_MIN = -8.25f;
 static constexpr float Z_BOUND_MAX = 12.25f;
 
+/**
+ * Point the camera keeps fixed on screen while zooming.
+ */
+enum class ZoomAnchor {
+	/** Zoom towards the viewport centre (legacy behaviour). */
+	SCREEN_CENTER,
+	/** Zoom towards the current mouse cursor position. */
+	MOUSE_CURSOR,
+};
+
 } // namespace openage::renderer::camera

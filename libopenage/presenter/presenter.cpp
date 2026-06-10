@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "cvar/cvar.h"
 #include "gamestate/game.h"
 #include "gamestate/game_state.h"
 #include "gamestate/simulation.h"
@@ -20,6 +21,7 @@
 #include "input/input_manager.h"
 #include "log/log.h"
 #include "renderer/camera/camera.h"
+#include "renderer/camera/definitions.h"
 #include "renderer/gui/gui.h"
 #include "renderer/gui/integration/public/gui_application_with_logger.h"
 #include "renderer/render_factory.h"
@@ -266,6 +268,14 @@ void Presenter::init_input() {
 		auto camera_controller = std::make_shared<input::camera::Controller>();
 		auto camera_context = std::make_shared<input::camera::BindingContext>();
 		input::camera::setup_defaults(camera_context, this->camera, this->camera_manager);
+
+		if (this->simulation) {
+			auto anchor = this->simulation->get_cvar_manager()->get("CAMERA_ZOOM_ANCHOR");
+			if (anchor == "screen_center") {
+				this->camera_manager->set_zoom_anchor(renderer::camera::ZoomAnchor::SCREEN_CENTER);
+			}
+		}
+
 		this->input_manager->set_camera_controller(camera_controller);
 		input_ctx->set_camera_bindings(camera_context);
 	}

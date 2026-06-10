@@ -56,14 +56,12 @@ void setup_defaults(const std::shared_ptr<BindingContext> &ctx,
 	ctx->bind(ev_up, move_forward_action);
 	ctx->bind(ev_down, move_backward_action);
 
-	// zoom
-	binding_func_t zoom_in{[&](const event_arguments & /* args */) {
-		// TODO: Use delta from QWheelEvent?
-		cam_manager->zoom_frame(renderer::camera::ZoomDirection::IN, 0.05f);
+	// zoom (anchors on the mouse cursor by default; see CameraManager::set_zoom_anchor)
+	binding_func_t zoom_in{[&](const event_arguments &args) {
+		cam_manager->zoom_frame(renderer::camera::ZoomDirection::IN, 0.05f, args.mouse);
 	}};
-	binding_func_t zoom_out{[&](const event_arguments & /* args */) {
-		// TODO: Use delta from QWheelEvent?
-		cam_manager->zoom_frame(renderer::camera::ZoomDirection::OUT, 0.05f);
+	binding_func_t zoom_out{[&](const event_arguments &args) {
+		cam_manager->zoom_frame(renderer::camera::ZoomDirection::OUT, 0.05f, args.mouse);
 	}};
 
 	binding_action zoom_in_action{zoom_in};

@@ -81,6 +81,21 @@ struct FogTileTexture {
 };
 
 /**
+ * RGBA minimap image for the HUD (one texel per map tile).
+ *
+ * Terrain shading is derived from fog-of-war visibility; entity markers are
+ * drawn on top for the view player (buildings use a larger symbol).
+ */
+struct MinimapTexture {
+	util::Vector2s size{0, 0};
+	std::vector<uint8_t> pixels;
+
+	bool empty() const {
+		return this->pixels.empty();
+	}
+};
+
+/**
  * Resources currently carried by a gatherer entity that have not yet been
  * dropped off at a drop-off building.
  */
@@ -527,6 +542,13 @@ public:
 	FogTileTexture get_fog_tile_texture() const;
 
 	/**
+	 * Get a snapshot of the minimap texture for HUD rendering.
+	 *
+	 * Thread-safe. Returns an empty texture if no map is loaded yet.
+	 */
+	MinimapTexture get_minimap_texture() const;
+
+	/**
 	 * Raise movement costs on tiles within range of enemy attackers.
 	 *
 	 * Used before pathfinding so units path around hostile towers and castles.
@@ -678,8 +700,10 @@ private:
 	 */
 	FogTileTexture fog_tile_texture;
 
+	MinimapTexture minimap_texture;
+
 	/**
-	 * Protects \p fog_tile_texture between simulation and presenter threads.
+	 * Protects \p fog_tile_texture and \p minimap_texture between threads.
 	 */
 	mutable std::shared_mutex fog_texture_mutex;
 
@@ -687,6 +711,11 @@ private:
 	 * Rebuild \p fog_tile_texture from the current fog-of-war state.
 	 */
 	void update_fog_tile_texture();
+
+	/**
+	 * Rebuild \p minimap_texture (fog shading + entity markers for the view player).
+	 */
+	void update_minimap_texture(const time::time_t &time);
 
 	/**
 	 * Tile occupancy: maps a tile to the entity currently occupying it.

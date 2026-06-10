@@ -451,7 +451,7 @@ Item {
 						horizontalAlignment: Text.AlignHCenter
 						wrapMode: Text.WordWrap
 						color: "#CCFFFFFF"
-						text: "Map preview unavailable in this HUD build"
+						text: "Minimap data is built each tick in the engine (fog shading plus unit and building markers). A live texture overlay in this panel is pending QML wiring."
 					}
 				}
 			}

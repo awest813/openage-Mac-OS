@@ -5,7 +5,11 @@
 #include <memory>
 #include <utility>
 
+#include <optional>
+
+#include "coord/pixel.h"
 #include "renderer/camera/camera.h"
+#include "renderer/camera/definitions.h"
 
 namespace openage::renderer {
 class UniformBufferInput;
@@ -77,7 +81,14 @@ public:
 	 * @param direction Zoom direction.
 	 * @param delta Zoom speed, i.e. a distance multiplier.
 	 */
-	void zoom_frame(ZoomDirection direction, float speed = 1.0f);
+	void zoom_frame(ZoomDirection direction,
+	                float speed = 1.0f,
+	                const std::optional<coord::input> &mouse_pos = std::nullopt);
+
+	/**
+	 * Choose whether wheel zoom anchors on the screen centre or the mouse cursor.
+	 */
+	void set_zoom_anchor(ZoomAnchor anchor);
 
 	/**
 	 * Set the move directions of the camera.
@@ -149,6 +160,11 @@ private:
 	 * Zoom motion speed of the camera.
 	 */
 	float zoom_motion_speed;
+
+	/**
+	 * Anchor point used when zooming.
+	 */
+	ZoomAnchor zoom_anchor;
 
 	/**
 	 * Uniform buffer input for the camera.

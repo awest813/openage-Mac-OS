@@ -1,0 +1,9 @@
+# Copyright 2026 the openage authors. See copying.md for legal info.
+#
+# Camera behaviour settings. Loaded at engine start alongside keybinds.oac.
+#
+# CAMERA_ZOOM_ANCHOR controls where the view stays fixed while zooming:
+#   screen_center  - zoom towards the viewport centre (legacy)
+#   mouse_cursor   - zoom towards the mouse cursor (default)
+
+set CAMERA_ZOOM_ANCHOR mouse_cursor

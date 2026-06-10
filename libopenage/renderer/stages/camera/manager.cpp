@@ -17,6 +17,7 @@ CameraManager::CameraManager(const std::shared_ptr<renderer::camera::Camera> &ca
 	zoom_motion_direction{static_cast<int>(ZoomDirection::NONE)},
 	move_motion_speed{0.2f},
 	zoom_motion_speed{0.05f},
+	zoom_anchor{ZoomAnchor::MOUSE_CURSOR},
 	camera_boundaries{camera_boundaries} {
 	this->uniforms = this->camera->get_uniform_buffer()->new_uniform_input(
 		"view",
@@ -54,18 +55,34 @@ void CameraManager::move_frame(MoveDirection direction, float speed) {
 	}
 }
 
-void CameraManager::zoom_frame(ZoomDirection direction, float speed) {
+void CameraManager::zoom_frame(ZoomDirection direction,
+                               float speed,
+                               const std::optional<coord::input> &mouse_pos) {
+	const coord::input anchor = [&]() -> coord::input {
+		if (this->zoom_anchor == ZoomAnchor::MOUSE_CURSOR && mouse_pos.has_value()) {
+			return mouse_pos.value();
+		}
+		auto viewport = this->camera->get_viewport_size();
+		return coord::input{
+			coord::pixel_t{static_cast<int64_t>(viewport[0] / 2)},
+			coord::pixel_t{static_cast<int64_t>(viewport[1] / 2)}};
+	}();
+
 	switch (direction) {
 	case ZoomDirection::IN:
-		this->camera->zoom_in(speed);
+		this->camera->zoom_towards(anchor, speed, true, this->camera_boundaries);
 		break;
 	case ZoomDirection::OUT:
-		this->camera->zoom_out(speed);
+		this->camera->zoom_towards(anchor, speed, false, this->camera_boundaries);
 		break;
 
 	default:
 		break;
 	}
+}
+
+void CameraManager::set_zoom_anchor(ZoomAnchor anchor) {
+	this->zoom_anchor = anchor;
 }
 
 void CameraManager::set_camera_boundaries(const CameraBoundaries &camera_boundaries) {
@@ -94,10 +111,10 @@ void CameraManager::update_motion() {
 
 	if (this->zoom_motion_direction != static_cast<int>(ZoomDirection::NONE)) {
 		if (this->zoom_motion_direction & static_cast<int>(ZoomDirection::IN)) {
-			this->camera->zoom_in(this->zoom_motion_speed);
+			this->zoom_frame(ZoomDirection::IN, this->zoom_motion_speed);
 		}
 		else if (this->zoom_motion_direction & static_cast<int>(ZoomDirection::OUT)) {
-			this->camera->zoom_out(this->zoom_motion_speed);
+			this->zoom_frame(ZoomDirection::OUT, this->zoom_motion_speed);
 		}
 	}
 }
