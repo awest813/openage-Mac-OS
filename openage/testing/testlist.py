@@ -115,6 +115,7 @@ def tests_cpp():
     yield "openage::gamestate::tests::entity_visibility_query"
     yield "openage::gamestate::tests::fog_render_visibility"
     yield "openage::gamestate::tests::fog_tile_texture"
+    yield "openage::gamestate::tests::minimap_texture"
     yield "openage::gamestate::tests::hazard_path_costs_no_map"
     yield "openage::gamestate::tests::next_command_conditions"
     yield "openage::gamestate::tests::next_command_conditions_extended"

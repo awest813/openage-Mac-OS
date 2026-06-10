@@ -584,6 +584,7 @@ void GameState::refresh_visibility(const time::time_t &time) {
 
 	this->update_fog_render_visibility(time);
 	this->update_fog_tile_texture();
+	this->update_minimap_texture(time);
 }
 
 void GameState::update_player_visibility(player_id_t player,
@@ -697,6 +698,125 @@ void GameState::update_fog_tile_texture() {
 FogTileTexture GameState::get_fog_tile_texture() const {
 	std::shared_lock lock{this->fog_texture_mutex};
 	return this->fog_tile_texture;
+}
+
+namespace {
+
+void set_minimap_pixel(std::vector<uint8_t> &pixels,
+                       size_t width,
+                       size_t height,
+                       int ne,
+                       int se,
+                       uint8_t r,
+                       uint8_t g,
+                       uint8_t b,
+                       int marker_size = 1) {
+	const int half = marker_size / 2;
+	for (int dy = 0; dy < marker_size; ++dy) {
+		for (int dx = 0; dx < marker_size; ++dx) {
+			const int x = ne + dx - half;
+			const int y = se + dy - half;
+			if (x < 0 || y < 0 || static_cast<size_t>(x) >= width
+			    || static_cast<size_t>(y) >= height) {
+				continue;
+			}
+			const size_t idx = (static_cast<size_t>(y) * width + static_cast<size_t>(x)) * 4;
+			pixels[idx] = r;
+			pixels[idx + 1] = g;
+			pixels[idx + 2] = b;
+			pixels[idx + 3] = 255;
+		}
+	}
+}
+
+} // namespace
+
+void GameState::update_minimap_texture(const time::time_t &time) {
+	if (this->map == nullptr) {
+		return;
+	}
+
+	const auto &map_size = this->map->get_size();
+	const size_t width = map_size[0];
+	const size_t height = map_size[1];
+	if (width == 0 || height == 0) {
+		return;
+	}
+
+	const player_id_t observer = this->view_player_id;
+	std::vector<uint8_t> pixels(width * height * 4, 0);
+
+	for (size_t se = 0; se < height; ++se) {
+		for (size_t ne = 0; ne < width; ++ne) {
+			coord::tile tile{static_cast<coord::tile_t>(ne), static_cast<coord::tile_t>(se)};
+			uint8_t shade = 40;
+			if (this->fog_of_war.is_visible(observer, tile)) {
+				shade = 120;
+			}
+			else if (this->fog_of_war.is_explored(observer, tile)) {
+				shade = 80;
+			}
+
+			const size_t idx = (se * width + ne) * 4;
+			pixels[idx] = shade;
+			pixels[idx + 1] = shade;
+			pixels[idx + 2] = static_cast<uint8_t>(shade - 20);
+			pixels[idx + 3] = 255;
+		}
+	}
+
+	for (const auto &[entity_id, entity] : this->game_entities) {
+		(void) entity_id;
+		if (not entity->has_component(component::component_t::POSITION)) {
+			continue;
+		}
+		if (not entity->has_component(component::component_t::OWNERSHIP)) {
+			continue;
+		}
+
+		auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+			entity->get_component(component::component_t::OWNERSHIP));
+		auto owner_id = ownership->get_owners().get(time);
+
+		auto pos_comp = std::dynamic_pointer_cast<component::Position>(
+			entity->get_component(component::component_t::POSITION));
+		auto tile = pos_comp->get_positions().get(time).to_tile();
+
+		if (not this->fog_of_war.is_visible(observer, tile)) {
+			continue;
+		}
+
+		const bool is_building = not entity->has_component(component::component_t::MOVE);
+		const int marker_size = is_building ? 2 : 1;
+
+		uint8_t r = 220;
+		uint8_t g = 60;
+		uint8_t b = 60;
+		if (owner_id == observer) {
+			r = is_building ? 120 : 60;
+			g = is_building ? 180 : 140;
+			b = 255;
+		}
+
+		set_minimap_pixel(pixels,
+		                  width,
+		                  height,
+		                  static_cast<int>(tile.ne),
+		                  static_cast<int>(tile.se),
+		                  r,
+		                  g,
+		                  b,
+		                  marker_size);
+	}
+
+	std::unique_lock lock{this->fog_texture_mutex};
+	this->minimap_texture.size = map_size;
+	this->minimap_texture.pixels = std::move(pixels);
+}
+
+MinimapTexture GameState::get_minimap_texture() const {
+	std::shared_lock lock{this->fog_texture_mutex};
+	return this->minimap_texture;
 }
 
 namespace {

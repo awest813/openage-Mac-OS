@@ -791,6 +791,44 @@ void fog_tile_texture() {
 	TESTEQUALS(fog.pixels[(2 + 2 * 4) * 4] > 200, true);
 }
 
+void minimap_texture() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = std::make_shared<nyan::Database>();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	auto observer = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(observer);
+
+	std::vector<std::shared_ptr<TerrainChunk>> chunks;
+	auto chunk = std::make_shared<TerrainChunk>(
+		util::Vector2s{4, 4},
+		coord::tile_delta{0, 0},
+		std::vector<TerrainTile>{});
+	chunks.push_back(chunk);
+	auto terrain = std::make_shared<Terrain>(util::Vector2s{4, 4}, std::move(chunks));
+	state->set_map(std::make_shared<Map>(state, terrain));
+
+	auto unit = std::make_shared<GameEntity>(entity_id_t{1});
+	auto position = std::make_shared<component::Position>(loop);
+	position->set_position(t0, coord::phys3{2, 2, 0});
+	unit->add_component(position);
+	auto ownership = std::make_shared<component::Ownership>(loop);
+	ownership->set_owner(t0, player_id_t{0});
+	unit->add_component(ownership);
+	state->add_game_entity(unit);
+
+	state->refresh_visibility(t0);
+	auto minimap = state->get_minimap_texture();
+	TESTEQUALS(minimap.empty(), false);
+	TESTEQUALS(minimap.size[0], size_t{4});
+	TESTEQUALS(minimap.pixels.size(), size_t{4 * 4 * 4});
+
+	// Unit marker at tile (2,2) tints the minimap blue (own unit).
+	const size_t idx = (2 + 2 * 4) * 4;
+	TESTEQUALS(minimap.pixels[idx + 2] > 200, true);
+}
+
 void hazard_path_costs_no_map() {
 	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = std::make_shared<nyan::Database>();

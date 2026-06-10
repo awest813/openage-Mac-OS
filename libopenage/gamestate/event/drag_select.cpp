@@ -51,6 +51,8 @@ void DragSelectHandler::invoke(openage::event::EventLoop & /* loop */,
 	log::log(SPAM << "\tLeft: " << left);
 	log::log(SPAM << "\tRight: " << right);
 
+	// No selection cap: every owned selectable entity in the drag rectangle is included
+	// (the original AoE limit of 30 is not enforced in the engine).
 	std::vector<entity_id_t> selected;
 	for (auto &entity : gstate->get_game_entities()) {
 		if (not entity.second->has_component(component::component_t::SELECTABLE)) {

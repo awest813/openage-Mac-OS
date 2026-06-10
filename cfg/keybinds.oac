@@ -1,4 +1,10 @@
-# Copyright 2016-2016 the openage authors. See copying.md for legal info.
+# Copyright 2016-2026 the openage authors. See copying.md for legal info.
+#
+# Global key and mouse bindings. Edit this file (or add a `load` of your own
+# profile) to customize controls; changes apply on the next engine start.
+#
+# Camera settings (zoom anchor, etc.) live in camera.oac.
+load camera.oac
 
 set TOGGLE_CONSOLE `
 set START_GAME Return

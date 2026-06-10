@@ -106,6 +106,24 @@ void Camera::zoom_out(float zoom_delta) {
 	this->set_zoom(zoom);
 }
 
+void Camera::zoom_towards(const coord::input &anchor,
+                          float zoom_delta,
+                          bool zoom_in,
+                          const CameraBoundaries &camera_boundaries) {
+	Eigen::Vector3f world_before = this->get_input_pos(anchor);
+
+	if (zoom_in) {
+		this->zoom_in(zoom_delta);
+	}
+	else {
+		this->zoom_out(zoom_delta);
+	}
+
+	Eigen::Vector3f world_after = this->get_input_pos(anchor);
+	Eigen::Vector3f delta = world_before - world_after;
+	this->move_rel(delta, 1.0f, camera_boundaries);
+}
+
 void Camera::resize(size_t width, size_t height) {
 	this->viewport_size = util::Vector2s(width, height);
 	this->viewport_changed = true;

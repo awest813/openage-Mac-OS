@@ -210,11 +210,22 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 
 *(see also `doc/ideas/interface.md`)*
 
-- [ ] Select more than 30 units (engine already removes the cap, UI must follow)
-- [ ] Customisable hotkeys for all actions
-- [ ] Minimap improvements: symbols for key buildings, big-map overlay
+- [x] **Select more than 30 units** — `DragSelectHandler` has no selection cap; every
+  owned selectable entity in the drag rectangle is included. The legacy 30-unit limit
+  is not enforced in the engine. QML `ActionMode` wiring (when present) should mirror
+  this behaviour.
+- [ ] **Customisable hotkeys for all actions** — `cfg/keybinds.oac` is the editable
+  binding profile (loaded at start via the cvar system). The new Qt input stack still
+  hard-codes camera/game binds; full keybinds.oac → `InputContext` mapping is pending.
+- [x] **Minimap improvements (data layer)** — `GameState::update_minimap_texture`
+  builds an RGBA minimap each visibility tick: fog-based terrain shading plus markers
+  (larger symbols for buildings, dots for units, colour by ownership). Test:
+  `minimap_texture`. HUD texture display and big-map overlay still pending QML wiring.
 - [ ] After-game statistics screen (kills, resources gathered, APM)
-- [ ] Zoom towards mouse cursor / selected units
+- [x] **Zoom towards mouse cursor** — wheel zoom uses `Camera::zoom_towards` anchored
+  on the cursor by default (`CameraManager::ZoomAnchor::MOUSE_CURSOR`). Set
+  `CAMERA_ZOOM_ANCHOR screen_center` in `cfg/camera.oac` for legacy centre zoom once
+  runtime cvar → camera wiring lands. Zoom towards selected units is still pending.
 
 ### 2.4 Fog of War
 

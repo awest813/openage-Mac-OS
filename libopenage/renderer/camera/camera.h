@@ -10,6 +10,7 @@
 
 #include <eigen3/Eigen/Dense>
 
+#include "coord/input.h"
 #include "coord/pixel.h"
 #include "coord/scene.h"
 #include "util/vector.h"
@@ -133,6 +134,19 @@ public:
 	 * @param zoom_delta How far the camera should zoom out.
 	 */
 	void zoom_out(float zoom_delta);
+
+	/**
+	 * Zoom in or out while keeping the scene point under \p anchor fixed on screen.
+	 *
+	 * @param anchor Viewport position to anchor (e.g. mouse cursor).
+	 * @param zoom_delta Zoom step size.
+	 * @param zoom_in true to zoom in, false to zoom out.
+	 * @param camera_boundaries Movement limits applied after the pan correction.
+	 */
+	void zoom_towards(const coord::input &anchor,
+	                  float zoom_delta,
+	                  bool zoom_in,
+	                  const CameraBoundaries &camera_boundaries = DEFAULT_CAM_BOUNDARIES);
 
 	/**
 	 * Resize the camera viewport.
