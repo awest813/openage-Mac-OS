@@ -221,7 +221,17 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
   builds an RGBA minimap each visibility tick: fog-based terrain shading plus markers
   (larger symbols for buildings, dots for units, colour by ownership). Test:
   `minimap_texture`. HUD texture display and big-map overlay still pending QML wiring.
-- [ ] After-game statistics screen (kills, resources gathered, APM)
+- [~] **After-game statistics (data layer)** — `Player` accumulates per-game
+  stats as time-indexed curves: `units_killed` (credited to the attacker's owner
+  in `Attack::attack_default` on a kill), `units_lost` (recorded in
+  `GameState::remove_game_entity(id, time)` for any owned unit/building death),
+  and `resources_gathered` per resource type (recorded on drop-off in the Gather
+  system). Query via `get_units_killed` / `get_units_lost` /
+  `get_resource_gathered` / `get_total_resources_gathered`. APM is tracked via
+  `record_action` (counted once per player-issued command in `SendCommandHandler`;
+  internal re-enqueues bypass it) and queried with `get_actions_issued` /
+  `get_apm`. Test: `player_statistics`. The end-game summary screen (QML) is
+  still pending.
 - [x] **Zoom towards mouse cursor** — wheel zoom uses `Camera::zoom_towards` anchored
   on the cursor by default (`CameraManager::ZoomAnchor::MOUSE_CURSOR`). Set
   `CAMERA_ZOOM_ANCHOR screen_center` in `cfg/camera.oac` for legacy centre zoom.
@@ -272,7 +282,16 @@ All of these must remain opt-in; a "vanilla mode" is always available.
   `deconstruct_recovery_fraction` (default 75%, per-creatable in nyan) and removes
   the building without combat destroy-salvage. Salvage still spawns if the building
   is destroyed by combat before the timer ends (cost snapshot is in the event).
-- [ ] Infinite forest regeneration (configurable)
+- [x] **Infinite forest regeneration (configurable)** — opt-in via the
+  `GAMEPLAY_FOREST_REGEN` cvar (`cfg/gameplay.oac`, default off → vanilla). When
+  enabled, the Gather system registers each harvestable resource node it taps
+  (recording the amount as the regen ceiling) and a depleted node is kept in the
+  world at 0 instead of being removed. `GameState::tick_resource_regen` (called
+  each simulation tick alongside salvage decay) restores `FOREST_REGEN_AMOUNT`
+  units every `FOREST_REGEN_INTERVAL_SEC` toward the ceiling. Registrations are
+  cleaned up when a node is removed or loses its `LIVE` component. Config knobs:
+  `GameState::set_forest_regen_enabled` / `set_forest_regen_params`. Test:
+  `resource_node_regen`.
 
 ### 3.3 New Buildings
 
@@ -307,7 +326,7 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3.12 \
       -DDOWNLOAD_NYAN=YES -G Ninja ..
 cmake --build . --parallel "$(nproc)"
-./run test -a          # all 58 tests pass (exit 0)
+./run test -a          # all 60 tests pass (exit 0)
 ```
 
 Notes:

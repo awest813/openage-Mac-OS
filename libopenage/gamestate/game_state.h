@@ -406,6 +406,62 @@ public:
 	 */
 	void tick_salvage_decay(const time::time_t &time);
 
+	// -----------------------------------------------------------------------
+	// Resource node regeneration (e.g. forests)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Enable or disable regeneration of harvestable resource nodes.
+	 *
+	 * When disabled (the default) a depleted node is removed from the world as
+	 * in the original game. When enabled, depleted nodes are kept and slowly
+	 * regrow towards the amount they were first gathered at.
+	 *
+	 * @param enabled Whether resource nodes regenerate.
+	 */
+	void set_forest_regen_enabled(bool enabled);
+
+	/**
+	 * @return true if harvestable resource nodes regenerate.
+	 */
+	bool is_forest_regen_enabled() const;
+
+	/**
+	 * Override the regeneration rate.
+	 *
+	 * @param interval_sec Seconds of game time between regeneration steps.
+	 * @param amount       Resource units restored per step.
+	 */
+	void set_forest_regen_params(double interval_sec, int64_t amount);
+
+	/**
+	 * Register (or refresh) a harvestable resource node so it can regenerate.
+	 *
+	 * Called by the Gather system the first time a node is tapped. The recorded
+	 * maximum is the largest amount the node has been seen holding, which is the
+	 * ceiling regeneration restores towards.
+	 *
+	 * @param id         Resource entity ID.
+	 * @param max_amount Amount the node currently holds (its regen ceiling).
+	 * @param time       Simulation time of registration.
+	 */
+	void register_resource_node(entity_id_t id, int64_t max_amount, const time::time_t &time);
+
+	/**
+	 * @param id Resource entity ID.
+	 * @return true if the entity is a registered regenerating resource node.
+	 */
+	bool is_resource_node(entity_id_t id) const;
+
+	/**
+	 * Regenerate registered resource nodes towards their recorded maximum.
+	 *
+	 * No-op when regeneration is disabled. Call once per simulation tick.
+	 *
+	 * @param time Current simulation time.
+	 */
+	void tick_resource_regen(const time::time_t &time);
+
 	/**
 	 * Complete a scheduled deconstruction: spawn salvage at \p position and remove
 	 * the building if it still exists (e.g. not destroyed by combat in the meantime).
@@ -684,6 +740,36 @@ private:
 	 * Entity IDs of active salvage piles (for periodic decay).
 	 */
 	std::unordered_set<entity_id_t> salvage_pile_ids;
+
+	/**
+	 * Regeneration bookkeeping for a single harvestable resource node.
+	 */
+	struct ResourceNodeState {
+		/** Amount the node regenerates back towards. */
+		int64_t max_amount = 0;
+		/** Last simulation time the node was regenerated. */
+		time::time_t last_regen_time;
+	};
+
+	/**
+	 * Registered regenerating resource nodes, keyed by entity ID.
+	 */
+	std::unordered_map<entity_id_t, ResourceNodeState> resource_nodes;
+
+	/**
+	 * Whether harvestable resource nodes regenerate.
+	 */
+	bool forest_regen_enabled = FOREST_REGEN_ENABLED_DEFAULT;
+
+	/**
+	 * Seconds of game time between resource regeneration steps.
+	 */
+	double forest_regen_interval_sec = FOREST_REGEN_INTERVAL_SEC;
+
+	/**
+	 * Resource units restored per regeneration step.
+	 */
+	int64_t forest_regen_amount = FOREST_REGEN_AMOUNT;
 
 	/**
 	 * Fog-of-war state for all players.

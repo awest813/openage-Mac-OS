@@ -3,6 +3,7 @@
 #include "simulation.h"
 
 #include "assets/mod_manager.h"
+#include "cvar/cvar.h"
 #include "event/event_loop.h"
 #include "gamestate/entity_factory.h"
 #include "gamestate/event/drag_select.h"
@@ -53,6 +54,7 @@ void GameSimulation::run() {
 		this->event_loop->reach_time(current_time, state);
 		state->refresh_visibility(current_time);
 		state->tick_salvage_decay(current_time);
+		state->tick_resource_regen(current_time);
 	}
 	log::log(MSG(info) << "Game simulation loop exited");
 }
@@ -68,6 +70,16 @@ void GameSimulation::start() {
 	                                               this->mod_manager,
 	                                               this->entity_factory,
 	                                               this->terrain_factory);
+
+	// Apply opt-in gameplay settings (see cfg/gameplay.oac). Resource node
+	// regeneration is off by default to preserve the original game behaviour.
+	if (this->cvar_manager) {
+		auto regen = this->cvar_manager->get("GAMEPLAY_FOREST_REGEN");
+		if (regen == "on" or regen == "true" or regen == "1") {
+			this->game->get_state()->set_forest_regen_enabled(true);
+			log::log(MSG(info) << "Resource node regeneration enabled.");
+		}
+	}
 
 	this->running = true;
 

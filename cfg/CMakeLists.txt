@@ -3,6 +3,7 @@
 install(FILES
 	"${CMAKE_CURRENT_SOURCE_DIR}/keybinds.oac"
 	"${CMAKE_CURRENT_SOURCE_DIR}/camera.oac"
+	"${CMAKE_CURRENT_SOURCE_DIR}/gameplay.oac"
 	DESTINATION "${GLOBAL_CONFIG_DIR}"
 )
 

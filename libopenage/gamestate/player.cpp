@@ -19,6 +19,9 @@ Player::Player(player_id_t id,
 	db_view{db_view},
 	population_demand{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
 	population_capacity{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
+	units_killed{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
+	units_lost{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
+	actions_issued{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
 	loop{loop} {
 }
 
@@ -106,6 +109,70 @@ player_state_t Player::get_state() const {
 
 void Player::set_state(player_state_t new_state) {
 	this->state = new_state;
+}
+
+void Player::record_kill(const time::time_t &time, int64_t amount) {
+	int64_t current = this->units_killed->get(time);
+	this->units_killed->set_last(time, current + amount);
+}
+
+int64_t Player::get_units_killed(const time::time_t &time) const {
+	return this->units_killed->get(time);
+}
+
+void Player::record_loss(const time::time_t &time, int64_t amount) {
+	int64_t current = this->units_lost->get(time);
+	this->units_lost->set_last(time, current + amount);
+}
+
+int64_t Player::get_units_lost(const time::time_t &time) const {
+	return this->units_lost->get(time);
+}
+
+void Player::record_resource_gathered(const time::time_t &time,
+                                      const nyan::fqon_t &resource,
+                                      int64_t amount) {
+	auto it = this->resources_gathered.find(resource);
+	if (it == this->resources_gathered.end()) {
+		it = this->resources_gathered.emplace(
+			resource,
+			std::make_shared<curve::Discrete<int64_t>>(this->loop, 0, "", nullptr, 0)).first;
+	}
+	int64_t current = it->second->get(time);
+	it->second->set_last(time, current + amount);
+}
+
+int64_t Player::get_resource_gathered(const time::time_t &time,
+                                      const nyan::fqon_t &resource) const {
+	auto it = this->resources_gathered.find(resource);
+	if (it == this->resources_gathered.end()) {
+		return 0;
+	}
+	return it->second->get(time);
+}
+
+int64_t Player::get_total_resources_gathered(const time::time_t &time) const {
+	int64_t total = 0;
+	for (const auto &[resource, curve] : this->resources_gathered) {
+		total += curve->get(time);
+	}
+	return total;
+}
+
+void Player::record_action(const time::time_t &time, int64_t amount) {
+	int64_t current = this->actions_issued->get(time);
+	this->actions_issued->set_last(time, current + amount);
+}
+
+int64_t Player::get_actions_issued(const time::time_t &time) const {
+	return this->actions_issued->get(time);
+}
+
+double Player::get_apm(const time::time_t &time, double elapsed_seconds) const {
+	if (elapsed_seconds <= 0) {
+		return 0.0;
+	}
+	return static_cast<double>(this->get_actions_issued(time)) / (elapsed_seconds / 60.0);
 }
 
 void Player::set_id(entity_id_t id) {
