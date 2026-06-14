@@ -61,6 +61,27 @@ constexpr double DECONSTRUCT_TIME_FACTOR = 1.5;
 constexpr double SALVAGE_DECAY_INTERVAL_SEC = 10.0;
 
 /**
+ * Whether harvestable resource nodes (e.g. forests, gold) regenerate by default.
+ *
+ * Disabled keeps the original Age of Empires behaviour: a resource node is
+ * removed once it is fully depleted. When enabled (opt-in via the
+ * GAMEPLAY_FOREST_REGEN cvar / cfg/gameplay.oac), depleted nodes are kept in
+ * the world and slowly regrow back towards the amount they were first tapped at.
+ */
+constexpr bool FOREST_REGEN_ENABLED_DEFAULT = false;
+
+/**
+ * Default seconds of game time between each resource regeneration step for a
+ * harvestable resource node when regeneration is enabled.
+ */
+constexpr double FOREST_REGEN_INTERVAL_SEC = 5.0;
+
+/**
+ * Default amount of the resource restored per regeneration step.
+ */
+constexpr int64_t FOREST_REGEN_AMOUNT = 1;
+
+/**
  * Maximum distance (in tiles) for builders to start build or deconstruct actions.
  */
 constexpr double BUILDER_INTERACTION_RANGE = 2.0;

@@ -2,6 +2,7 @@
 
 #include "game_state.h"
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -65,6 +66,7 @@ void GameState::remove_game_entity(entity_id_t id) {
 	this->entity_population_demand.erase(id);
 	this->entity_population_provision.erase(id);
 	this->salvage_pile_ids.erase(id);
+	this->resource_nodes.erase(id);
 	this->release_tile(id);
 }
 
@@ -117,6 +119,7 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	this->entity_population_demand.erase(id);
 	this->entity_population_provision.erase(id);
 	this->salvage_pile_ids.erase(id);
+	this->resource_nodes.erase(id);
 	this->release_tile(id);
 
 	// Release the population space a unit reserved when it was trained.
@@ -497,6 +500,89 @@ void GameState::tick_salvage_decay(const time::time_t &time) {
 
 	for (entity_id_t id : depleted) {
 		this->remove_game_entity(id);
+	}
+}
+
+void GameState::set_forest_regen_enabled(bool enabled) {
+	this->forest_regen_enabled = enabled;
+}
+
+bool GameState::is_forest_regen_enabled() const {
+	return this->forest_regen_enabled;
+}
+
+void GameState::set_forest_regen_params(double interval_sec, int64_t amount) {
+	if (interval_sec > 0) {
+		this->forest_regen_interval_sec = interval_sec;
+	}
+	if (amount > 0) {
+		this->forest_regen_amount = amount;
+	}
+}
+
+void GameState::register_resource_node(entity_id_t id,
+                                       int64_t max_amount,
+                                       const time::time_t &time) {
+	auto it = this->resource_nodes.find(id);
+	if (it == this->resource_nodes.end()) {
+		this->resource_nodes.emplace(id, ResourceNodeState{max_amount, time});
+	}
+	else if (max_amount > it->second.max_amount) {
+		// Record the largest amount the node has been seen holding.
+		it->second.max_amount = max_amount;
+	}
+}
+
+bool GameState::is_resource_node(entity_id_t id) const {
+	return this->resource_nodes.contains(id);
+}
+
+void GameState::tick_resource_regen(const time::time_t &time) {
+	if (not this->forest_regen_enabled) {
+		return;
+	}
+
+	// nyan attribute holding a resource entity's current amount (shared with Gather).
+	static constexpr const char *RESOURCE_AMOUNT_ATTRIBUTE =
+		"engine.ability.type.Live.AttributeAmount";
+
+	std::vector<entity_id_t> stale;
+
+	for (auto &[id, node] : this->resource_nodes) {
+		auto it = this->game_entities.find(id);
+		if (it == this->game_entities.end()
+		    || not it->second->has_component(component::component_t::LIVE)) {
+			stale.push_back(id);
+			continue;
+		}
+
+		double elapsed = time.to_double() - node.last_regen_time.to_double();
+		if (elapsed < this->forest_regen_interval_sec) {
+			continue;
+		}
+
+		auto live = std::dynamic_pointer_cast<component::Live>(
+			it->second->get_component(component::component_t::LIVE));
+		int64_t current = live->get_attribute(time, RESOURCE_AMOUNT_ATTRIBUTE);
+
+		if (current >= node.max_amount) {
+			// Already full; just advance the regen clock.
+			node.last_regen_time = time;
+			continue;
+		}
+
+		int64_t steps = static_cast<int64_t>(elapsed / this->forest_regen_interval_sec);
+		int64_t regenerated = std::min(node.max_amount,
+		                               current + steps * this->forest_regen_amount);
+		live->set_attribute(time, RESOURCE_AMOUNT_ATTRIBUTE, regenerated);
+		node.last_regen_time = time;
+
+		log::log(MSG(dbg) << "Resource node " << id << " regenerated to "
+		                  << regenerated << " / " << node.max_amount << ".");
+	}
+
+	for (entity_id_t id : stale) {
+		this->resource_nodes.erase(id);
 	}
 }
 

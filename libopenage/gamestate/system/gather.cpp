@@ -205,6 +205,12 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 		auto live_component = std::dynamic_pointer_cast<component::Live>(
 			resource_entity->get_component(component::component_t::LIVE));
 		current_amount = live_component->get_attribute(start_time, RESOURCE_AMOUNT_ATTRIBUTE);
+
+		// Register the node so it can regenerate. The first tap records its
+		// current amount as the ceiling regeneration restores towards.
+		if (state->is_forest_regen_enabled()) {
+			state->register_resource_node(target_id, current_amount, start_time);
+		}
 	}
 	else [[unlikely]] {
 		log::log(MSG(warn) << "Gather target " << target_id
@@ -239,8 +245,14 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 		                  << " (remaining=" << new_amount << ").");
 	}
 
-	// Depletion: remove resource entity when empty
+	// Depletion: remove resource entity when empty, unless it is a regenerating
+	// node — those are kept in the world at 0 so they can regrow.
 	if (new_amount == 0) {
+		if (state->is_forest_regen_enabled() && state->is_resource_node(target_id)) {
+			log::log(MSG(dbg) << "Resource entity " << target_id
+			                  << " depleted; kept for regeneration.");
+			return reload_time->get();
+		}
 		log::log(MSG(info) << "Resource entity " << target_id << " has been depleted.");
 		state->remove_game_entity(target_id);
 		return time::time_t::from_int(0);

@@ -1182,4 +1182,48 @@ void salvage_decay() {
 	TESTEQUALS(state->get_game_entities().size(), 0);
 }
 
+void resource_node_regen() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	// Regeneration is off by default (original game behaviour).
+	TESTEQUALS(state->is_forest_regen_enabled(), false);
+
+	state->set_forest_regen_enabled(true);
+	TESTEQUALS(state->is_forest_regen_enabled(), true);
+
+	// A harvestable resource node registered for regeneration.
+	auto node = std::make_shared<GameEntity>(1);
+	node->add_component(std::make_shared<component::Position>(loop));
+	state->add_game_entity(node);
+
+	state->register_resource_node(1, 100, t0);
+	TESTEQUALS(state->is_resource_node(1), true);
+
+	// Re-registering with a smaller amount keeps the larger recorded ceiling.
+	state->register_resource_node(1, 50, t0);
+	TESTEQUALS(state->is_resource_node(1), true);
+
+	// A node whose entity has no LIVE component is pruned on the next tick.
+	state->tick_resource_regen(t0 + FOREST_REGEN_INTERVAL_SEC);
+	TESTEQUALS(state->is_resource_node(1), false);
+
+	// Removing the entity clears its regeneration registration.
+	state->register_resource_node(1, 100, t0);
+	TESTEQUALS(state->is_resource_node(1), true);
+	state->remove_game_entity(1);
+	TESTEQUALS(state->is_resource_node(1), false);
+
+	// When regeneration is disabled, ticking is a no-op and registrations persist.
+	state->set_forest_regen_enabled(false);
+	auto node2 = std::make_shared<GameEntity>(2);
+	node2->add_component(std::make_shared<component::Position>(loop));
+	state->add_game_entity(node2);
+	state->register_resource_node(2, 100, t0);
+	state->tick_resource_regen(t0 + FOREST_REGEN_INTERVAL_SEC * 10);
+	TESTEQUALS(state->is_resource_node(2), true);
+}
+
 } // namespace openage::gamestate::tests

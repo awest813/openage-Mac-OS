@@ -129,6 +129,7 @@ def tests_cpp():
     yield "openage::gamestate::tests::building_cost_custom_salvage_fraction"
     yield "openage::gamestate::tests::deconstruct_complete_spawns_salvage_if_building_gone"
     yield "openage::gamestate::tests::salvage_decay"
+    yield "openage::gamestate::tests::resource_node_regen"
     yield "openage::gamestate::tests::player_resources"
     yield "openage::gamestate::tests::player_population"
     yield "openage::gamestate::tests::population_lookup_missing_entity"

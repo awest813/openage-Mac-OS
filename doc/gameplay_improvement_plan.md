@@ -272,7 +272,16 @@ All of these must remain opt-in; a "vanilla mode" is always available.
   `deconstruct_recovery_fraction` (default 75%, per-creatable in nyan) and removes
   the building without combat destroy-salvage. Salvage still spawns if the building
   is destroyed by combat before the timer ends (cost snapshot is in the event).
-- [ ] Infinite forest regeneration (configurable)
+- [x] **Infinite forest regeneration (configurable)** — opt-in via the
+  `GAMEPLAY_FOREST_REGEN` cvar (`cfg/gameplay.oac`, default off → vanilla). When
+  enabled, the Gather system registers each harvestable resource node it taps
+  (recording the amount as the regen ceiling) and a depleted node is kept in the
+  world at 0 instead of being removed. `GameState::tick_resource_regen` (called
+  each simulation tick alongside salvage decay) restores `FOREST_REGEN_AMOUNT`
+  units every `FOREST_REGEN_INTERVAL_SEC` toward the ceiling. Registrations are
+  cleaned up when a node is removed or loses its `LIVE` component. Config knobs:
+  `GameState::set_forest_regen_enabled` / `set_forest_regen_params`. Test:
+  `resource_node_regen`.
 
 ### 3.3 New Buildings
 
@@ -307,7 +316,7 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3.12 \
       -DDOWNLOAD_NYAN=YES -G Ninja ..
 cmake --build . --parallel "$(nproc)"
-./run test -a          # all 58 tests pass (exit 0)
+./run test -a          # all 59 tests pass (exit 0)
 ```
 
 Notes:
