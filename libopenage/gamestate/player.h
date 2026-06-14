@@ -195,6 +195,66 @@ public:
 	 */
 	void set_state(player_state_t state);
 
+	// -----------------------------------------------------------------------
+	// After-game statistics
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Record that this player destroyed one or more enemy entities (units or
+	 * buildings).
+	 *
+	 * @param time   Simulation time of the kill.
+	 * @param amount Number of entities killed (default 1).
+	 */
+	void record_kill(const time::time_t &time, int64_t amount = 1);
+
+	/**
+	 * @param time Time at which to read.
+	 * @return Cumulative number of enemy entities this player has destroyed.
+	 */
+	int64_t get_units_killed(const time::time_t &time) const;
+
+	/**
+	 * Record that this player lost one or more of its own entities (units or
+	 * buildings) in combat.
+	 *
+	 * @param time   Simulation time of the loss.
+	 * @param amount Number of entities lost (default 1).
+	 */
+	void record_loss(const time::time_t &time, int64_t amount = 1);
+
+	/**
+	 * @param time Time at which to read.
+	 * @return Cumulative number of own entities this player has lost.
+	 */
+	int64_t get_units_lost(const time::time_t &time) const;
+
+	/**
+	 * Record resources this player has gathered (dropped off), accumulated per
+	 * resource type for the end-game summary.
+	 *
+	 * @param time     Simulation time of the gather.
+	 * @param resource Resource type identifier (nyan fqon).
+	 * @param amount   Amount gathered.
+	 */
+	void record_resource_gathered(const time::time_t &time,
+	                              const nyan::fqon_t &resource,
+	                              int64_t amount);
+
+	/**
+	 * @param time     Time at which to read.
+	 * @param resource Resource type identifier (nyan fqon).
+	 * @return Cumulative amount of the given resource gathered.
+	 */
+	int64_t get_resource_gathered(const time::time_t &time,
+	                              const nyan::fqon_t &resource) const;
+
+	/**
+	 * @param time Time at which to read.
+	 * @return Cumulative amount of all resources gathered (summed across types).
+	 */
+	int64_t get_total_resources_gathered(const time::time_t &time) const;
+
 protected:
 	/**
 	 * A player cannot be default copied because of their unique ID.
@@ -246,6 +306,22 @@ private:
 	 * capacity used for checks is this value clamped to \p POPULATION_MAX.
 	 */
 	std::shared_ptr<curve::Discrete<int64_t>> population_capacity;
+
+	/**
+	 * Cumulative count of enemy entities this player has destroyed (for the
+	 * after-game summary). Time-indexed for determinism.
+	 */
+	std::shared_ptr<curve::Discrete<int64_t>> units_killed;
+
+	/**
+	 * Cumulative count of this player's own entities lost in combat.
+	 */
+	std::shared_ptr<curve::Discrete<int64_t>> units_lost;
+
+	/**
+	 * Cumulative resources gathered per resource type (keyed by nyan fqon).
+	 */
+	std::unordered_map<nyan::fqon_t, std::shared_ptr<curve::Discrete<int64_t>>> resources_gathered;
 
 	/**
 	 * Event loop used for lazily creating resource curves.

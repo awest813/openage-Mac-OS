@@ -100,6 +100,7 @@ bool try_drop_off(const std::shared_ptr<gamestate::GameEntity> &entity,
 
 		auto &player = state->get_player(owner_id);
 		player->add_resource(time, cargo->resource_type, cargo->amount);
+		player->record_resource_gathered(time, cargo->resource_type, cargo->amount);
 
 		log::log(MSG(info) << "Entity " << entity->get_id()
 		                   << " dropped off " << cargo->amount

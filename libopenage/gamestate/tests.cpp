@@ -1226,4 +1226,42 @@ void resource_node_regen() {
 	TESTEQUALS(state->is_resource_node(2), true);
 }
 
+void player_statistics() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto view = db->new_view();
+	auto t0 = time::time_t::from_int(0);
+
+	auto player = std::make_shared<Player>(0, view, loop);
+	state->add_player(player);
+
+	// All counters start at zero.
+	TESTEQUALS(player->get_units_killed(t0), 0);
+	TESTEQUALS(player->get_units_lost(t0), 0);
+	TESTEQUALS(player->get_total_resources_gathered(t0), 0);
+
+	// Kills accumulate.
+	player->record_kill(t0, 2);
+	player->record_kill(t0);
+	TESTEQUALS(player->get_units_killed(t0), 3);
+
+	// Resources gathered accumulate per type and in total.
+	player->record_resource_gathered(t0, "test.resource.Wood", 50);
+	player->record_resource_gathered(t0, "test.resource.Gold", 30);
+	player->record_resource_gathered(t0, "test.resource.Wood", 20);
+	TESTEQUALS(player->get_resource_gathered(t0, "test.resource.Wood"), 70);
+	TESTEQUALS(player->get_resource_gathered(t0, "test.resource.Gold"), 30);
+	TESTEQUALS(player->get_resource_gathered(t0, "test.resource.Stone"), 0);
+	TESTEQUALS(player->get_total_resources_gathered(t0), 100);
+
+	// Destroying an owned entity records a loss via the (id, time) overload.
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+	make_building(10, 0, loop, state, t0);
+	make_building(11, 0, loop, state, t0);
+	state->remove_game_entity(10, t0);
+	TESTEQUALS(player->get_units_lost(t0), 1);
+}
+
 } // namespace openage::gamestate::tests

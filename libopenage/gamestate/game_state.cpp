@@ -122,6 +122,11 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	this->resource_nodes.erase(id);
 	this->release_tile(id);
 
+	// Record the loss of an owned entity for the after-game statistics.
+	if ((is_owned_unit or is_building) and this->has_player(owner_id)) {
+		this->get_player(owner_id)->record_loss(time);
+	}
+
 	// Release the population space a unit reserved when it was trained.
 	if (is_owned_unit and this->has_player(owner_id)) {
 		int64_t demand = population_demand.value_or(DEFAULT_POPULATION_COST);
