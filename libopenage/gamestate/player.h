@@ -255,6 +255,31 @@ public:
 	 */
 	int64_t get_total_resources_gathered(const time::time_t &time) const;
 
+	/**
+	 * Record one or more player-issued actions (for APM). One command counts as
+	 * one action regardless of how many units it targets; internal re-enqueues
+	 * are not counted.
+	 *
+	 * @param time   Simulation time of the action.
+	 * @param amount Number of actions (default 1).
+	 */
+	void record_action(const time::time_t &time, int64_t amount = 1);
+
+	/**
+	 * @param time Time at which to read.
+	 * @return Cumulative number of player-issued actions.
+	 */
+	int64_t get_actions_issued(const time::time_t &time) const;
+
+	/**
+	 * Compute actions per minute over an elapsed game duration.
+	 *
+	 * @param time            Time at which to read the action count.
+	 * @param elapsed_seconds Game time elapsed so far (seconds).
+	 * @return Actions per minute, or 0 if no time has elapsed.
+	 */
+	double get_apm(const time::time_t &time, double elapsed_seconds) const;
+
 protected:
 	/**
 	 * A player cannot be default copied because of their unique ID.
@@ -322,6 +347,11 @@ private:
 	 * Cumulative resources gathered per resource type (keyed by nyan fqon).
 	 */
 	std::unordered_map<nyan::fqon_t, std::shared_ptr<curve::Discrete<int64_t>>> resources_gathered;
+
+	/**
+	 * Cumulative count of player-issued actions (for APM).
+	 */
+	std::shared_ptr<curve::Discrete<int64_t>> actions_issued;
 
 	/**
 	 * Event loop used for lazily creating resource curves.

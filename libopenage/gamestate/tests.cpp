@@ -1255,6 +1255,18 @@ void player_statistics() {
 	TESTEQUALS(player->get_resource_gathered(t0, "test.resource.Stone"), 0);
 	TESTEQUALS(player->get_total_resources_gathered(t0), 100);
 
+	// Actions accumulate and feed the APM calculation.
+	TESTEQUALS(player->get_actions_issued(t0), 0);
+	TESTEQUALS(player->get_apm(t0, 60.0), 0.0);
+	player->record_action(t0);
+	player->record_action(t0);
+	player->record_action(t0);
+	TESTEQUALS(player->get_actions_issued(t0), 3);
+	// 3 actions over 30 s == 6 actions per minute.
+	TESTEQUALS(player->get_apm(t0, 30.0), 6.0);
+	// Zero elapsed time yields 0 (no division by zero).
+	TESTEQUALS(player->get_apm(t0, 0.0), 0.0);
+
 	// Destroying an owned entity records a loss via the (id, time) overload.
 	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
 	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());

@@ -227,8 +227,10 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
   `GameState::remove_game_entity(id, time)` for any owned unit/building death),
   and `resources_gathered` per resource type (recorded on drop-off in the Gather
   system). Query via `get_units_killed` / `get_units_lost` /
-  `get_resource_gathered` / `get_total_resources_gathered`. Test:
-  `player_statistics`. APM tracking and the end-game summary screen (QML) are
+  `get_resource_gathered` / `get_total_resources_gathered`. APM is tracked via
+  `record_action` (counted once per player-issued command in `SendCommandHandler`;
+  internal re-enqueues bypass it) and queried with `get_actions_issued` /
+  `get_apm`. Test: `player_statistics`. The end-game summary screen (QML) is
   still pending.
 - [x] **Zoom towards mouse cursor** — wheel zoom uses `Camera::zoom_towards` anchored
   on the cursor by default (`CameraManager::ZoomAnchor::MOUSE_CURSOR`). Set

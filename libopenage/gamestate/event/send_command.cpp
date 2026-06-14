@@ -19,11 +19,13 @@
 #include "gamestate/component/internal/commands/move.h"
 #include "gamestate/component/internal/commands/patrol.h"
 #include "gamestate/component/internal/commands/train.h"
+#include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/internal/stance.h"
 #include "gamestate/component/types.h"
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
+#include "gamestate/player.h"
 #include "gamestate/types.h"
 
 
@@ -71,6 +73,21 @@ void SendCommandHandler::invoke(openage::event::EventLoop & /* loop */,
 	auto command_type = params.get("type", component::command::command_t::NONE);
 	std::vector<gamestate::entity_id_t> ids = params.get("entity_ids",
 	                                                     std::vector<gamestate::entity_id_t>{});
+
+	// Count one player action for APM statistics (a single command is one action
+	// regardless of how many units are selected). Internal re-enqueues (auto-attack,
+	// patrol, attack-move) bypass this handler, so only player commands count.
+	if (not ids.empty() && command_type != component::command::command_t::NONE) {
+		auto first = gstate->get_game_entity(ids.front());
+		if (first->has_component(component::component_t::OWNERSHIP)) {
+			auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+				first->get_component(component::component_t::OWNERSHIP));
+			auto owner = ownership->get_owners().get(time);
+			if (gstate->has_player(owner)) {
+				gstate->get_player(owner)->record_action(time);
+			}
+		}
+	}
 
 	// For MOVE with multiple entities, compute each unit's current position
 	// relative to the group centroid and issue FormationMoveCommand so the
