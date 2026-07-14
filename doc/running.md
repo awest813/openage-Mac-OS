@@ -4,8 +4,8 @@ This document explains the different run modes in openage.
 
 1. [Quickstart](#quickstart)
 2. [Modes](#modes)
-   1. [`game`](#game)
-   2. [`main`](#main)
+   1. [`main`](#main)
+   2. [`game`](#game)
    3. [`test`](#test)
    4. [`convert`](#convert)
    5. [`convert-file`](#convert-file)
@@ -28,8 +28,8 @@ you can execute
 bin/run
 ```
 
-from the same subfolder. This automatically selects the [`game` mode](#game) as default
-to start a new game instance and also creates all necessary configs.
+from the same subfolder. This defaults to the [`main` mode](#main) (menu shell) and
+also creates all necessary configs.
 
 If prompts appear, follow the instructions and choose what you think is best. It's
 almost idiot-proof!
@@ -39,30 +39,32 @@ almost idiot-proof!
 
 Modes can be selected manually by appending the `bin/run` prompt with the mode name.
 
-### `game`
-
-```
-bin/run game
-```
-
-Start the engine and immediately create a new game instance. This run mode is supposed
-to jump straight into a game (or replay recording).
-
-If no converted modpacks can be found, this mode will start with a prompt asking if
-the user wants to convert any before initializing the game.
-
-It's the default run mode.
-
-
 ### `main`
 
 ```
 bin/run main
 ```
 
-This run mode is supposed to start a main menu or launcher which allows configuring a
-game. Neither of these are implemented at the moment, so `main` just does the same
-thing as `game`.
+Starts the engine with the QML menu shell in `assets/qml/menus/` (main menu, Escape
+pause overlay, after-game summary). Simulation time stays paused until **Start**.
+Deep match configuration (map/players/civs) is still future work; Start currently
+enters the already-loaded simulation.
+
+This is the default run mode when no subcommand is given.
+
+
+### `game`
+
+```
+bin/run game
+```
+
+Same C++ engine path as [`main`](#main) today (presenter + menu shell). Prefer
+`main` for the launcher-style entry; `game` remains available for scripts that
+expect that subcommand name.
+
+If no converted modpacks can be found, this mode will start with a prompt asking if
+the user wants to convert any before initializing the game.
 
 
 ### `test`

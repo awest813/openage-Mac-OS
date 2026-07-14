@@ -388,6 +388,13 @@ void player_defeated_on_last_building_destroyed() {
 	TESTEQUALS(p0->get_state() == player_state_t::DEFEATED, true);
 	TESTEQUALS(p1->get_state() == player_state_t::WINNER, true);
 	TESTEQUALS(state->get_alive_player_count(), 0);
+	TESTEQUALS(state->get_game_result().finished, true);
+	TESTEQUALS(state->get_game_result().has_winner, true);
+	TESTEQUALS(state->get_game_result().winner_id, player_id_t{1});
+
+	state->clear_game_result();
+	TESTEQUALS(state->get_game_result().finished, false);
+	TESTEQUALS(state->get_game_result().has_winner, false);
 }
 
 void building_population_capacity() {

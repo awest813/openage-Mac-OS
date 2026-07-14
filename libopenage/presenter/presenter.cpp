@@ -2,6 +2,8 @@
 
 #include "presenter.h"
 
+#include <QEvent>
+#include <QKeyEvent>
 #include <eigen3/Eigen/Dense>
 #include <iostream>
 #include <string>
@@ -20,6 +22,7 @@
 #include "input/input_context.h"
 #include "input/input_manager.h"
 #include "log/log.h"
+#include "presenter/menu_controller.h"
 #include "renderer/camera/camera.h"
 #include "renderer/camera/definitions.h"
 #include "renderer/gui/gui.h"
@@ -28,6 +31,7 @@
 #include "renderer/render_pass.h"
 #include "renderer/render_target.h"
 #include "renderer/resources/assets/asset_manager.h"
+#include "renderer/resources/assets/texture_manager.h"
 #include "renderer/resources/shader_source.h"
 #include "renderer/resources/texture_info.h"
 #include "renderer/stages/camera/manager.h"
@@ -36,6 +40,7 @@
 #include "renderer/stages/skybox/render_stage.h"
 #include "renderer/stages/terrain/render_stage.h"
 #include "renderer/stages/world/render_stage.h"
+#include "time/clock.h"
 #include "time/time_loop.h"
 #include "util/path.h"
 
@@ -110,8 +115,14 @@ void Presenter::init_graphics(const renderer::window_settings &window_settings) 
 	this->asset_manager = std::make_shared<renderer::resources::AssetManager>(
 		this->renderer,
 		this->root_dir / "assets" / "converted");
-	auto missing_tex = this->root_dir / "assets" / "test" / "textures" / "test_missing.sprite";
-	this->asset_manager->set_placeholder_animation(missing_tex);
+	auto missing_sprite = this->root_dir / "assets" / "test" / "textures" / "test_missing.sprite";
+	auto missing_texture = this->root_dir / "assets" / "test" / "textures" / "test_missing.texture";
+	auto missing_png = this->root_dir / "assets" / "test" / "textures" / "missing.png";
+	this->asset_manager->set_placeholder_animation(missing_sprite);
+	this->asset_manager->set_placeholder_texture(missing_texture);
+	this->asset_manager->set_placeholder_terrain(
+		this->root_dir / "assets" / "test" / "textures" / "test_terrain.terrain");
+	this->asset_manager->get_texture_manager()->set_placeholder(missing_png);
 
 	// Camera
 	this->camera = std::make_shared<renderer::camera::Camera>(this->renderer, this->window->get_size());
@@ -184,9 +195,7 @@ void Presenter::init_graphics(const renderer::window_settings &window_settings) 
 void Presenter::init_gui() {
 	log::log(INFO << "Presenter: Initializing GUI with Qt backend");
 
-	//// -- gui initialization
-	// TODO: Do not use test GUI
-	util::Path qml_root = this->root_dir / "assets" / "test" / "qml";
+	util::Path qml_root = this->root_dir / "assets" / "qml" / "menus";
 	log::log(INFO << "Presenter: Setting QML root to " << qml_root.resolve_native_path());
 	if (not qml_root.is_dir()) {
 		throw Error{ERR << "could not find qml root folder " << qml_root};
@@ -204,6 +213,20 @@ void Presenter::init_gui() {
 		throw Error{ERR << "could not find main.qml file " << qml_root_file};
 	}
 
+	this->menu_controller = std::make_shared<MenuController>();
+	this->menu_controller->set_window(this->window);
+	this->menu_controller->set_time_loop(this->time_loop);
+	this->menu_controller->set_simulation(this->simulation);
+
+	// Hold the simulation on the main menu until Start is chosen.
+	// TimeLoop starts the clock paused; keep it paused if a race already resumed it.
+	if (this->time_loop) {
+		auto clock = this->time_loop->get_clock();
+		if (clock->get_state() == time::ClockState::RUNNING) {
+			clock->pause();
+		}
+	}
+
 	// TODO: in order to support qml-mods, the fslike and filelike
 	//       library has to be integrated into qt. For now,
 	//       figure out the absolute paths here and pass them in.
@@ -214,8 +237,8 @@ void Presenter::init_gui() {
 		qml_root_file, // entry qml file, absolute path.
 		qml_root,      // directory to watch for qml file changes
 		qml_assets,    // qml data: Engine *, the data directory, ...
-		this->renderer // openage renderer
-	);
+		this->renderer, // openage renderer
+		this->menu_controller.get());
 
 	auto gui_pass = this->gui->get_render_pass();
 	this->render_passes.push_back(gui_pass);
@@ -227,16 +250,34 @@ void Presenter::init_input() {
 	this->input_manager = std::make_shared<input::InputManager>();
 
 	this->window->add_key_callback([&](const QKeyEvent &ev) {
+		if (ev.type() == QEvent::KeyPress && ev.key() == Qt::Key_Escape) {
+			if (this->menu_controller) {
+				this->menu_controller->togglePause();
+			}
+			return;
+		}
+		if (this->menu_controller && this->menu_controller->blocks_game_input()) {
+			return;
+		}
 		this->input_manager->process(ev);
 	});
 	this->window->add_mouse_button_callback([&](const QMouseEvent &ev) {
+		if (this->menu_controller && this->menu_controller->blocks_game_input()) {
+			return;
+		}
 		this->input_manager->process(ev);
 	});
 	this->window->add_mouse_move_callback([&](const QMouseEvent &ev) {
 		this->input_manager->set_mouse(ev.position().x(), ev.position().y());
+		if (this->menu_controller && this->menu_controller->blocks_game_input()) {
+			return;
+		}
 		this->input_manager->process(ev);
 	});
 	this->window->add_mouse_wheel_callback([&](const QWheelEvent &ev) {
+		if (this->menu_controller && this->menu_controller->blocks_game_input()) {
+			return;
+		}
 		this->input_manager->process(ev);
 	});
 
@@ -334,6 +375,9 @@ void Presenter::render() {
 	this->terrain_renderer->update();
 	this->world_renderer->update();
 	this->hud_renderer->update();
+	if (this->menu_controller) {
+		this->menu_controller->update();
+	}
 	this->gui->render();
 
 	for (auto &pass : this->render_passes) {

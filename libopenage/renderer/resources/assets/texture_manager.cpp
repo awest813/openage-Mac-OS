@@ -1,7 +1,10 @@
-// Copyright 2022-2023 the openage authors. See copying.md for legal info.
+// Copyright 2022-2026 the openage authors. See copying.md for legal info.
 
 #include "texture_manager.h"
 
+#include "error/error.h"
+#include "log/log.h"
+#include "log/message.h"
 #include "renderer/renderer.h"
 #include "renderer/resources/texture_data.h"
 
@@ -15,24 +18,45 @@ TextureManager::TextureManager(const std::shared_ptr<Renderer> &renderer) :
 
 const std::shared_ptr<Texture2d> &TextureManager::request(const util::Path &path) {
 	if (not this->loaded.contains(path)) {
-		// create if not loaded
-		auto tex_data = resources::Texture2dData(path);
-		this->loaded.insert({path, this->renderer->add_texture(tex_data)});
+		try {
+			auto tex_data = resources::Texture2dData(path);
+			this->loaded.insert({path, this->renderer->add_texture(tex_data)});
+		}
+		catch (const Error &err) {
+			if (this->placeholder) {
+				log::log(MSG(warn) << "Failed to load texture image from: " << path
+				                   << " - using placeholder instead.");
+				this->loaded.insert({path, (*this->placeholder).second});
+			}
+			else {
+				throw;
+			}
+		}
 	}
 	return this->loaded.at(path);
 }
 
 void TextureManager::add(const util::Path &path) {
 	if (not this->loaded.contains(path)) {
-		// create if not loaded
-		auto tex_data = resources::Texture2dData(path);
-		this->loaded.insert({path, this->renderer->add_texture(tex_data)});
+		try {
+			auto tex_data = resources::Texture2dData(path);
+			this->loaded.insert({path, this->renderer->add_texture(tex_data)});
+		}
+		catch (const Error &err) {
+			if (this->placeholder) {
+				log::log(MSG(warn) << "Failed to load texture image from: " << path
+				                   << " - using placeholder instead.");
+				this->loaded.insert({path, (*this->placeholder).second});
+			}
+			else {
+				throw;
+			}
+		}
 	}
 }
 
 void TextureManager::add(const util::Path &path,
                          const std::shared_ptr<Texture2d> &texture) {
-	auto flat_path = path.resolve_native_path();
 	this->loaded.insert({path, texture});
 }
 

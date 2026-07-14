@@ -8,6 +8,7 @@
 #include "cvar/cvar.h"
 #include "gamestate/simulation.h"
 #include "presenter/presenter.h"
+#include "time/clock.h"
 #include "time/time_loop.h"
 
 
@@ -70,6 +71,17 @@ Engine::Engine(mode mode,
 }
 
 void Engine::loop() {
+	// Headless mode has no menu to gate the clock; resume simulation time now.
+	if (this->run_mode == mode::HEADLESS && this->time_loop) {
+		auto clock = this->time_loop->get_clock();
+		if (clock->get_state() == time::ClockState::PAUSED) {
+			clock->resume();
+		}
+		else if (clock->get_state() == time::ClockState::INIT) {
+			clock->start();
+		}
+	}
+
 	// Run the main game simulation loop:
 	this->simulation->run();
 

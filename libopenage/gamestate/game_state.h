@@ -137,6 +137,15 @@ struct BuildingCostRecord {
 };
 
 /**
+ * Outcome of a finished match, for UI / after-game summary screens.
+ */
+struct GameResult {
+	bool finished = false;
+	bool has_winner = false;
+	player_id_t winner_id = 0;
+};
+
+/**
  * State of the game.
  *
  * Contains index structures for looking up game entities and other
@@ -250,6 +259,21 @@ public:
 	 * @return Map of all players by their ID.
 	 */
 	const std::unordered_map<player_id_t, std::shared_ptr<Player>> &get_players() const;
+
+	/**
+	 * Record the match outcome (called when game.game_over is fired).
+	 */
+	void set_game_result(GameResult result);
+
+	/**
+	 * @return Match outcome for UI / after-game summary screens (copy).
+	 */
+	GameResult get_game_result() const;
+
+	/**
+	 * Clear a previous match outcome (e.g. when returning to the main menu).
+	 */
+	void clear_game_result();
 
 	/**
 	 * Count how many players are still in the ALIVE state.
@@ -1058,6 +1082,17 @@ private:
 	 * Fog-of-war state for all players.
 	 */
 	FogOfWar fog_of_war;
+
+	/**
+	 * Match outcome once the game has ended (empty until then).
+	 * Protected by \p game_result_mutex (sim writes, presenter reads).
+	 */
+	GameResult game_result;
+
+	/**
+	 * Guards \p game_result between the simulation and presenter threads.
+	 */
+	mutable std::shared_mutex game_result_mutex;
 
 	/**
 	 * Player whose fog-of-war view is used for rendering (local player).
