@@ -560,6 +560,111 @@ public:
 	 */
 	void apply_bridge_path_costs(path::grid_id_t grid_id, const time::time_t &time);
 
+	// -----------------------------------------------------------------------
+	// Environment (Phase 3.1): day/night, weather, forest hiding
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Enable or disable the day/night cycle (sight range changes with phase).
+	 */
+	void set_day_night_enabled(bool enabled);
+
+	/**
+	 * @return true if the day/night cycle is active.
+	 */
+	bool is_day_night_enabled() const;
+
+	/**
+	 * Override day and night lengths (seconds of game time).
+	 */
+	void set_day_night_params(double day_sec, double night_sec);
+
+	/**
+	 * Resolve the day phase at \p time (DAY when the cycle is disabled).
+	 */
+	day_phase_t get_day_phase(const time::time_t &time) const;
+
+	/**
+	 * Enable or disable dynamic weather (sight and move-speed modifiers).
+	 */
+	void set_weather_enabled(bool enabled);
+
+	/**
+	 * @return true if weather effects are active.
+	 */
+	bool is_weather_enabled() const;
+
+	/**
+	 * Force the current weather condition (also used by tests).
+	 */
+	void set_weather(weather_t weather);
+
+	/**
+	 * @return Current weather (CLEAR when weather is disabled).
+	 */
+	weather_t get_weather() const;
+
+	/**
+	 * Advance environment state for this tick (weather cycling when enabled).
+	 */
+	void tick_environment(const time::time_t &time);
+
+	/**
+	 * Combined sight-range multiplier from day phase and weather (1.0 = normal).
+	 */
+	double get_sight_multiplier(const time::time_t &time) const;
+
+	/**
+	 * Combined movement-speed multiplier from weather (1.0 = normal).
+	 */
+	double get_move_speed_multiplier() const;
+
+	/**
+	 * Enable or disable forest hiding (enemies on forest tiles need proximity).
+	 */
+	void set_forest_hide_enabled(bool enabled);
+
+	/**
+	 * @return true if forest hiding is active.
+	 */
+	bool is_forest_hide_enabled() const;
+
+	/**
+	 * Override the Chebyshev detection threshold for forest-hidden units.
+	 */
+	void set_forest_hide_threshold(int tiles);
+
+	/**
+	 * @return Forest-hide detection radius in tiles.
+	 */
+	int get_forest_hide_threshold() const;
+
+	/**
+	 * Mark a tile as forest (for hiding). Used by tests and map setup.
+	 */
+	void mark_forest_tile(coord::tile tile);
+
+	/**
+	 * Remove a tile from the forest set.
+	 */
+	void unmark_forest_tile(coord::tile tile);
+
+	/**
+	 * @return true if \p tile is marked as forest.
+	 */
+	bool is_forest_tile(coord::tile tile) const;
+
+	/**
+	 * Clear all marked forest tiles.
+	 */
+	void clear_forest_tiles();
+
+	/**
+	 * Scan the loaded map terrain and mark tiles whose terrain name contains
+	 * "forest" (case-insensitive). No-op without a map.
+	 */
+	void rebuild_forest_tiles_from_terrain();
+
 	/**
 	 * Complete a scheduled deconstruction: spawn salvage at \p position and remove
 	 * the building if it still exists (e.g. not destroyed by combat in the meantime).
@@ -903,6 +1008,51 @@ private:
 	 * Bridge building entity → tile (for cleanup on destroy).
 	 */
 	std::unordered_map<entity_id_t, coord::tile> entity_bridge_tile;
+
+	/**
+	 * Whether the day/night cycle is active.
+	 */
+	bool day_night_enabled = DAY_NIGHT_ENABLED_DEFAULT;
+
+	/**
+	 * Day length in seconds of game time.
+	 */
+	double day_length_sec = DAY_LENGTH_SEC;
+
+	/**
+	 * Night length in seconds of game time.
+	 */
+	double night_length_sec = NIGHT_LENGTH_SEC;
+
+	/**
+	 * Whether weather effects are active.
+	 */
+	bool weather_enabled = WEATHER_ENABLED_DEFAULT;
+
+	/**
+	 * Current weather condition.
+	 */
+	weather_t current_weather = weather_t::CLEAR;
+
+	/**
+	 * Last simulation time weather was advanced.
+	 */
+	time::time_t last_weather_change_time;
+
+	/**
+	 * Whether forest hiding is active.
+	 */
+	bool forest_hide_enabled = FOREST_HIDE_ENABLED_DEFAULT;
+
+	/**
+	 * Chebyshev radius for detecting forest-hidden units.
+	 */
+	int forest_hide_threshold = FOREST_HIDE_THRESHOLD_TILES;
+
+	/**
+	 * Tiles that count as forest for the forest-hiding rule.
+	 */
+	std::unordered_set<coord::tile> forest_tiles;
 
 	/**
 	 * Fog-of-war state for all players.

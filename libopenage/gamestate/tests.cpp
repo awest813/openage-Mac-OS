@@ -1425,6 +1425,130 @@ void fog_last_known_cleared_on_remove() {
 	TESTEQUALS(state->get_last_known_position(player_id_t{0}, entity_id_t{2}).has_value(), false);
 }
 
+void environment_day_night() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	// Disabled by default: always daytime, full sight.
+	TESTEQUALS(state->is_day_night_enabled(), false);
+	TESTEQUALS(state->get_day_phase(time::time_t::from_int(0)) == day_phase_t::DAY, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_int(0)), 1.0);
+
+	state->set_day_night_enabled(true);
+	state->set_day_night_params(100.0, 100.0);
+
+	// Mid-day.
+	TESTEQUALS(state->get_day_phase(time::time_t::from_double(40.0)) == day_phase_t::DAY, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_double(40.0)), DAY_SIGHT_MULT);
+
+	// Dusk: last 10% of day.
+	TESTEQUALS(state->get_day_phase(time::time_t::from_double(95.0)) == day_phase_t::DUSK, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_double(95.0)), TWILIGHT_SIGHT_MULT);
+
+	// Night.
+	TESTEQUALS(state->get_day_phase(time::time_t::from_double(140.0)) == day_phase_t::NIGHT, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_double(140.0)), NIGHT_SIGHT_MULT);
+
+	// Dawn: last 10% of night.
+	TESTEQUALS(state->get_day_phase(time::time_t::from_double(195.0)) == day_phase_t::DAWN, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_double(195.0)), TWILIGHT_SIGHT_MULT);
+}
+
+void environment_weather() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	TESTEQUALS(state->is_weather_enabled(), false);
+	TESTEQUALS(state->get_weather() == weather_t::CLEAR, true);
+	TESTEQUALS(state->get_move_speed_multiplier(), WEATHER_CLEAR_MOVE_MULT);
+	TESTEQUALS(state->get_sight_multiplier(t0), 1.0);
+
+	state->set_weather_enabled(true);
+	state->set_weather(weather_t::FOG);
+	TESTEQUALS(state->get_weather() == weather_t::FOG, true);
+	TESTEQUALS(state->get_sight_multiplier(t0), WEATHER_FOG_SIGHT_MULT);
+	TESTEQUALS(state->get_move_speed_multiplier(), WEATHER_FOG_MOVE_MULT);
+
+	state->set_weather(weather_t::RAIN);
+	TESTEQUALS(state->get_sight_multiplier(t0), WEATHER_RAIN_SIGHT_MULT);
+	TESTEQUALS(state->get_move_speed_multiplier(), WEATHER_RAIN_MOVE_MULT);
+
+	// Weather cycles CLEAR -> FOG -> RAIN after the interval.
+	state->set_weather(weather_t::CLEAR);
+	state->tick_environment(t0);
+	TESTEQUALS(state->get_weather() == weather_t::CLEAR, true);
+	state->tick_environment(t0 + WEATHER_CYCLE_INTERVAL_SEC);
+	TESTEQUALS(state->get_weather() == weather_t::FOG, true);
+	state->tick_environment(t0 + WEATHER_CYCLE_INTERVAL_SEC * 2);
+	TESTEQUALS(state->get_weather() == weather_t::RAIN, true);
+
+	// Stacked with night: night * fog.
+	state->set_day_night_enabled(true);
+	state->set_day_night_params(100.0, 100.0);
+	state->set_weather(weather_t::FOG);
+	auto night = time::time_t::from_double(140.0);
+	TESTEQUALS(state->get_sight_multiplier(night), NIGHT_SIGHT_MULT * WEATHER_FOG_SIGHT_MULT);
+}
+
+void environment_forest_hide() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	TESTEQUALS(state->is_forest_hide_enabled(), false);
+
+	auto observer = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	auto enemy_player = std::make_shared<Player>(player_id_t{1}, db->new_view(), loop);
+	state->add_player(observer);
+	state->add_player(enemy_player);
+
+	auto make_unit = [&](entity_id_t id, player_id_t owner, coord::phys3 pos) {
+		auto entity = std::make_shared<GameEntity>(id);
+		auto position = std::make_shared<component::Position>(loop);
+		position->set_position(t0, pos);
+		entity->add_component(position);
+		auto ownership = std::make_shared<component::Ownership>(loop);
+		ownership->set_owner(t0, owner);
+		entity->add_component(ownership);
+		state->add_game_entity(entity);
+	};
+
+	// Scout at (10,10); enemy at (12,12) — within default sight range 4.
+	make_unit(entity_id_t{1}, player_id_t{0}, coord::phys3{10, 10, 0});
+	make_unit(entity_id_t{2}, player_id_t{1}, coord::phys3{12, 12, 0});
+
+	coord::tile forest_tile{12, 12};
+	state->mark_forest_tile(forest_tile);
+	TESTEQUALS(state->is_forest_tile(forest_tile), true);
+
+	state->refresh_visibility(t0);
+	// Without forest hide, the enemy is fog-visible.
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), true);
+
+	state->set_forest_hide_enabled(true);
+	state->set_forest_hide_threshold(1);
+	// Chebyshev distance from scout (10,10) to enemy (12,12) is 2 > threshold 1.
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), false);
+
+	// Threshold 2 detects the enemy.
+	state->set_forest_hide_threshold(2);
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), true);
+
+	// Own units on forest tiles remain visible to themselves.
+	state->mark_forest_tile(coord::tile{10, 10});
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{1}, t0), true);
+
+	state->unmark_forest_tile(forest_tile);
+	TESTEQUALS(state->is_forest_tile(forest_tile), false);
+	state->clear_forest_tiles();
+	TESTEQUALS(state->is_forest_tile(coord::tile{10, 10}), false);
+}
+
+
 void player_statistics() {
 	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();

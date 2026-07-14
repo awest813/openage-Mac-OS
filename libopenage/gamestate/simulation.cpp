@@ -52,6 +52,7 @@ void GameSimulation::run() {
 		time::time_t current_time = this->time_loop->get_clock()->get_time();
 		auto state = this->game->get_state();
 		this->event_loop->reach_time(current_time, state);
+		state->tick_environment(current_time);
 		state->refresh_visibility(current_time);
 		state->tick_salvage_decay(current_time);
 		state->tick_resource_regen(current_time);
@@ -90,6 +91,25 @@ void GameSimulation::start() {
 		if (bridges == "on" or bridges == "true" or bridges == "1") {
 			this->game->get_state()->set_bridges_enabled(true);
 			log::log(MSG(info) << "Buildable bridges enabled.");
+		}
+
+		auto day_night = this->cvar_manager->get("GAMEPLAY_DAY_NIGHT");
+		if (day_night == "on" or day_night == "true" or day_night == "1") {
+			this->game->get_state()->set_day_night_enabled(true);
+			log::log(MSG(info) << "Day/night cycle enabled.");
+		}
+
+		auto weather = this->cvar_manager->get("GAMEPLAY_WEATHER");
+		if (weather == "on" or weather == "true" or weather == "1") {
+			this->game->get_state()->set_weather_enabled(true);
+			log::log(MSG(info) << "Dynamic weather enabled.");
+		}
+
+		auto forest_hide = this->cvar_manager->get("GAMEPLAY_FOREST_HIDE");
+		if (forest_hide == "on" or forest_hide == "true" or forest_hide == "1") {
+			this->game->get_state()->set_forest_hide_enabled(true);
+			this->game->get_state()->rebuild_forest_tiles_from_terrain();
+			log::log(MSG(info) << "Forest hiding enabled.");
 		}
 	}
 

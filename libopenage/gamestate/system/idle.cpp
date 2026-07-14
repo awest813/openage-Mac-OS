@@ -107,7 +107,7 @@ const time::time_t Idle::idle(const std::shared_ptr<gamestate::GameEntity> &enti
 		double dist = (cand_pos - own_pos).length();
 
 		if (dist <= scan_radius) {
-			// Respect fog of war: only auto-attack units the owner can see.
+			// Respect fog / forest-hiding: only auto-attack units the owner can see.
 			if (not state->is_entity_visible(own_owner, cand_id, start_time)) {
 				continue;
 			}

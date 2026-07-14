@@ -202,8 +202,10 @@ const time::time_t Move::move_default(const std::shared_ptr<gamestate::GameEntit
 		double move_time = 0;
 		if (not move_speed->is_infinite_positive()) {
 			auto distance = path_vector.length();
+			// Street tile bonus × weather move multiplier.
 			double speed = move_speed->get()
-			               * state->get_tile_move_speed_multiplier(cur_waypoint.to_tile());
+			               * state->get_tile_move_speed_multiplier(cur_waypoint.to_tile())
+			               * state->get_move_speed_multiplier();
 			if (speed <= 0) {
 				speed = move_speed->get();
 			}
