@@ -982,9 +982,10 @@ void building_cost_and_salvage_spawn() {
 	pos->set_position(t0, coord::phys3{5, 5, 0});
 	state->add_game_entity(building);
 
-	TESTEQUALS(state->get_building_cost(10).has_value(), true);
-	TESTEQUALS(state->get_building_cost(10)->entries.size(), 1);
-	TESTEQUALS(state->get_building_cost(10)->entries[0].amount, 200);
+	auto cost_after = state->get_building_cost(10);
+	TESTEQUALS(cost_after.has_value(), true);
+	TESTEQUALS(cost_after->entries.size(), 1);
+	TESTEQUALS(cost_after->entries[0].amount, 200);
 
 	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
 	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
