@@ -64,6 +64,17 @@ This run mode is supposed to start a main menu or launcher which allows configur
 game. Neither of these are implemented at the moment, so `main` just does the same
 thing as `game`.
 
+On first launch (no converted modpacks), it asks whether to convert assets. Later
+launches skip that prompt. Useful flags on macOS:
+
+```
+bin/run main --source-dir "/path/to/AoE2DE"
+bin/run main --force-convert   # convert again even if modpacks exist
+bin/run main --no-convert      # never convert on launch
+```
+
+`OPENAGE_SOURCE_DIR` / `AGE2DIR` are also honored.
+
 
 ### `test`
 
@@ -79,10 +90,13 @@ subsystems of the engine.
 
 ```
 bin/run convert
+bin/run convert --force --browse          # macOS: Finder folder picker
+bin/run convert --force --source-dir PATH
 ```
 
 Runs the [asset conversion](media_convert.md) subsystem which creates openage modpacks
-from original game installations.
+from original game installations. On macOS, `--browse` opens Finder; typing `browse`
+at the interactive path prompt does the same.
 
 
 ### `convert-file`

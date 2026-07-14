@@ -125,6 +125,42 @@ cd bin && ./run
 
 Try `./run --help` for available options.
 
+## Importing game files (easy path)
+
+openage needs an original AoE install once, then converts it into `assets/converted`.
+
+### Option A — Finder picker
+
+```bash
+./run convert --force --browse
+```
+
+Or during any interactive convert prompt, type `browse` / `b` to open Finder.
+
+### Option B — Point at Steam DE
+
+```bash
+./run main --source-dir "$HOME/Library/Application Support/Steam/steamapps/common/AoE2DE"
+```
+
+### Option C — Environment variable
+
+```bash
+export OPENAGE_SOURCE_DIR="$HOME/Library/Application Support/Steam/steamapps/common/AoE2DE"
+./run main
+```
+
+### Option D — Double-click helper
+
+Copy `packaging/macos/Import Game Assets.command` next to your `run` launcher
+(or run it from the repo after building). Double-click it, or drop a game
+folder onto it. Terminal opens, Finder picks the install, conversion starts.
+
+After a successful convert, later `./run main` launches skip the convert
+prompt. Use `--force-convert` to convert again.
+
+See [doc/media_convert.md](../media_convert.md) for supported editions.
+
 ## Creating documentation
 
 ```bash

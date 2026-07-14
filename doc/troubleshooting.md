@@ -1,5 +1,38 @@
 # Troubleshooting
 
+## macOS — game file import
+
+### Converter asks for a path / I do not want to type it
+
+Use Finder:
+
+```bash
+./run convert --force --browse
+```
+
+Or type `browse` when prompted. You can also set:
+
+```bash
+export OPENAGE_SOURCE_DIR="/path/to/game/install"
+```
+
+### Steam game is on an external drive
+
+Secondary Steam libraries are discovered via `libraryfolders.vdf`. Confirm
+the library appears under Steam → Settings → Storage, then re-run convert.
+You can always `--browse` to the `steamapps/common/<Game>` folder manually.
+
+### Classic Age of Empires II (1999) on Apple Silicon
+
+There is no native Mac port. Install under Wine or CrossOver, then browse to:
+
+`…/drive_c/Program Files (x86)/Microsoft Games/Age of Empires II`
+
+### “EOF, aborting” when double-clicking a launcher
+
+Conversion needs a folder. Use `Import Game Assets.command` or
+`./run convert --force --browse` from Terminal.
+
 ## Windows Installer
 
 ### More than one python installation

@@ -1,4 +1,4 @@
-# Copyright 2015-2024 the openage authors. See copying.md for legal info.
+# Copyright 2015-2026 the openage authors. See copying.md for legal info.
 
 """
 Main engine entry point for openage.
@@ -41,6 +41,19 @@ def init_subparser(cli: ArgumentParser):
         "--window-mode", choices=["fullscreen", "borderless", "windowed"], default="windowed",
         help="Set the window mode")
 
+    cli.add_argument(
+        "--source-dir", default=None,
+        help=("game installation directory to convert from "
+              "(also reads OPENAGE_SOURCE_DIR / AGE2DIR)"))
+
+    cli.add_argument(
+        "--force-convert", action='store_true',
+        help="convert assets even if converted modpacks already exist")
+
+    cli.add_argument(
+        "--no-convert", action='store_true',
+        help="never run asset conversion on launch")
+
 
 def main(args, error):
     """
@@ -60,9 +73,13 @@ def main(args, error):
     from ..convert.service.init.changelog import check_updates
     from ..convert.service.init.modpack_search import enumerate_modpacks, query_modpack
     from ..convert.tool.api_export import export_api
-    from ..convert.tool.subtool.acquire_sourcedir import wanna_convert
+    from ..convert.tool.subtool.acquire_sourcedir import (
+        resolve_source_dir_override,
+        wanna_convert,
+    )
     from ..cppinterface.setup import setup as cpp_interface_setup
     from ..cvar.location import get_config_path
+    from ..util.fslike.directory import CaseIgnoringDirectory
     from ..util.fslike.union import Union
 
     # initialize libopenage
@@ -92,11 +109,34 @@ def main(args, error):
         converted_path.mkdirs()
         export_api(converted_path)
 
-    # check if modpacks need to be converted
-    if wanna_convert():
-        convert_assets(asset_path, args)
+    # Existing converted modpacks? Skip the convert prompt on launch unless
+    # the user forces conversion or supplied an explicit source directory.
+    converted_dir = asset_path / "converted"
+    try:
+        available_modpacks = enumerate_modpacks(converted_dir, exclude={"engine"})
+    except FileNotFoundError:
+        available_modpacks = {}
 
-    available_modpacks = enumerate_modpacks(asset_path / "converted", exclude={"engine"})
+    source_override = resolve_source_dir_override(getattr(args, "source_dir", None))
+    want_convert = False
+    if not args.no_convert:
+        if args.force_convert or source_override:
+            want_convert = True
+        elif not available_modpacks:
+            # First run: always ask (or auto-yes when a source dir is forced above).
+            want_convert = wanna_convert()
+        # else: modpacks already present → skip conversion prompt
+
+    if want_convert:
+        srcdir = None
+        if source_override:
+            srcdir = CaseIgnoringDirectory(source_override).root
+        convert_assets(asset_path, args, srcdir)
+        try:
+            available_modpacks = enumerate_modpacks(converted_dir, exclude={"engine"})
+        except FileNotFoundError:
+            available_modpacks = {}
+
     if len(available_modpacks) == 0:
         info("No modpacks have been found")
         if not args.modpacks:

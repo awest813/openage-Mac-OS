@@ -40,11 +40,35 @@ The game will ask for your AoE II installation folder; examples include:
     /var/run/media/windisk/Program Files (x86)/Steam/SteamApps/common/Age2HD
     ~/.steam/steam/SteamApps/common/Age2HD
     ~/Library/Application Support/Steam/steamapps/common/Age2HD
+    ~/Library/Application Support/Steam/steamapps/common/AoE2DE
 
 Alternatively, if your game installation is not found, you can trigger the conversion manually:
 
 ```
 python3 -m openage convert --force --source-dir /path/to/game/install
 ```
+
+### Easy import on macOS
+
+Several shortcuts avoid typing long Finder paths:
+
+1. **Finder folder picker** during conversion — type `browse` (or `b`) when asked for a path, or run:
+   ```bash
+   ./run convert --force --browse
+   ```
+2. **Environment variable** (works with `main` and `convert`):
+   ```bash
+   export OPENAGE_SOURCE_DIR="$HOME/Library/Application Support/Steam/steamapps/common/AoE2DE"
+   ./run main
+   ```
+3. **Launch with an explicit folder**:
+   ```bash
+   ./run main --source-dir "$HOME/Library/Application Support/Steam/steamapps/common/AoE2DE"
+   ```
+4. **Double-click helper** (portable builds / repo):  
+   `packaging/macos/Import Game Assets.command` — opens Finder, then converts.  
+   You can also drop a game folder onto the `.command` file.
+
+Converted modpacks are remembered; `./run main` will not ask to convert again unless you pass `--force-convert`.
 
 You will find the converted files in `assets/converted`.

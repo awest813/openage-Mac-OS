@@ -36,6 +36,10 @@ def tests_py():
            "test the filesystem abstraction subsystem")
     yield ("openage.default_dirs.test",
            "test macOS/platform directory resolution")
+    yield ("openage.convert.tool.subtool.acquire_sourcedir.test_parse_steam_library_paths",
+           "test Steam libraryfolders.vdf path parsing")
+    yield ("openage.convert.tool.subtool.acquire_sourcedir.test_resolve_source_dir_override",
+           "test OPENAGE_SOURCE_DIR / AGE2DIR override resolution")
     yield "openage.util.threading.test_concurrent_chain"
 
 

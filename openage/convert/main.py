@@ -85,7 +85,12 @@ def convert_assets(
 
     # acquire conversion source directory
     if srcdir is None:
-        srcdir = acquire_conversion_source_dir(args.avail_game_eds, prev_srcdirs)
+        override = getattr(args, "source_dir", None)
+        srcdir = acquire_conversion_source_dir(
+            args.avail_game_eds,
+            prev_srcdirs,
+            source_dir_override=override,
+        )
 
     # Acquire game version info
     args.game_version = get_game_version(srcdir, args.avail_game_eds, args.avail_game_exps)
@@ -170,7 +175,12 @@ def init_subparser(cli: ArgumentParser):
 
     cli.add_argument(
         "--source-dir", default=None,
-        help="source data directory")
+        help=("source data directory "
+              "(also reads OPENAGE_SOURCE_DIR / AGE2DIR)"))
+
+    cli.add_argument(
+        "--browse", action='store_true',
+        help="open a native folder picker to choose --source-dir")
 
     cli.add_argument(
         "--output-dir", default=None,
@@ -259,11 +269,23 @@ def main(args, error):
     from ..cppinterface.setup import setup
     setup(args)
 
+    # Optional Finder / zenity folder picker before conversion.
+    if getattr(args, "browse", False):
+        from .tool.subtool.acquire_sourcedir import pick_directory_native
+        chosen = pick_directory_native()
+        if not chosen:
+            print("No folder selected; aborting.")
+            return 1
+        args.source_dir = chosen
+
     # conversion source
     if args.source_dir is not None:
         srcdir = CaseIgnoringDirectory(args.source_dir).root
     else:
-        srcdir = None
+        # Fall back to OPENAGE_SOURCE_DIR / AGE2DIR when --source-dir omitted.
+        from .tool.subtool.acquire_sourcedir import resolve_source_dir_override
+        override = resolve_source_dir_override(None)
+        srcdir = CaseIgnoringDirectory(override).root if override else None
 
     # mount the config folder at "cfg/"
     from ..cvar.location import get_config_path
