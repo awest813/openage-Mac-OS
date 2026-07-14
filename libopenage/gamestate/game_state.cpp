@@ -61,6 +61,7 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 void GameState::remove_game_entity(entity_id_t id) {
 	this->unregister_street_by_entity(id);
 	this->unregister_bridge_by_entity(id);
+	this->fog_of_war.clear_entity(id);
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
 	this->rally_points.erase(id);
@@ -116,6 +117,7 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 
 	this->unregister_street_by_entity(id);
 	this->unregister_bridge_by_entity(id);
+	this->fog_of_war.clear_entity(id);
 
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
@@ -133,16 +135,21 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	}
 
 	// Release the population space a unit reserved when it was trained.
-	if (is_owned_unit and this->has_player(owner_id)) {
-		int64_t demand = population_demand.value_or(DEFAULT_POPULATION_COST);
+	// Only release when demand was recorded — units without a recorded cost
+	// (e.g. 0-pop or test helpers that never called set_entity_population_demand)
+	// must not invent a phantom DEFAULT_POPULATION_COST debit.
+	if (is_owned_unit and this->has_player(owner_id) and population_demand.has_value()) {
+		int64_t demand = population_demand.value();
 		if (demand > 0) {
 			this->get_player(owner_id)->add_population_demand(time, -demand);
 		}
 	}
 
 	// Remove the population headroom a destroyed building had provided.
-	if (is_building and this->has_player(owner_id)) {
-		int64_t provision = population_provision.value_or(DEFAULT_BUILDING_POPULATION_SPACE);
+	// Only release when provision was recorded at spawn — buildings without
+	// ProvideContingent never raised capacity and must not subtract the default.
+	if (is_building and this->has_player(owner_id) and population_provision.has_value()) {
+		int64_t provision = population_provision.value();
 		if (provision > 0) {
 			this->get_player(owner_id)->add_population_capacity(time, -provision);
 		}
@@ -612,6 +619,15 @@ void GameState::set_street_move_mult(double mult) {
 
 void GameState::register_street_tile(coord::tile tile, entity_id_t building_id) {
 	this->unregister_street_by_entity(building_id);
+	// Evict any previous street owner of this tile so destroy cleanup stays consistent.
+	for (auto it = this->entity_street_tile.begin(); it != this->entity_street_tile.end();) {
+		if (it->second == tile) {
+			it = this->entity_street_tile.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
 	this->street_tiles.insert(tile);
 	this->entity_street_tile.insert_or_assign(building_id, tile);
 }
@@ -648,6 +664,9 @@ bool GameState::can_place_street(coord::tile tile) const {
 	if (this->is_street_tile(tile) or this->is_bridge_tile(tile)) {
 		return false;
 	}
+	if (this->is_tile_occupied(tile)) {
+		return false;
+	}
 	return this->is_land_tile(tile);
 }
 
@@ -661,6 +680,11 @@ bool GameState::is_bridges_enabled() const {
 
 void GameState::register_bridge_tile(coord::tile tile, entity_id_t building_id) {
 	this->unregister_bridge_by_entity(building_id);
+	// Evict any previous bridge owner of this tile.
+	auto existing = this->bridge_tiles.find(tile);
+	if (existing != this->bridge_tiles.end() and existing->second != building_id) {
+		this->entity_bridge_tile.erase(existing->second);
+	}
 	this->bridge_tiles.insert_or_assign(tile, building_id);
 	this->entity_bridge_tile.insert_or_assign(building_id, tile);
 }
@@ -692,6 +716,9 @@ bool GameState::can_place_bridge(coord::tile tile) const {
 		return false;
 	}
 	if (this->is_bridge_tile(tile) or this->is_street_tile(tile)) {
+		return false;
+	}
+	if (this->is_tile_occupied(tile)) {
 		return false;
 	}
 	// Without Water path grids (unit tests), allow placement so lifecycle

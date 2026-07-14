@@ -147,6 +147,9 @@ const time::time_t Guard::guard_command(
 			double candidate_dist = to_candidate.length();
 
 			if (candidate_dist <= max_range) {
+				if (not state->is_entity_visible(own_owner, candidate_id, start_time)) {
+					continue;
+				}
 				found_enemy = candidate_id;
 				enemy_found = true;
 				break;

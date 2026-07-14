@@ -340,7 +340,7 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3.12 \
       -DDOWNLOAD_NYAN=YES -G Ninja ..
 cmake --build . --parallel "$(nproc)"
-./run test -a          # all 60 tests pass (exit 0)
+./run test -a          # all registered C++/Python tests pass (exit 0)
 ```
 
 Notes:
@@ -351,6 +351,25 @@ Notes:
   base object (it builds with no pathfinding grids) so gamestate unit tests can
   construct a `Map` without loading the full nyan API. This fixed an abort in the
   `fog_tile_texture` test that previously took down the whole `./run test -a` run.
+
+### Audit & Polish (gameplay)
+
+A correctness pass over Phase 1–3 fixed several leaks and combat/placement holes:
+
+- [x] **Population release only when recorded** — destroying a building/unit no
+  longer invents `DEFAULT_BUILDING_POPULATION_SPACE` / `DEFAULT_POPULATION_COST`
+  when spawn never recorded provision/demand. Test: `population_no_phantom_release`.
+- [x] **Auto-attack / attack-move / guard / patrol respect fog** — enemy scans
+  gate on `is_entity_visible` so units cannot acquire targets outside LOS.
+- [x] **Street/bridge spawn re-validation** — `SpawnProductionHandler` re-runs
+  `can_place_*` before registering tiles (construction race / feature toggle).
+- [x] **Street/bridge register overwrite** — registering a tile evicts the prior
+  owner so destroy cleanup cannot clear a still-active registration. Test:
+  `street_tile_overwrite`.
+- [x] **Fog last-known cleanup** — `FogOfWar::clear_entity` runs on both
+  `remove_game_entity` overloads. Test: `fog_last_known_cleared_on_remove`.
+- [x] **Placement vs occupancy** — `can_place_street` / `can_place_bridge` reject
+  tiles already occupied by mobile units.
 
 ## Implementation Notes
 

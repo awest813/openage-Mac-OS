@@ -183,12 +183,28 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 		}
 
 		// Opt-in street / bridge registration (Phase 3.3).
+		// Re-validate at spawn time — another building may have claimed the
+		// tile (or the feature may have been toggled) during construction.
 		const coord::tile spawn_tile = spawn_pos.to_tile();
 		if (gstate->is_streets_enabled() and api::is_street_building(nyan_entity)) {
-			gstate->register_street_tile(spawn_tile, entity->get_id());
+			if (gstate->can_place_street(spawn_tile)) {
+				gstate->register_street_tile(spawn_tile, entity->get_id());
+			}
+			else {
+				log::log(MSG(warn) << "Street " << nyan_entity
+				                   << " spawned at " << spawn_tile
+				                   << " but tile is no longer placeable; skipping registration.");
+			}
 		}
 		else if (gstate->is_bridges_enabled() and api::is_bridge_building(nyan_entity)) {
-			gstate->register_bridge_tile(spawn_tile, entity->get_id());
+			if (gstate->can_place_bridge(spawn_tile)) {
+				gstate->register_bridge_tile(spawn_tile, entity->get_id());
+			}
+			else {
+				log::log(MSG(warn) << "Bridge " << nyan_entity
+				                   << " spawned at " << spawn_tile
+				                   << " but tile is no longer placeable; skipping registration.");
+			}
 		}
 	}
 
