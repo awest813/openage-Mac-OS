@@ -462,6 +462,104 @@ public:
 	 */
 	void tick_resource_regen(const time::time_t &time);
 
+	// -----------------------------------------------------------------------
+	// Streets & bridges (Phase 3.3)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Enable or disable street movement bonuses.
+	 */
+	void set_streets_enabled(bool enabled);
+
+	/**
+	 * @return true if street movement bonuses are active.
+	 */
+	bool is_streets_enabled() const;
+
+	/**
+	 * Override the street movement-speed multiplier (must be > 0).
+	 */
+	void set_street_move_mult(double mult);
+
+	/**
+	 * Register a street tile owned by a building entity.
+	 */
+	void register_street_tile(coord::tile tile, entity_id_t building_id);
+
+	/**
+	 * Unregister a street tile (by tile or by building entity).
+	 */
+	void unregister_street_tile(coord::tile tile);
+	void unregister_street_by_entity(entity_id_t building_id);
+
+	/**
+	 * @return true if \p tile has a street.
+	 */
+	bool is_street_tile(coord::tile tile) const;
+
+	/**
+	 * @return true if a street may be placed on \p tile (feature on, free tile).
+	 *         When Land/Water grids exist, also requires a land tile.
+	 */
+	bool can_place_street(coord::tile tile) const;
+
+	/**
+	 * Enable or disable buildable bridges.
+	 */
+	void set_bridges_enabled(bool enabled);
+
+	/**
+	 * @return true if bridges are active.
+	 */
+	bool is_bridges_enabled() const;
+
+	/**
+	 * Register a bridge tile owned by a building entity.
+	 */
+	void register_bridge_tile(coord::tile tile, entity_id_t building_id);
+
+	/**
+	 * Unregister a bridge tile (by tile or by building entity).
+	 */
+	void unregister_bridge_tile(coord::tile tile);
+	void unregister_bridge_by_entity(entity_id_t building_id);
+
+	/**
+	 * @return true if \p tile has a bridge.
+	 */
+	bool is_bridge_tile(coord::tile tile) const;
+
+	/**
+	 * @return true if a bridge may be placed on \p tile (feature on, free tile).
+	 *         When Land/Water grids exist, also requires a water tile.
+	 */
+	bool can_place_bridge(coord::tile tile) const;
+
+	/**
+	 * @return true if \p tile is land-passable on the Land path grid.
+	 *         Returns true when no Land grid is available (tests without PathType).
+	 */
+	bool is_land_tile(coord::tile tile) const;
+
+	/**
+	 * @return true if \p tile is water-passable on the Water path grid
+	 *         (and land-impassable when a Land grid exists).
+	 *         Returns false when no Water grid is available.
+	 */
+	bool is_water_tile(coord::tile tile) const;
+
+	/**
+	 * Movement-speed multiplier for travelling onto \p tile (streets × 1.0 default).
+	 */
+	double get_tile_move_speed_multiplier(coord::tile tile) const;
+
+	/**
+	 * Overlay bridge path costs on \p grid_id (Land → passable, Water → impassable).
+	 *
+	 * Call after \p Map::restore_sector_costs / hazard overlays each path query.
+	 */
+	void apply_bridge_path_costs(path::grid_id_t grid_id, const time::time_t &time);
+
 	/**
 	 * Complete a scheduled deconstruction: spawn salvage at \p position and remove
 	 * the building if it still exists (e.g. not destroyed by combat in the meantime).
@@ -770,6 +868,41 @@ private:
 	 * Resource units restored per regeneration step.
 	 */
 	int64_t forest_regen_amount = FOREST_REGEN_AMOUNT;
+
+	/**
+	 * Whether street movement bonuses are active.
+	 */
+	bool streets_enabled = STREETS_ENABLED_DEFAULT;
+
+	/**
+	 * Movement-speed multiplier on street tiles.
+	 */
+	double street_move_mult = STREET_MOVE_MULT;
+
+	/**
+	 * Tiles that currently have a street building.
+	 */
+	std::unordered_set<coord::tile> street_tiles;
+
+	/**
+	 * Street building entity → tile (for cleanup on destroy).
+	 */
+	std::unordered_map<entity_id_t, coord::tile> entity_street_tile;
+
+	/**
+	 * Whether buildable bridges are active.
+	 */
+	bool bridges_enabled = BRIDGES_ENABLED_DEFAULT;
+
+	/**
+	 * Bridge tile → building entity id.
+	 */
+	std::unordered_map<coord::tile, entity_id_t> bridge_tiles;
+
+	/**
+	 * Bridge building entity → tile (for cleanup on destroy).
+	 */
+	std::unordered_map<entity_id_t, coord::tile> entity_bridge_tile;
 
 	/**
 	 * Fog-of-war state for all players.

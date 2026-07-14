@@ -135,6 +135,7 @@ const time::time_t Move::move_default(const std::shared_ptr<gamestate::GameEntit
 
 	map->restore_sector_costs(grid_id, start_time);
 	state->apply_hazard_path_costs(owner_id, grid_id, start_time);
+	state->apply_bridge_path_costs(grid_id, start_time);
 	auto waypoints = find_path(pathfinder, grid_id, current_pos, destination, start_time);
 	map->restore_sector_costs(grid_id, start_time);
 
@@ -201,7 +202,12 @@ const time::time_t Move::move_default(const std::shared_ptr<gamestate::GameEntit
 		double move_time = 0;
 		if (not move_speed->is_infinite_positive()) {
 			auto distance = path_vector.length();
-			move_time = distance / move_speed->get();
+			double speed = move_speed->get()
+			               * state->get_tile_move_speed_multiplier(cur_waypoint.to_tile());
+			if (speed <= 0) {
+				speed = move_speed->get();
+			}
+			move_time = distance / speed;
 		}
 		total_time += move_time;
 

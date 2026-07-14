@@ -35,6 +35,7 @@
 #include "event/send_command.h"
 #include "api/creatable.h"
 #include "api/population.h"
+#include "api/building_kind.h"
 #include "fog_of_war.h"
 #include "game_entity.h"
 #include "game_state.h"
@@ -1132,6 +1133,10 @@ void entity_population_tracking() {
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
+	// remove_game_entity may fire defeat events when the last building dies.
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
 	auto view = db->new_view();
 	auto player = std::make_shared<Player>(0, view, loop);
 	state->add_player(player);
@@ -1224,6 +1229,103 @@ void resource_node_regen() {
 	state->register_resource_node(2, 100, t0);
 	state->tick_resource_regen(t0 + FOREST_REGEN_INTERVAL_SEC * 10);
 	TESTEQUALS(state->is_resource_node(2), true);
+}
+
+void streets_move_speed_multiplier() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	coord::tile street{5, 5};
+	coord::tile plain{6, 6};
+
+	TESTEQUALS(state->is_streets_enabled(), false);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(street), 1.0);
+
+	state->set_streets_enabled(true);
+	state->register_street_tile(street, entity_id_t{42});
+	TESTEQUALS(state->is_street_tile(street), true);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(street), STREET_MOVE_MULT);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(plain), 1.0);
+
+	state->set_street_move_mult(1.5);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(street), 1.5);
+
+	state->set_streets_enabled(false);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(street), 1.0);
+}
+
+void streets_lifecycle() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	state->set_streets_enabled(true);
+	TESTEQUALS(state->can_place_street(coord::tile{3, 3}), true);
+
+	auto building = std::make_shared<GameEntity>(7);
+	auto ownership = std::make_shared<component::Ownership>(loop);
+	ownership->set_owner(t0, player_id_t{0});
+	building->add_component(ownership);
+	state->add_game_entity(building);
+
+	auto player = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(player);
+
+	state->register_street_tile(coord::tile{3, 3}, 7);
+	TESTEQUALS(state->is_street_tile(coord::tile{3, 3}), true);
+	TESTEQUALS(state->can_place_street(coord::tile{3, 3}), false);
+
+	state->remove_game_entity(7, t0);
+	TESTEQUALS(state->is_street_tile(coord::tile{3, 3}), false);
+}
+
+void bridges_lifecycle() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	TESTEQUALS(state->is_bridges_enabled(), false);
+	TESTEQUALS(state->can_place_bridge(coord::tile{2, 2}), false);
+
+	state->set_bridges_enabled(true);
+	TESTEQUALS(state->can_place_bridge(coord::tile{2, 2}), true);
+
+	auto player = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(player);
+
+	auto building = std::make_shared<GameEntity>(9);
+	auto ownership = std::make_shared<component::Ownership>(loop);
+	ownership->set_owner(t0, player_id_t{0});
+	building->add_component(ownership);
+	state->add_game_entity(building);
+
+	state->register_bridge_tile(coord::tile{2, 2}, 9);
+	TESTEQUALS(state->is_bridge_tile(coord::tile{2, 2}), true);
+	TESTEQUALS(state->can_place_bridge(coord::tile{2, 2}), false);
+	TESTEQUALS(state->can_place_street(coord::tile{2, 2}), false);
+
+	// Bridge overlay is a no-op without Land/Water grids.
+	state->apply_bridge_path_costs(path::grid_id_t{0}, t0);
+
+	state->remove_game_entity(9, t0);
+	TESTEQUALS(state->is_bridge_tile(coord::tile{2, 2}), false);
+}
+
+void building_kind_helpers() {
+	TESTEQUALS(api::is_street_building("test.building.Street"), true);
+	TESTEQUALS(api::is_street_building("aoe2_base.data.building.road.Road"), true);
+	TESTEQUALS(api::is_street_building("test.building.House"), false);
+	TESTEQUALS(api::is_bridge_building("test.building.WoodenBridge"), true);
+	TESTEQUALS(api::is_bridge_building("test.building.Barracks"), false);
 }
 
 void player_statistics() {

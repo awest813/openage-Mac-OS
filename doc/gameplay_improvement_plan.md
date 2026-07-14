@@ -295,8 +295,22 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 
 ### 3.3 New Buildings
 
-- [ ] Bridges: buildable over water, block ships, allow land units
-- [ ] Streets: increase movement speed for units travelling over them
+**Status:** ✅ Complete (opt-in; vanilla defaults preserved)
+
+- [x] **Streets** — opt-in via `GAMEPLAY_STREETS` (`cfg/gameplay.oac`, default
+  off). Street buildings (fqon contains `"street"` / `"road"`) register their
+  tile on spawn; `Move::move_default` applies `STREET_MOVE_MULT` (default 1.25)
+  via `GameState::get_tile_move_speed_multiplier` per waypoint segment. Placement
+  requires a free land tile (`can_place_street`). Destroying the building clears
+  the registration. Tests: `streets_move_speed_multiplier`, `streets_lifecycle`,
+  `building_kind_helpers`.
+- [x] **Bridges** — opt-in via `GAMEPLAY_BRIDGES`. Bridge buildings (fqon contains
+  `"bridge"`) register their tile on spawn. Each path query re-applies bridge
+  costs after `restore_sector_costs` / hazards: Land grid → `COST_MIN`, Water
+  grid → `COST_IMPASSABLE` (`apply_bridge_path_costs`). Placement requires a free
+  water tile when Water/Land grids exist. Tests: `bridges_lifecycle`.
+  *Note:* cross-sector portal refresh after a bridge opens a new land corridor
+  is deferred; same-sector crossings work with the cost overlay.
 
 ### 3.4 AI Improvements
 

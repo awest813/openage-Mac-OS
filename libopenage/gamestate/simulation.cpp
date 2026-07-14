@@ -79,6 +79,18 @@ void GameSimulation::start() {
 			this->game->get_state()->set_forest_regen_enabled(true);
 			log::log(MSG(info) << "Resource node regeneration enabled.");
 		}
+
+		auto streets = this->cvar_manager->get("GAMEPLAY_STREETS");
+		if (streets == "on" or streets == "true" or streets == "1") {
+			this->game->get_state()->set_streets_enabled(true);
+			log::log(MSG(info) << "Street movement bonus enabled.");
+		}
+
+		auto bridges = this->cvar_manager->get("GAMEPLAY_BRIDGES");
+		if (bridges == "on" or bridges == "true" or bridges == "1") {
+			this->game->get_state()->set_bridges_enabled(true);
+			log::log(MSG(info) << "Buildable bridges enabled.");
+		}
 	}
 
 	this->running = true;

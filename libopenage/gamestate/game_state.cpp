@@ -59,6 +59,8 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 }
 
 void GameState::remove_game_entity(entity_id_t id) {
+	this->unregister_street_by_entity(id);
+	this->unregister_bridge_by_entity(id);
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
 	this->rally_points.erase(id);
@@ -111,6 +113,9 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 
 	population_demand = this->get_entity_population_demand(id);
 	population_provision = this->get_entity_population_provision(id);
+
+	this->unregister_street_by_entity(id);
+	this->unregister_bridge_by_entity(id);
 
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
@@ -588,6 +593,180 @@ void GameState::tick_resource_regen(const time::time_t &time) {
 
 	for (entity_id_t id : stale) {
 		this->resource_nodes.erase(id);
+	}
+}
+
+void GameState::set_streets_enabled(bool enabled) {
+	this->streets_enabled = enabled;
+}
+
+bool GameState::is_streets_enabled() const {
+	return this->streets_enabled;
+}
+
+void GameState::set_street_move_mult(double mult) {
+	if (mult > 0) {
+		this->street_move_mult = mult;
+	}
+}
+
+void GameState::register_street_tile(coord::tile tile, entity_id_t building_id) {
+	this->unregister_street_by_entity(building_id);
+	this->street_tiles.insert(tile);
+	this->entity_street_tile.insert_or_assign(building_id, tile);
+}
+
+void GameState::unregister_street_tile(coord::tile tile) {
+	this->street_tiles.erase(tile);
+	for (auto it = this->entity_street_tile.begin(); it != this->entity_street_tile.end();) {
+		if (it->second == tile) {
+			it = this->entity_street_tile.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+}
+
+void GameState::unregister_street_by_entity(entity_id_t building_id) {
+	auto it = this->entity_street_tile.find(building_id);
+	if (it == this->entity_street_tile.end()) {
+		return;
+	}
+	this->street_tiles.erase(it->second);
+	this->entity_street_tile.erase(it);
+}
+
+bool GameState::is_street_tile(coord::tile tile) const {
+	return this->street_tiles.contains(tile);
+}
+
+bool GameState::can_place_street(coord::tile tile) const {
+	if (not this->streets_enabled) {
+		return false;
+	}
+	if (this->is_street_tile(tile) or this->is_bridge_tile(tile)) {
+		return false;
+	}
+	return this->is_land_tile(tile);
+}
+
+void GameState::set_bridges_enabled(bool enabled) {
+	this->bridges_enabled = enabled;
+}
+
+bool GameState::is_bridges_enabled() const {
+	return this->bridges_enabled;
+}
+
+void GameState::register_bridge_tile(coord::tile tile, entity_id_t building_id) {
+	this->unregister_bridge_by_entity(building_id);
+	this->bridge_tiles.insert_or_assign(tile, building_id);
+	this->entity_bridge_tile.insert_or_assign(building_id, tile);
+}
+
+void GameState::unregister_bridge_tile(coord::tile tile) {
+	auto it = this->bridge_tiles.find(tile);
+	if (it == this->bridge_tiles.end()) {
+		return;
+	}
+	this->entity_bridge_tile.erase(it->second);
+	this->bridge_tiles.erase(it);
+}
+
+void GameState::unregister_bridge_by_entity(entity_id_t building_id) {
+	auto it = this->entity_bridge_tile.find(building_id);
+	if (it == this->entity_bridge_tile.end()) {
+		return;
+	}
+	this->bridge_tiles.erase(it->second);
+	this->entity_bridge_tile.erase(it);
+}
+
+bool GameState::is_bridge_tile(coord::tile tile) const {
+	return this->bridge_tiles.contains(tile);
+}
+
+bool GameState::can_place_bridge(coord::tile tile) const {
+	if (not this->bridges_enabled) {
+		return false;
+	}
+	if (this->is_bridge_tile(tile) or this->is_street_tile(tile)) {
+		return false;
+	}
+	// Without Water path grids (unit tests), allow placement so lifecycle
+	// tests can exercise registration without a full nyan PathType setup.
+	if (this->map == nullptr) {
+		return true;
+	}
+	auto water = this->map->find_grid_by_suffix("Water");
+	if (not water.has_value()) {
+		return true;
+	}
+	return this->is_water_tile(tile);
+}
+
+bool GameState::is_land_tile(coord::tile tile) const {
+	if (this->map == nullptr) {
+		return true;
+	}
+	auto land = this->map->find_grid_by_suffix("Land");
+	if (not land.has_value()) {
+		return true;
+	}
+	auto cost = this->map->get_tile_cost(land.value(), tile);
+	if (not cost.has_value()) {
+		return false;
+	}
+	return cost.value() != path::COST_IMPASSABLE;
+}
+
+bool GameState::is_water_tile(coord::tile tile) const {
+	if (this->map == nullptr) {
+		return false;
+	}
+	auto water = this->map->find_grid_by_suffix("Water");
+	if (not water.has_value()) {
+		return false;
+	}
+	auto water_cost = this->map->get_tile_cost(water.value(), tile);
+	if (not water_cost.has_value() or water_cost.value() == path::COST_IMPASSABLE) {
+		return false;
+	}
+	auto land = this->map->find_grid_by_suffix("Land");
+	if (land.has_value()) {
+		auto land_cost = this->map->get_tile_cost(land.value(), tile);
+		if (land_cost.has_value() and land_cost.value() != path::COST_IMPASSABLE) {
+			return false;
+		}
+	}
+	return true;
+}
+
+double GameState::get_tile_move_speed_multiplier(coord::tile tile) const {
+	if (this->streets_enabled and this->is_street_tile(tile)) {
+		return this->street_move_mult;
+	}
+	return 1.0;
+}
+
+void GameState::apply_bridge_path_costs(path::grid_id_t grid_id, const time::time_t &time) {
+	if (not this->bridges_enabled or this->bridge_tiles.empty() or this->map == nullptr) {
+		return;
+	}
+
+	const auto kind = this->map->classify_grid(grid_id);
+	if (kind == path_grid_kind_t::OTHER) {
+		return;
+	}
+
+	const path::cost_t cost = (kind == path_grid_kind_t::LAND)
+	                              ? path::COST_MIN
+	                              : path::COST_IMPASSABLE;
+
+	for (const auto &[tile, building_id] : this->bridge_tiles) {
+		(void) building_id;
+		this->map->set_tile_cost(grid_id, tile, cost, time);
 	}
 }
 
