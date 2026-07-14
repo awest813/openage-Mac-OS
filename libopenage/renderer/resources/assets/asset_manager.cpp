@@ -46,6 +46,8 @@ const std::shared_ptr<Animation2dInfo> &AssetManager::request_animation(const ut
 		if (this->placeholder_animation) {
 			log::log(MSG(warn) << "Failed to load animation file from: " << path
 			                   << " - using placeholder instead.");
+			// Cache the placeholder under the failed path so we do not re-parse.
+			this->cache->add_animation(path, (*this->placeholder_animation).second);
 			return (*this->placeholder_animation).second;
 		}
 		else {
@@ -156,6 +158,7 @@ const std::shared_ptr<Texture2dInfo> &AssetManager::request_texture(const util::
 		if (this->placeholder_texture) {
 			log::log(MSG(warn) << "Failed to load texture file from: " << path
 			                   << " - using placeholder instead.");
+			this->cache->add_texture(path, (*this->placeholder_texture).second);
 			return (*this->placeholder_texture).second;
 		}
 		else {

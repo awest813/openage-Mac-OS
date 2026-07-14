@@ -122,6 +122,9 @@ void WorldObject::update_uniforms(const time::time_t &time) {
 
 	// Animation information
 	auto [last_update, animation_info] = this->animation_info.frame(time);
+	if (not animation_info) {
+		return;
+	}
 
 	for (size_t layer_idx = 0; layer_idx < this->layer_uniforms.size(); ++layer_idx) {
 		auto &layer_unifs = this->layer_uniforms.at(layer_idx);
@@ -157,10 +160,16 @@ void WorldObject::update_uniforms(const time::time_t &time) {
 
 		// Index of texture and subtexture where the frame's pixels are located
 		auto &frame_info = angle->get_frame(frame_idx);
+		if (not frame_info) {
+			continue;
+		}
 		auto tex_idx = frame_info->get_texture_idx();
 		auto subtex_idx = frame_info->get_subtexture_idx();
 
 		auto &tex_info = animation_info->get_texture(tex_idx);
+		if (not tex_info || not tex_info->get_image_path().has_value()) {
+			continue;
+		}
 		auto &tex_manager = this->asset_manager->get_texture_manager();
 		auto &texture = tex_manager->request(tex_info->get_image_path().value());
 		layer_unifs->update(this->tex, texture);
@@ -256,6 +265,9 @@ bool WorldObject::is_visible(const camera::Frustum2d &frustum,
 	static const Eigen::Matrix4f model_matrix = this->get_model_matrix();
 	Eigen::Vector3f current_pos = this->position.get(time).to_world_space();
 	auto animation_info = this->animation_info.get(time);
+	if (not animation_info) {
+		return false;
+	}
 	return frustum.in_frustum(current_pos,
 	                          model_matrix,
 	                          animation_info->get_scalefactor(),

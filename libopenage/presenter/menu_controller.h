@@ -36,7 +36,7 @@ namespace presenter {
 class MenuController : public QObject {
 	Q_OBJECT
 
-	Q_PROPERTY(QString screen READ screen WRITE set_screen NOTIFY screenChanged)
+	Q_PROPERTY(QString screen READ screen NOTIFY screenChanged)
 	Q_PROPERTY(bool paused READ paused NOTIFY pausedChanged)
 	Q_PROPERTY(bool inGame READ in_game NOTIFY inGameChanged)
 	Q_PROPERTY(bool gameOver READ game_over NOTIFY gameOverChanged)
@@ -46,6 +46,7 @@ class MenuController : public QObject {
 	Q_PROPERTY(qint64 unitsLost READ units_lost NOTIFY statsChanged)
 	Q_PROPERTY(qint64 resourcesGathered READ resources_gathered NOTIFY statsChanged)
 	Q_PROPERTY(double apm READ apm NOTIFY statsChanged)
+	Q_PROPERTY(bool blocksGameInput READ blocks_game_input NOTIFY screenChanged)
 
 public:
 	MenuController(QObject *parent = nullptr);
@@ -73,6 +74,11 @@ public:
 	qint64 units_lost() const;
 	qint64 resources_gathered() const;
 	double apm() const;
+
+	/**
+	 * True when the active menu screen should absorb game/camera input.
+	 */
+	bool blocks_game_input() const;
 
 public slots:
 	/** Leave the main menu and enter the running game screen. */

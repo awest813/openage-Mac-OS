@@ -243,21 +243,16 @@ TerrainInfo parse_terrain_file(const util::Path &path,
 	for (auto layer : layers) {
 		std::vector<std::shared_ptr<TerrainFrameInfo>> frame_infos;
 		for (auto frame : frames[layer.layer_id]) {
-			if (frame.index > frame_infos.size()) {
-				// set empty frames if an index is missing
-				for (size_t i = frame_infos.size() - 1; i < frame.index; ++i) {
-					frame_infos.push_back(nullptr);
-				}
+			// Pad missing indices so frame.index lands at the correct slot.
+			while (frame_infos.size() < frame.index) {
+				frame_infos.push_back(nullptr);
 			}
 			frame_infos.push_back(std::make_shared<TerrainFrameInfo>(
 				texture_id_map[frame.texture_id],
 				frame.subtex_id));
 		}
-		if (frame_infos.size() < largest_frame_idx) {
-			// insert empty frames at the end if an indices are missing
-			for (size_t i = frame_infos.size() - 1; i < largest_frame_idx; ++i) {
-				frame_infos.push_back(nullptr);
-			}
+		while (frame_infos.size() <= largest_frame_idx) {
+			frame_infos.push_back(nullptr);
 		}
 		layer_infos.emplace_back(frame_infos,
 		                         layer.mode,

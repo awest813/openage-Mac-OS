@@ -81,6 +81,10 @@ double MenuController::apm() const {
 	return this->stat_apm;
 }
 
+bool MenuController::blocks_game_input() const {
+	return this->current_screen != QStringLiteral("game");
+}
+
 void MenuController::set_paused(bool paused) {
 	if (this->is_paused == paused) {
 		return;

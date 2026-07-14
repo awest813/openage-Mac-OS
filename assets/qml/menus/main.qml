@@ -8,17 +8,13 @@ import yay.sfttech.livereload 1.0
  * pause overlay, and after-game statistics.
  *
  * Expects context property `menuController` (presenter::MenuController).
+ *
+ * Escape is handled in the presenter window callback (not here) so pause
+ * is not toggled twice via the QML focus path.
  */
 Item {
 	id: root
 	focus: true
-
-	Keys.onPressed: function(event) {
-		if (event.key === Qt.Key_Escape) {
-			menuController.togglePause()
-			event.accepted = true
-		}
-	}
 
 	MainMenu {
 		anchors.fill: parent

@@ -31,6 +31,7 @@
 #include "renderer/render_pass.h"
 #include "renderer/render_target.h"
 #include "renderer/resources/assets/asset_manager.h"
+#include "renderer/resources/assets/texture_manager.h"
 #include "renderer/resources/shader_source.h"
 #include "renderer/resources/texture_info.h"
 #include "renderer/stages/camera/manager.h"
@@ -114,8 +115,12 @@ void Presenter::init_graphics(const renderer::window_settings &window_settings) 
 	this->asset_manager = std::make_shared<renderer::resources::AssetManager>(
 		this->renderer,
 		this->root_dir / "assets" / "converted");
-	auto missing_tex = this->root_dir / "assets" / "test" / "textures" / "test_missing.sprite";
-	this->asset_manager->set_placeholder_animation(missing_tex);
+	auto missing_sprite = this->root_dir / "assets" / "test" / "textures" / "test_missing.sprite";
+	auto missing_texture = this->root_dir / "assets" / "test" / "textures" / "test_missing.texture";
+	auto missing_png = this->root_dir / "assets" / "test" / "textures" / "missing.png";
+	this->asset_manager->set_placeholder_animation(missing_sprite);
+	this->asset_manager->set_placeholder_texture(missing_texture);
+	this->asset_manager->get_texture_manager()->set_placeholder(missing_png);
 
 	// Camera
 	this->camera = std::make_shared<renderer::camera::Camera>(this->renderer, this->window->get_size());
@@ -248,16 +253,28 @@ void Presenter::init_input() {
 			}
 			return;
 		}
+		if (this->menu_controller && this->menu_controller->blocks_game_input()) {
+			return;
+		}
 		this->input_manager->process(ev);
 	});
 	this->window->add_mouse_button_callback([&](const QMouseEvent &ev) {
+		if (this->menu_controller && this->menu_controller->blocks_game_input()) {
+			return;
+		}
 		this->input_manager->process(ev);
 	});
 	this->window->add_mouse_move_callback([&](const QMouseEvent &ev) {
 		this->input_manager->set_mouse(ev.position().x(), ev.position().y());
+		if (this->menu_controller && this->menu_controller->blocks_game_input()) {
+			return;
+		}
 		this->input_manager->process(ev);
 	});
 	this->window->add_mouse_wheel_callback([&](const QWheelEvent &ev) {
+		if (this->menu_controller && this->menu_controller->blocks_game_input()) {
+			return;
+		}
 		this->input_manager->process(ev);
 	});
 
