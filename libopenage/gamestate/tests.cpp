@@ -1132,6 +1132,10 @@ void entity_population_tracking() {
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
+	// remove_game_entity may fire defeat events when the last building dies.
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
 	auto view = db->new_view();
 	auto player = std::make_shared<Player>(0, view, loop);
 	state->add_player(player);
