@@ -11,6 +11,6 @@ Release guide:
 1. Tag the merge commit, something like `git tag -s v0.5.0`. The prefixed `v` is mandatory.
 1. Push the tag to GitHub.
 1. Use the GitHub web interface to publish a release from the tag. Make it look nice, see previous release description. If in doubt, save the draft and have someone else proof read it. Also include the changelog.
-1. The macOS release workflow validates the tag against `openage_version`, builds both supported architectures, and attaches the generated tarballs to the GitHub release automatically once both builds succeed.
+1. The macOS release workflow validates the tag against `openage_version`, builds both supported architectures, packages relocatable tarballs (and DMGs) via `packaging/macos/package_portable.sh`, and attaches them to the GitHub release automatically once both builds succeed.
 1. Windows artifacts are still a manual follow-up for this fork. Plan that packaging work before publishing the release if you need Windows binaries.
     * OPTIONAL: Brag on social media. /r/openage, /r/aoe2 and AoE2 Discords might be the right place to do so.

@@ -31,6 +31,7 @@ find_path(HarfBuzz_INCLUDE_DIR harfbuzz/hb.h
 	PATHS
 		/usr/include
 		/usr/local/include
+		/opt/homebrew/include
 		/sw/include
 		/opt/local/include
 		/usr/freeware/include
@@ -43,6 +44,7 @@ find_library(HarfBuzz_LIBRARY
 	PATHS
 		/usr/lib
 		/usr/local/lib
+		/opt/homebrew/lib
 		/sw
 		/usr/freeware
 )

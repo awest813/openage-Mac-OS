@@ -183,6 +183,26 @@ def get_install_prefixes(args):
     return ret
 
 
+def default_install_prefix():
+    """
+    Default --prefix.
+
+    On macOS, prefer the active Homebrew prefix so Apple Silicon installs
+    land under /opt/homebrew instead of the Intel-only /usr/local.
+    """
+    if sys.platform.startswith('darwin'):
+        try:
+            import subprocess
+            brew_prefix = subprocess.check_output(
+                ['brew', '--prefix'], text=True, stderr=subprocess.DEVNULL
+            ).strip()
+            if brew_prefix:
+                return brew_prefix
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            pass
+    return "/usr/local"
+
+
 def get_macos_options(args):
     """
     Build macOS-specific cmake options for architecture and deployment target.
@@ -220,6 +240,18 @@ def get_macos_options(args):
         ).strip()
         if sdkroot:
             extra_flags.append(f'-DCMAKE_OSX_SYSROOT={sdkroot}')
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+
+    # Point CMake at the arch-appropriate Homebrew tree (/opt/homebrew on
+    # Apple Silicon, /usr/local on Intel) so Find* modules and config packages
+    # resolve without hardcoding either prefix.
+    try:
+        brew_prefix = subprocess.check_output(
+            ['brew', '--prefix'], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        if brew_prefix:
+            extra_flags.append(f'-DCMAKE_PREFIX_PATH={brew_prefix}')
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
 
@@ -450,8 +482,9 @@ def parse_args():
     cli.add_argument("--ldflags", "-l",
                      default=getenv("LDFLAGS"),
                      help="linker flags")
-    cli.add_argument("--prefix", "-p", default="/usr/local",
-                     help="installation directory prefix")
+    cli.add_argument("--prefix", "-p", default=default_install_prefix(),
+                     help="installation directory prefix "
+                          "(macOS default: brew --prefix)")
     cli.add_argument("--py-prefix", default=None,
                      help="python module installation directory prefix")
     cli.add_argument("--dry-run", action='store_true',

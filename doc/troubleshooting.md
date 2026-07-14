@@ -1,5 +1,35 @@
 # Troubleshooting
 
+## macOS
+
+### `incompatible architecture` / wrong Homebrew prefix
+
+Apple Silicon Homebrew lives at `/opt/homebrew`; Intel at `/usr/local`.
+Run `brew --prefix` and make sure `./configure --prefix` and
+`--compiler="$(brew --prefix llvm)/bin/clang++"` use that tree. Mixing
+prefixes produces link or dyld load failures.
+
+### Gatekeeper rejects a downloaded release
+
+Release archives are ad-hoc signed. After extracting:
+
+```bash
+xattr -dr com.apple.quarantine ./openage-*-macos-*
+```
+
+### Converter does not find my Steam library
+
+Games on a secondary Steam library (external disk) are discovered via
+`libraryfolders.vdf`. Confirm Steam lists the library under Settings →
+Storage, then re-run conversion. Classic editions installed through Wine or
+CrossOver are also proposed automatically.
+
+### GUI never appears / window stays black
+
+Qt and Cocoa must run on the main thread. This fork already does that on
+`__APPLE__`. If you changed engine threading, restore presenter-on-main /
+simulation-on-worker for macOS builds.
+
 ## Windows Installer
 
 ### More than one python installation

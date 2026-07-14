@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the openage authors. See copying.md for legal info.
+# Copyright 2020-2026 the openage authors. See copying.md for legal info.
 #
 # pylint: disable=too-many-branches
 
@@ -7,6 +7,7 @@ Acquire the sourcedir for the game that is supposed to be converted.
 """
 from __future__ import annotations
 import platform
+import re
 import typing
 
 from configparser import ConfigParser
@@ -39,6 +40,15 @@ REGISTRY_SUFFIX_AOK = "Age of Empires\\2.0"
 REGISTRY_SUFFIX_TC = "Age of Empires II: The Conquerors Expansion\\1.0"
 
 TRIAL_URL = 'https://archive.org/download/AgeOfEmpiresIiTheConquerorsDemo/Age2XTrial.exe'
+
+# Well-known Steam app folder names under steamapps/common/.
+# Used when expanding libraryfolders.vdf library roots.
+STEAM_COMMON_GAME_DIRS = (
+    "AoEDE",
+    "Age2HD",
+    "AoE2DE",
+    "STAR WARS - Galactic Battlegrounds Saga",
+)
 
 
 def expand_relative_path(path: str) -> AnyStr:
@@ -121,6 +131,144 @@ def query_source_dir(proposals: set[str]) -> AnyStr:
     return sourcedir
 
 
+def parse_steam_library_paths(vdf_text: str) -> list[str]:
+    """
+    Extract Steam library root paths from a libraryfolders.vdf body.
+
+    Supports both the modern nested-block format and the older flat
+    `"N" "/path"` style. Path values are returned as written (not expanded).
+    """
+    paths: list[str] = []
+    seen: set[str] = set()
+
+    def add(path: str) -> None:
+        path = path.replace("\\\\", "\\")
+        if path not in seen:
+            seen.add(path)
+            paths.append(path)
+
+    # Modern format: "path"   "/some/library"
+    for match in re.finditer(
+        r'"path"\s*"([^"]+)"',
+        vdf_text,
+        flags=re.IGNORECASE,
+    ):
+        add(match.group(1))
+
+    # Legacy format: numeric library id key → path value on its own line.
+    # Require the *key* to be digits so values like ContentStatsID="456"
+    # do not create false matches when scanned as `"456" "NextKey"`.
+    for match in re.finditer(
+        r'^\s*"(\d+)"\s*"([^"]+)"',
+        vdf_text,
+        flags=re.MULTILINE,
+    ):
+        path = match.group(2)
+        if "/" not in path and "\\" not in path:
+            continue
+        add(path)
+
+    return paths
+
+
+def steam_libraryfolders_candidates() -> list[Path]:
+    """
+    Return likely libraryfolders.vdf locations for the current platform.
+    """
+    home = Path.home()
+    if platform.system() == "Darwin":
+        return [
+            home / "Library/Application Support/Steam/steamapps/libraryfolders.vdf",
+            home / "Library/Application Support/Steam/config/libraryfolders.vdf",
+        ]
+    if platform.system() == "Linux":
+        return [
+            home / ".steam/steam/steamapps/libraryfolders.vdf",
+            home / ".local/share/Steam/steamapps/libraryfolders.vdf",
+            home / ".steam/root/steamapps/libraryfolders.vdf",
+        ]
+    if platform.system() == "Windows":
+        program_files = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+        return [
+            Path(program_files) / "Steam/steamapps/libraryfolders.vdf",
+            Path(program_files) / "Steam/config/libraryfolders.vdf",
+        ]
+    return []
+
+
+def steam_library_roots() -> list[Path]:
+    """
+    Resolve Steam library root directories from libraryfolders.vdf files.
+    """
+    roots: list[Path] = []
+    seen: set[str] = set()
+
+    for vdf_path in steam_libraryfolders_candidates():
+        if not vdf_path.is_file():
+            continue
+        try:
+            text = vdf_path.read_text(encoding="utf-8", errors="replace")
+        except OSError as error:
+            dbg("could not read %s: %s", vdf_path, error)
+            continue
+
+        for raw in parse_steam_library_paths(text):
+            expanded = Path(expand_relative_path(raw))
+            key = str(expanded)
+            if key in seen:
+                continue
+            if expanded.is_dir():
+                seen.add(key)
+                roots.append(expanded)
+
+    return roots
+
+
+def steam_game_dir_proposals(
+    game_folder_names: typing.Iterable[str] = STEAM_COMMON_GAME_DIRS,
+) -> set[str]:
+    """
+    Propose existing steamapps/common/<game> directories across all Steam libraries.
+    """
+    proposals: set[str] = set()
+    for root in steam_library_roots():
+        common = root / "steamapps" / "common"
+        if not common.is_dir():
+            # Some VDF paths already point at the steam root that contains
+            # steamapps/; others point directly at a library folder that
+            # *is* the parent of steamapps/.
+            common = root / "common"
+        if not common.is_dir():
+            continue
+        for name in game_folder_names:
+            candidate = common / name
+            if candidate.is_dir():
+                proposals.add(str(candidate))
+    return proposals
+
+
+def game_folder_names_from_editions(
+    avail_game_eds: list[GameEdition],
+) -> set[str]:
+    """
+    Collect steamapps/common/<folder> basenames declared in edition install paths.
+    """
+    names: set[str] = set(STEAM_COMMON_GAME_DIRS)
+    for edition in avail_game_eds:
+        for platform_paths in edition.install_paths.values():
+            for path in platform_paths:
+                normalized = path.replace("\\", "/")
+                marker = "/steamapps/common/"
+                if marker not in normalized.lower():
+                    continue
+                # Keep the original casing from the path after the marker.
+                idx = normalized.lower().index(marker) + len(marker)
+                folder = normalized[idx:].strip("/")
+                if folder:
+                    names.add(folder.split("/")[0])
+    return names
+
+
 def acquire_conversion_source_dir(
     avail_game_eds: list[GameEdition],
     prev_srcdir_paths: set[str] = None
@@ -162,7 +310,16 @@ def acquire_conversion_source_dir(
                 if Path(expand_relative_path(candidate)).is_dir():
                     proposals.add(candidate)
 
-        # TODO: Reimplement wine support
+        # Expand proposals across Steam library folders (libraryfolders.vdf).
+        # Essential on macOS/Linux when games live on a secondary drive.
+        folder_names = game_folder_names_from_editions(avail_game_eds)
+        proposals.update(steam_game_dir_proposals(folder_names))
+
+        # Wine / CrossOver prefixes (common on macOS for classic editions).
+        for wine_path in wine_srcdir_proposals():
+            expanded = expand_relative_path(wine_path)
+            if Path(expanded).is_dir():
+                proposals.add(expanded)
 
         use_trial = False
         if len(proposals) == 0:
@@ -255,6 +412,16 @@ def wine_srcdir_proposals() -> Generator[str, None, None]:
     yield "~/.wine/" + STANDARD_PATH_IN_64BIT_WINEPREFIX
     yield "~/.wine/" + STANDARD_PATH_IN_WINEPREFIX_STEAM
 
+    # CrossOver / Game Porting Toolkit-style prefixes on macOS
+    if platform.system() == "Darwin":
+        crossover_root = Path.home() / "Library/Application Support/CrossOver/Bottles"
+        if crossover_root.is_dir():
+            for bottle in crossover_root.iterdir():
+                if bottle.is_dir():
+                    yield str(bottle / STANDARD_PATH_IN_32BIT_WINEPREFIX)
+                    yield str(bottle / STANDARD_PATH_IN_64BIT_WINEPREFIX)
+                    yield str(bottle / STANDARD_PATH_IN_WINEPREFIX_STEAM)
+
     try:
         info("using the wine registry to query an installation location...")
         # get wine registry key of the age installation
@@ -288,3 +455,42 @@ def wine_srcdir_proposals() -> Generator[str, None, None]:
 
     except OSError as error:
         dbg("wine registry extraction failed: %s", error)
+
+
+def test_parse_steam_library_paths():
+    """Unit tests for libraryfolders.vdf path extraction."""
+    modern = '''
+"libraryfolders"
+{
+	"0"
+	{
+		"path"		"/Users/demo/Library/Application Support/Steam"
+		"label"		""
+	}
+	"1"
+	{
+		"path"		"/Volumes/Games/SteamLibrary"
+	}
+}
+'''
+    paths = parse_steam_library_paths(modern)
+    assert paths == [
+        "/Users/demo/Library/Application Support/Steam",
+        "/Volumes/Games/SteamLibrary",
+    ], paths
+
+    legacy = '''
+"LibraryFolders"
+{
+	"TimeNextStatsReport"		"123"
+	"ContentStatsID"		"456"
+	"1"		"/home/user/.local/share/Steam"
+	"2"		"/mnt/ssd/SteamLibrary"
+}
+'''
+    paths = parse_steam_library_paths(legacy)
+    assert "/home/user/.local/share/Steam" in paths
+    assert "/mnt/ssd/SteamLibrary" in paths
+    # Numeric non-path values must be ignored.
+    assert "123" not in paths
+    assert "456" not in paths

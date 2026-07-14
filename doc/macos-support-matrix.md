@@ -114,8 +114,16 @@ universal packages.
 | Artifact type       | Architectures      | Signing                          |
 | ------------------- | ------------------ | -------------------------------- |
 | Development builds  | per-arch           | unsigned                         |
-| Release DMG / tarball | per-arch (arm64, x86_64) | ad-hoc signed (unsigned OK for source builds) |
+| Release DMG / tarball | per-arch (arm64, x86_64) | ad-hoc signed via `packaging/macos/package_portable.sh` |
 | Public release DMG  | arm64 + x86_64     | Developer ID signed (if Apple developer certificate available) |
+
+Release packaging:
+
+1. Bundles non-system dylibs into `lib/` and rewrites install names to
+   `@loader_path` so the tree is relocatable off the CI Homebrew prefix.
+2. Ad-hoc codesigns Mach-O binaries (required for Apple Silicon Gatekeeper
+   to load relocated dylibs).
+3. Emits `openage-<version>-macos-<arch>.tar.gz` and a matching `.dmg`.
 
 Artifacts are named using the scheme:
 
@@ -125,7 +133,11 @@ openage-<version>-macos-<arch>.<ext>
 
 Examples:
 - `openage-0.6.1-macos-arm64.tar.gz`
+- `openage-0.6.1-macos-arm64.dmg`
 - `openage-0.6.1-macos-x86_64.tar.gz`
+
+Install prefix for release/CI builds is `$(brew --prefix)` so Apple Silicon
+artifacts under `/opt/homebrew` and Intel under `/usr/local`.
 
 ---
 
@@ -148,6 +160,12 @@ coverage.  `macos-latest` is **not used** in CI to prevent silent drift.
   platform stack unwinding.
 - Memory and thread sanitizers (`--sanitize=mem` / `--sanitize=thread`) are
   disabled on Apple platforms due to missing kernel support.
+- The GUI presenter runs on the **main thread** on macOS (Cocoa/Qt
+  requirement). Simulation runs on a worker thread. Do not reverse this
+  without re-testing Qt event delivery on Apple Silicon.
+- Portable release bundles still expect a matching macOS major version and
+  may need Developer ID signing for Gatekeeper-friendly distribution outside
+  the `xattr -d com.apple.quarantine` workaround.
 
 ---
 
@@ -155,5 +173,6 @@ coverage.  `macos-latest` is **not used** in CI to prevent silent drift.
 
 | Date       | Change                                                    |
 | ---------- | --------------------------------------------------------- |
+| 2026-07-14 | Phase I: portable release bundling, Steam libraryfolders.vdf, Wine proposals, Apple main-thread GUI, brew prefix defaults |
 | 2026-05-27 | Phase H: native macOS Steam paths, default_dirs tests, release ccache |
 | 2026-05-27 | Initial support matrix for Apple Silicon + Intel fork     |
