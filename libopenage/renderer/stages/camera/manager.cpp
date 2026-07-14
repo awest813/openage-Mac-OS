@@ -64,8 +64,8 @@ void CameraManager::zoom_frame(ZoomDirection direction,
 		}
 		auto viewport = this->camera->get_viewport_size();
 		return coord::input{
-			coord::pixel_t{static_cast<int64_t>(viewport[0] / 2)},
-			coord::pixel_t{static_cast<int64_t>(viewport[1] / 2)}};
+			static_cast<coord::pixel_t>(viewport[0] / 2),
+			static_cast<coord::pixel_t>(viewport[1] / 2)};
 	}();
 
 	switch (direction) {

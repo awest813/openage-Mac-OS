@@ -107,6 +107,10 @@ const time::time_t Idle::idle(const std::shared_ptr<gamestate::GameEntity> &enti
 		double dist = (cand_pos - own_pos).length();
 
 		if (dist <= scan_radius) {
+			// Respect fog / forest-hiding: only auto-attack units the owner can see.
+			if (not state->is_entity_visible(own_owner, cand_id, start_time)) {
+				continue;
+			}
 			// Found an enemy in range — push an ATTACK command.
 			auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
 				entity->get_component(component::component_t::COMMANDQUEUE));

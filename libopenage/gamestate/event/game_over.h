@@ -48,10 +48,12 @@ public:
 /**
  * Handles a "game.game_over" event.
  *
- * Fires when exactly one player remains alive.
+ * Fires when exactly one player remains alive (or none remain).
+ * Match outcome is stored on GameState for the menu summary screen.
  *
  * Params expected:
  *   - "winner_id" (player_id_t) — the winning player
+ *   - "has_winner" (bool) — whether a winner exists
  */
 class GameOverHandler : public openage::event::OnceEventHandler {
 public:

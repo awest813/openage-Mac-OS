@@ -221,7 +221,7 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
   builds an RGBA minimap each visibility tick: fog-based terrain shading plus markers
   (larger symbols for buildings, dots for units, colour by ownership). Test:
   `minimap_texture`. HUD texture display and big-map overlay still pending QML wiring.
-- [~] **After-game statistics (data layer)** — `Player` accumulates per-game
+- [x] **After-game statistics (data layer)** — `Player` accumulates per-game
   stats as time-indexed curves: `units_killed` (credited to the attacker's owner
   in `Attack::attack_default` on a kill), `units_lost` (recorded in
   `GameState::remove_game_entity(id, time)` for any owned unit/building death),
@@ -230,8 +230,16 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
   `get_resource_gathered` / `get_total_resources_gathered`. APM is tracked via
   `record_action` (counted once per player-issued command in `SendCommandHandler`;
   internal re-enqueues bypass it) and queried with `get_actions_issued` /
-  `get_apm`. Test: `player_statistics`. The end-game summary screen (QML) is
-  still pending.
+  `get_apm`. Test: `player_statistics`.
+- [x] **After-game summary + menu shell (QML)** — Presenter loads
+  `assets/qml/menus/main.qml` instead of the test GUI. `MenuController` bridges
+  main / pause / game-over screens to the simulation clock and window. Escape
+  toggles pause (and returns from game-over to the main menu); match end stores
+  `GameState::GameResult` (mutex-guarded) and opens the summary with kills /
+  losses / resources / APM. Menu screens block game/camera input; texture /
+  animation / terrain placeholders are wired so missing assets fall back instead
+  of crashing. The time loop starts paused until **Start**. Full match reset from
+  the menu is still pending (Start re-enters the current simulation).
 - [x] **Zoom towards mouse cursor** — wheel zoom uses `Camera::zoom_towards` anchored
   on the cursor by default (`CameraManager::ZoomAnchor::MOUSE_CURSOR`). Set
   `CAMERA_ZOOM_ANCHOR screen_center` in `cfg/camera.oac` for legacy centre zoom.
@@ -265,9 +273,26 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 
 *(see `doc/ideas/gameplay.md` — Environment section)*
 
-- [ ] Day/night cycle affecting line-of-sight
-- [ ] Weather effects (fog, rain) modifying movement speed and visibility
-- [ ] Forest hiding: a unit in a forest tile is invisible to enemies beyond a threshold
+**Status:** ✅ Complete (opt-in; vanilla defaults preserved)
+
+- [x] **Day/night cycle affecting line-of-sight** — opt-in via `GAMEPLAY_DAY_NIGHT`
+  (`cfg/gameplay.oac`, default off). `GameState` resolves `day_phase_t`
+  (DAY / DUSK / NIGHT / DAWN) from simulation time and applies sight multipliers
+  (`DAY_SIGHT_MULT` / `TWILIGHT_SIGHT_MULT` / `NIGHT_SIGHT_MULT`) in
+  `refresh_visibility`. Day/night lengths configurable via
+  `set_day_night_params`. Test: `environment_day_night`.
+- [x] **Weather effects (fog, rain) modifying movement speed and visibility** —
+  opt-in via `GAMEPLAY_WEATHER`. Cycles CLEAR → FOG → RAIN on
+  `tick_environment` (each simulation tick). Fog and rain reduce sight
+  (stacked with day/night); rain also applies `WEATHER_RAIN_MOVE_MULT` through
+  `GameState::get_move_speed_multiplier` used by `Move::move_default`. Test:
+  `environment_weather`.
+- [x] **Forest hiding** — opt-in via `GAMEPLAY_FOREST_HIDE`. Enemy units on
+  forest tiles are invisible beyond `FOREST_HIDE_THRESHOLD_TILES` (Chebyshev,
+  default 2) even when fog-visible. Forest tiles are marked via
+  `mark_forest_tile` or `rebuild_forest_tiles_from_terrain` (matches "forest"
+  in terrain asset path / fqon). Idle auto-attack respects
+  `is_entity_visible`. Test: `environment_forest_hide`.
 
 ### 3.2 New Resources and Economy
 
@@ -295,8 +320,22 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 
 ### 3.3 New Buildings
 
-- [ ] Bridges: buildable over water, block ships, allow land units
-- [ ] Streets: increase movement speed for units travelling over them
+**Status:** ✅ Complete (opt-in; vanilla defaults preserved)
+
+- [x] **Streets** — opt-in via `GAMEPLAY_STREETS` (`cfg/gameplay.oac`, default
+  off). Street buildings (fqon contains `"street"` / `"road"`) register their
+  tile on spawn; `Move::move_default` applies `STREET_MOVE_MULT` (default 1.25)
+  via `GameState::get_tile_move_speed_multiplier` per waypoint segment. Placement
+  requires a free land tile (`can_place_street`). Destroying the building clears
+  the registration. Tests: `streets_move_speed_multiplier`, `streets_lifecycle`,
+  `building_kind_helpers`.
+- [x] **Bridges** — opt-in via `GAMEPLAY_BRIDGES`. Bridge buildings (fqon contains
+  `"bridge"`) register their tile on spawn. Each path query re-applies bridge
+  costs after `restore_sector_costs` / hazards: Land grid → `COST_MIN`, Water
+  grid → `COST_IMPASSABLE` (`apply_bridge_path_costs`). Placement requires a free
+  water tile when Water/Land grids exist. Tests: `bridges_lifecycle`.
+  *Note:* cross-sector portal refresh after a bridge opens a new land corridor
+  is deferred; same-sector crossings work with the cost overlay.
 
 ### 3.4 AI Improvements
 
@@ -326,7 +365,7 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3.12 \
       -DDOWNLOAD_NYAN=YES -G Ninja ..
 cmake --build . --parallel "$(nproc)"
-./run test -a          # all 60 tests pass (exit 0)
+./run test -a          # all registered C++/Python tests pass (exit 0)
 ```
 
 Notes:
@@ -337,6 +376,25 @@ Notes:
   base object (it builds with no pathfinding grids) so gamestate unit tests can
   construct a `Map` without loading the full nyan API. This fixed an abort in the
   `fog_tile_texture` test that previously took down the whole `./run test -a` run.
+
+### Audit & Polish (gameplay)
+
+A correctness pass over Phase 1–3 fixed several leaks and combat/placement holes:
+
+- [x] **Population release only when recorded** — destroying a building/unit no
+  longer invents `DEFAULT_BUILDING_POPULATION_SPACE` / `DEFAULT_POPULATION_COST`
+  when spawn never recorded provision/demand. Test: `population_no_phantom_release`.
+- [x] **Auto-attack / attack-move / guard / patrol respect fog** — enemy scans
+  gate on `is_entity_visible` so units cannot acquire targets outside LOS.
+- [x] **Street/bridge spawn re-validation** — `SpawnProductionHandler` re-runs
+  `can_place_*` before registering tiles (construction race / feature toggle).
+- [x] **Street/bridge register overwrite** — registering a tile evicts the prior
+  owner so destroy cleanup cannot clear a still-active registration. Test:
+  `street_tile_overwrite`.
+- [x] **Fog last-known cleanup** — `FogOfWar::clear_entity` runs on both
+  `remove_game_entity` overloads. Test: `fog_last_known_cleared_on_remove`.
+- [x] **Placement vs occupancy** — `can_place_street` / `can_place_bridge` reject
+  tiles already occupied by mobile units.
 
 ## Implementation Notes
 

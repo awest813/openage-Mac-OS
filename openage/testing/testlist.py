@@ -36,6 +36,10 @@ def tests_py():
            "test the filesystem abstraction subsystem")
     yield ("openage.default_dirs.test",
            "test macOS/platform directory resolution")
+    yield ("openage.convert.tool.subtool.acquire_sourcedir.test_parse_steam_library_paths",
+           "test Steam libraryfolders.vdf path parsing")
+    yield ("openage.convert.tool.subtool.acquire_sourcedir.test_resolve_source_dir_override",
+           "test OPENAGE_SOURCE_DIR / AGE2DIR override resolution")
     yield "openage.util.threading.test_concurrent_chain"
 
 
@@ -130,6 +134,16 @@ def tests_cpp():
     yield "openage::gamestate::tests::deconstruct_complete_spawns_salvage_if_building_gone"
     yield "openage::gamestate::tests::salvage_decay"
     yield "openage::gamestate::tests::resource_node_regen"
+    yield "openage::gamestate::tests::streets_move_speed_multiplier"
+    yield "openage::gamestate::tests::streets_lifecycle"
+    yield "openage::gamestate::tests::bridges_lifecycle"
+    yield "openage::gamestate::tests::building_kind_helpers"
+    yield "openage::gamestate::tests::population_no_phantom_release"
+    yield "openage::gamestate::tests::street_tile_overwrite"
+    yield "openage::gamestate::tests::fog_last_known_cleared_on_remove"
+    yield "openage::gamestate::tests::environment_day_night"
+    yield "openage::gamestate::tests::environment_weather"
+    yield "openage::gamestate::tests::environment_forest_hide"
     yield "openage::gamestate::tests::player_statistics"
     yield "openage::gamestate::tests::player_resources"
     yield "openage::gamestate::tests::player_population"

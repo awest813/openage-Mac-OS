@@ -62,6 +62,9 @@ Texture2dData::Texture2dData(const util::Path &path) {
 
 	// TODO: use QImageIOHandler to directly create the correct surface format.
 	QImage image{native_path.c_str()};
+	if (image.isNull()) {
+		throw Error{MSG(err) << "Failed to load texture image: " << native_path};
+	}
 	image.convertTo(QImage::Format_RGBA8888);
 
 	log::log(MSG(dbg) << "Texture has been loaded from " << native_path);
@@ -111,6 +114,9 @@ Texture2dData::Texture2dData(Texture2dInfo const &info) :
 
 	// TODO: use QImageIOHandler to directly create the correct surface format.
 	QImage image{native_path.c_str()};
+	if (image.isNull()) {
+		throw Error{MSG(err) << "Failed to load texture image: " << native_path};
+	}
 	image.convertTo(QImage::Format_RGBA8888);
 
 	log::log(MSG(dbg) << "Texture has been loaded from " << native_path);

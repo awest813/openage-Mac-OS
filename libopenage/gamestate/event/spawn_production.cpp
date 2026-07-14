@@ -11,6 +11,7 @@
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
 #include "gamestate/component/types.h"
+#include "gamestate/api/building_kind.h"
 #include "gamestate/api/creatable.h"
 #include "gamestate/api/population.h"
 #include "gamestate/component/api/create.h"
@@ -179,6 +180,31 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 
 		if (cost_record.has_value()) {
 			gstate->set_building_cost(entity->get_id(), cost_record.value());
+		}
+
+		// Opt-in street / bridge registration (Phase 3.3).
+		// Re-validate at spawn time — another building may have claimed the
+		// tile (or the feature may have been toggled) during construction.
+		const coord::tile spawn_tile = spawn_pos.to_tile();
+		if (gstate->is_streets_enabled() and api::is_street_building(nyan_entity)) {
+			if (gstate->can_place_street(spawn_tile)) {
+				gstate->register_street_tile(spawn_tile, entity->get_id());
+			}
+			else {
+				log::log(MSG(warn) << "Street " << nyan_entity
+				                   << " spawned at " << spawn_tile
+				                   << " but tile is no longer placeable; skipping registration.");
+			}
+		}
+		else if (gstate->is_bridges_enabled() and api::is_bridge_building(nyan_entity)) {
+			if (gstate->can_place_bridge(spawn_tile)) {
+				gstate->register_bridge_tile(spawn_tile, entity->get_id());
+			}
+			else {
+				log::log(MSG(warn) << "Bridge " << nyan_entity
+				                   << " spawned at " << spawn_tile
+				                   << " but tile is no longer placeable; skipping registration.");
+			}
 		}
 	}
 

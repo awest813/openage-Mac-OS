@@ -1,10 +1,31 @@
 # Copyright 2026 the openage authors. See copying.md for legal info.
 #
 # Gameplay rule settings. Loaded at engine start alongside keybinds.oac.
+# All extended features default to off so vanilla behaviour is preserved.
 #
 # GAMEPLAY_FOREST_REGEN controls whether harvestable resource nodes (forests,
 # gold, stone, ...) regenerate instead of vanishing once depleted:
 #   off  - resource nodes are removed when fully gathered (original behaviour)
 #   on   - depleted nodes remain and slowly regrow towards their original amount
+#
+# GAMEPLAY_STREETS enables street buildings that speed up units travelling over
+# their tiles (default multiplier 1.25).
+#
+# GAMEPLAY_BRIDGES enables bridge buildings placed on water: land units can
+# cross; ships are blocked on that tile.
+#
+# GAMEPLAY_DAY_NIGHT enables a day/night cycle that shrinks line-of-sight
+# at dusk, night, and dawn.
+#
+# GAMEPLAY_WEATHER enables cycling weather (clear / fog / rain). Fog and rain
+# reduce sight; rain also slows movement.
+#
+# GAMEPLAY_FOREST_HIDE makes enemy units on forest tiles invisible beyond a
+# short detection radius (default 2 tiles Chebyshev).
 
 set GAMEPLAY_FOREST_REGEN off
+set GAMEPLAY_STREETS off
+set GAMEPLAY_BRIDGES off
+set GAMEPLAY_DAY_NIGHT off
+set GAMEPLAY_WEATHER off
+set GAMEPLAY_FOREST_HIDE off

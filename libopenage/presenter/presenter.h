@@ -71,6 +71,8 @@ class AssetManager;
 
 namespace presenter {
 
+class MenuController;
+
 class Presenter {
 public:
 	/**
@@ -175,6 +177,11 @@ protected:
 	 * Qt-based GUI for interface.
 	 */
 	std::shared_ptr<renderer::gui::GUI> gui;
+
+	/**
+	 * Menu / overlay controller exposed to QML.
+	 */
+	std::shared_ptr<MenuController> menu_controller;
 
 	/**
 	 * Camera manager for camera controls.

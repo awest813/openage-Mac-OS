@@ -1,5 +1,6 @@
 add_sources(libopenage
     ability.cpp
+    building_kind.cpp
     creatable.cpp
     population.cpp
     activity.cpp

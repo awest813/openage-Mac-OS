@@ -10,5 +10,5 @@ install(DIRECTORY "qml"
 )
 
 # To show QML files in the QtCreator.
-file(GLOB QML_SRC "qml/*.qml")
+file(GLOB_RECURSE QML_SRC "qml/*.qml")
 add_custom_target(qtcreator-show-qml SOURCES ${QML_SRC})

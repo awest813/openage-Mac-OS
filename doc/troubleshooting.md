@@ -1,5 +1,63 @@
 # Troubleshooting
 
+## macOS
+
+### `incompatible architecture` / wrong Homebrew prefix
+
+Apple Silicon Homebrew lives at `/opt/homebrew`; Intel at `/usr/local`.
+Run `brew --prefix` and make sure `./configure --prefix` and
+`--compiler="$(brew --prefix llvm)/bin/clang++"` use that tree. Mixing
+prefixes produces link or dyld load failures.
+
+### Gatekeeper rejects a downloaded release
+
+Release archives are ad-hoc signed. After extracting:
+
+```bash
+xattr -dr com.apple.quarantine ./openage-*-macos-*
+```
+
+### GUI never appears / window stays black
+
+Qt and Cocoa must run on the main thread. This fork already does that on
+`__APPLE__`. If you changed engine threading, restore presenter-on-main /
+simulation-on-worker for macOS builds.
+
+## macOS — game file import
+
+### Converter asks for a path / I do not want to type it
+
+Use Finder:
+
+```bash
+./run convert --force --browse
+```
+
+Or type `browse` when prompted. You can also set:
+
+```bash
+export OPENAGE_SOURCE_DIR="/path/to/game/install"
+```
+
+### Steam game is on an external drive
+
+Secondary Steam libraries are discovered via `libraryfolders.vdf`. Confirm
+the library appears under Steam → Settings → Storage, then re-run convert.
+You can always `--browse` to the `steamapps/common/<Game>` folder manually.
+Classic editions installed through Wine or CrossOver are also proposed
+automatically.
+
+### Classic Age of Empires II (1999) on Apple Silicon
+
+There is no native Mac port. Install under Wine or CrossOver, then browse to:
+
+`…/drive_c/Program Files (x86)/Microsoft Games/Age of Empires II`
+
+### “EOF, aborting” when double-clicking a launcher
+
+Conversion needs a folder. Use `Import Game Assets.command` or
+`./run convert --force --browse` from Terminal.
+
 ## Windows Installer
 
 ### More than one python installation

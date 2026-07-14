@@ -7,6 +7,7 @@ find_path(EPOXY_INCLUDE_DIRS epoxy/gl.h
 	PATHS
 	/usr/include
 	/usr/local/include
+	/opt/homebrew/include
 	/sw/include
 	/opt/local/include
 	/usr/freeware/include
@@ -20,6 +21,7 @@ find_library(EPOXY_LIBRARIES
 	PATHS
 	/usr/lib
 	/usr/local/lib
+	/opt/homebrew/lib
 	/sw
 	/usr/freeware
 )

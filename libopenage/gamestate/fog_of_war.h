@@ -108,6 +108,15 @@ public:
 	 */
 	void clear_last_known_position(player_id_t observer, entity_id_t entity);
 
+	/**
+	 * Clear last-known position entries for \p entity across all observers.
+	 *
+	 * Call when the entity is removed from the world so ghost data cannot leak.
+	 *
+	 * @param entity Entity being removed.
+	 */
+	void clear_entity(entity_id_t entity);
+
 private:
 	/// Tiles currently visible to each player (rebuilt each tick).
 	std::unordered_map<player_id_t, std::unordered_set<coord::tile>> visible_tiles;

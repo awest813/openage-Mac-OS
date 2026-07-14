@@ -86,4 +86,11 @@ void FogOfWar::clear_last_known_position(player_id_t observer, entity_id_t entit
 	}
 }
 
+void FogOfWar::clear_entity(entity_id_t entity) {
+	for (auto &[observer, entities] : this->last_known_positions) {
+		(void) observer;
+		entities.erase(entity);
+	}
+}
+
 } // namespace openage::gamestate

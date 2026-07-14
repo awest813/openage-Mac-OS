@@ -137,6 +137,15 @@ struct BuildingCostRecord {
 };
 
 /**
+ * Outcome of a finished match, for UI / after-game summary screens.
+ */
+struct GameResult {
+	bool finished = false;
+	bool has_winner = false;
+	player_id_t winner_id = 0;
+};
+
+/**
  * State of the game.
  *
  * Contains index structures for looking up game entities and other
@@ -250,6 +259,21 @@ public:
 	 * @return Map of all players by their ID.
 	 */
 	const std::unordered_map<player_id_t, std::shared_ptr<Player>> &get_players() const;
+
+	/**
+	 * Record the match outcome (called when game.game_over is fired).
+	 */
+	void set_game_result(GameResult result);
+
+	/**
+	 * @return Match outcome for UI / after-game summary screens (copy).
+	 */
+	GameResult get_game_result() const;
+
+	/**
+	 * Clear a previous match outcome (e.g. when returning to the main menu).
+	 */
+	void clear_game_result();
 
 	/**
 	 * Count how many players are still in the ALIVE state.
@@ -461,6 +485,209 @@ public:
 	 * @param time Current simulation time.
 	 */
 	void tick_resource_regen(const time::time_t &time);
+
+	// -----------------------------------------------------------------------
+	// Streets & bridges (Phase 3.3)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Enable or disable street movement bonuses.
+	 */
+	void set_streets_enabled(bool enabled);
+
+	/**
+	 * @return true if street movement bonuses are active.
+	 */
+	bool is_streets_enabled() const;
+
+	/**
+	 * Override the street movement-speed multiplier (must be > 0).
+	 */
+	void set_street_move_mult(double mult);
+
+	/**
+	 * Register a street tile owned by a building entity.
+	 */
+	void register_street_tile(coord::tile tile, entity_id_t building_id);
+
+	/**
+	 * Unregister a street tile (by tile or by building entity).
+	 */
+	void unregister_street_tile(coord::tile tile);
+	void unregister_street_by_entity(entity_id_t building_id);
+
+	/**
+	 * @return true if \p tile has a street.
+	 */
+	bool is_street_tile(coord::tile tile) const;
+
+	/**
+	 * @return true if a street may be placed on \p tile (feature on, free tile).
+	 *         When Land/Water grids exist, also requires a land tile.
+	 */
+	bool can_place_street(coord::tile tile) const;
+
+	/**
+	 * Enable or disable buildable bridges.
+	 */
+	void set_bridges_enabled(bool enabled);
+
+	/**
+	 * @return true if bridges are active.
+	 */
+	bool is_bridges_enabled() const;
+
+	/**
+	 * Register a bridge tile owned by a building entity.
+	 */
+	void register_bridge_tile(coord::tile tile, entity_id_t building_id);
+
+	/**
+	 * Unregister a bridge tile (by tile or by building entity).
+	 */
+	void unregister_bridge_tile(coord::tile tile);
+	void unregister_bridge_by_entity(entity_id_t building_id);
+
+	/**
+	 * @return true if \p tile has a bridge.
+	 */
+	bool is_bridge_tile(coord::tile tile) const;
+
+	/**
+	 * @return true if a bridge may be placed on \p tile (feature on, free tile).
+	 *         When Land/Water grids exist, also requires a water tile.
+	 */
+	bool can_place_bridge(coord::tile tile) const;
+
+	/**
+	 * @return true if \p tile is land-passable on the Land path grid.
+	 *         Returns true when no Land grid is available (tests without PathType).
+	 */
+	bool is_land_tile(coord::tile tile) const;
+
+	/**
+	 * @return true if \p tile is water-passable on the Water path grid
+	 *         (and land-impassable when a Land grid exists).
+	 *         Returns false when no Water grid is available.
+	 */
+	bool is_water_tile(coord::tile tile) const;
+
+	/**
+	 * Movement-speed multiplier for travelling onto \p tile (streets × 1.0 default).
+	 */
+	double get_tile_move_speed_multiplier(coord::tile tile) const;
+
+	/**
+	 * Overlay bridge path costs on \p grid_id (Land → passable, Water → impassable).
+	 *
+	 * Call after \p Map::restore_sector_costs / hazard overlays each path query.
+	 */
+	void apply_bridge_path_costs(path::grid_id_t grid_id, const time::time_t &time);
+
+	// -----------------------------------------------------------------------
+	// Environment (Phase 3.1): day/night, weather, forest hiding
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Enable or disable the day/night cycle (sight range changes with phase).
+	 */
+	void set_day_night_enabled(bool enabled);
+
+	/**
+	 * @return true if the day/night cycle is active.
+	 */
+	bool is_day_night_enabled() const;
+
+	/**
+	 * Override day and night lengths (seconds of game time).
+	 */
+	void set_day_night_params(double day_sec, double night_sec);
+
+	/**
+	 * Resolve the day phase at \p time (DAY when the cycle is disabled).
+	 */
+	day_phase_t get_day_phase(const time::time_t &time) const;
+
+	/**
+	 * Enable or disable dynamic weather (sight and move-speed modifiers).
+	 */
+	void set_weather_enabled(bool enabled);
+
+	/**
+	 * @return true if weather effects are active.
+	 */
+	bool is_weather_enabled() const;
+
+	/**
+	 * Force the current weather condition (also used by tests).
+	 */
+	void set_weather(weather_t weather);
+
+	/**
+	 * @return Current weather (CLEAR when weather is disabled).
+	 */
+	weather_t get_weather() const;
+
+	/**
+	 * Advance environment state for this tick (weather cycling when enabled).
+	 */
+	void tick_environment(const time::time_t &time);
+
+	/**
+	 * Combined sight-range multiplier from day phase and weather (1.0 = normal).
+	 */
+	double get_sight_multiplier(const time::time_t &time) const;
+
+	/**
+	 * Combined movement-speed multiplier from weather (1.0 = normal).
+	 */
+	double get_move_speed_multiplier() const;
+
+	/**
+	 * Enable or disable forest hiding (enemies on forest tiles need proximity).
+	 */
+	void set_forest_hide_enabled(bool enabled);
+
+	/**
+	 * @return true if forest hiding is active.
+	 */
+	bool is_forest_hide_enabled() const;
+
+	/**
+	 * Override the Chebyshev detection threshold for forest-hidden units.
+	 */
+	void set_forest_hide_threshold(int tiles);
+
+	/**
+	 * @return Forest-hide detection radius in tiles.
+	 */
+	int get_forest_hide_threshold() const;
+
+	/**
+	 * Mark a tile as forest (for hiding). Used by tests and map setup.
+	 */
+	void mark_forest_tile(coord::tile tile);
+
+	/**
+	 * Remove a tile from the forest set.
+	 */
+	void unmark_forest_tile(coord::tile tile);
+
+	/**
+	 * @return true if \p tile is marked as forest.
+	 */
+	bool is_forest_tile(coord::tile tile) const;
+
+	/**
+	 * Clear all marked forest tiles.
+	 */
+	void clear_forest_tiles();
+
+	/**
+	 * Scan the loaded map terrain and mark tiles whose terrain name contains
+	 * "forest" (case-insensitive). No-op without a map.
+	 */
+	void rebuild_forest_tiles_from_terrain();
 
 	/**
 	 * Complete a scheduled deconstruction: spawn salvage at \p position and remove
@@ -772,9 +999,100 @@ private:
 	int64_t forest_regen_amount = FOREST_REGEN_AMOUNT;
 
 	/**
+	 * Whether street movement bonuses are active.
+	 */
+	bool streets_enabled = STREETS_ENABLED_DEFAULT;
+
+	/**
+	 * Movement-speed multiplier on street tiles.
+	 */
+	double street_move_mult = STREET_MOVE_MULT;
+
+	/**
+	 * Tiles that currently have a street building.
+	 */
+	std::unordered_set<coord::tile> street_tiles;
+
+	/**
+	 * Street building entity → tile (for cleanup on destroy).
+	 */
+	std::unordered_map<entity_id_t, coord::tile> entity_street_tile;
+
+	/**
+	 * Whether buildable bridges are active.
+	 */
+	bool bridges_enabled = BRIDGES_ENABLED_DEFAULT;
+
+	/**
+	 * Bridge tile → building entity id.
+	 */
+	std::unordered_map<coord::tile, entity_id_t> bridge_tiles;
+
+	/**
+	 * Bridge building entity → tile (for cleanup on destroy).
+	 */
+	std::unordered_map<entity_id_t, coord::tile> entity_bridge_tile;
+
+	/**
+	 * Whether the day/night cycle is active.
+	 */
+	bool day_night_enabled = DAY_NIGHT_ENABLED_DEFAULT;
+
+	/**
+	 * Day length in seconds of game time.
+	 */
+	double day_length_sec = DAY_LENGTH_SEC;
+
+	/**
+	 * Night length in seconds of game time.
+	 */
+	double night_length_sec = NIGHT_LENGTH_SEC;
+
+	/**
+	 * Whether weather effects are active.
+	 */
+	bool weather_enabled = WEATHER_ENABLED_DEFAULT;
+
+	/**
+	 * Current weather condition.
+	 */
+	weather_t current_weather = weather_t::CLEAR;
+
+	/**
+	 * Last simulation time weather was advanced.
+	 */
+	time::time_t last_weather_change_time;
+
+	/**
+	 * Whether forest hiding is active.
+	 */
+	bool forest_hide_enabled = FOREST_HIDE_ENABLED_DEFAULT;
+
+	/**
+	 * Chebyshev radius for detecting forest-hidden units.
+	 */
+	int forest_hide_threshold = FOREST_HIDE_THRESHOLD_TILES;
+
+	/**
+	 * Tiles that count as forest for the forest-hiding rule.
+	 */
+	std::unordered_set<coord::tile> forest_tiles;
+
+	/**
 	 * Fog-of-war state for all players.
 	 */
 	FogOfWar fog_of_war;
+
+	/**
+	 * Match outcome once the game has ended (empty until then).
+	 * Protected by \p game_result_mutex (sim writes, presenter reads).
+	 */
+	GameResult game_result;
+
+	/**
+	 * Guards \p game_result between the simulation and presenter threads.
+	 */
+	mutable std::shared_mutex game_result_mutex;
 
 	/**
 	 * Player whose fog-of-war view is used for rendering (local player).

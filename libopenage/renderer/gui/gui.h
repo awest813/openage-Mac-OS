@@ -1,4 +1,4 @@
-// Copyright 2015-2024 the openage authors. See copying.md for legal info.
+// Copyright 2015-2026 the openage authors. See copying.md for legal info.
 
 #pragma once
 
@@ -7,6 +7,8 @@
 #include <string>
 
 #include "renderer/gui/guisys/public/gui_subtree.h"
+
+class QObject;
 
 namespace qtgui {
 class GuiInput;
@@ -43,7 +45,8 @@ public:
 	             const util::Path &source,
 	             const util::Path &rootdir,
 	             const util::Path &assetdir,
-	             const std::shared_ptr<Renderer> &renderer);
+	             const std::shared_ptr<Renderer> &renderer,
+	             QObject *menu_controller = nullptr);
 	virtual ~GUI() = default;
 
 	/**
@@ -114,8 +117,9 @@ private:
 
 	/**
 	 * Manages Qt QML components and items.
+	 * Created after context properties are registered.
 	 */
-	qtgui::GuiSubtree subtree;
+	std::unique_ptr<qtgui::GuiSubtree> subtree;
 
 	/**
 	 * Reference to the openage renderer.

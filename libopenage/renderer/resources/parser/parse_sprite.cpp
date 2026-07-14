@@ -283,25 +283,31 @@ Animation2dInfo parse_sprite_file(const util::Path &path,
 				continue;
 			}
 
-			for (auto frame : frames.at(angle.degree)) {
-				if (frame.layer_id != layer.layer_id) {
-					continue;
-				}
-				if (frame.index > frame_infos.size()) {
-					// set empty frames if an index is missing
-					for (size_t i = frame_infos.size() - 1; i < frame.index; ++i) {
+			auto frame_it = frames.find(angle.degree);
+			if (frame_it != frames.end()) {
+				for (auto frame : frame_it->second) {
+					if (frame.layer_id != layer.layer_id) {
+						continue;
+					}
+					// Pad missing indices so frame.index lands at the correct slot.
+					while (frame_infos.size() < frame.index) {
 						frame_infos.push_back(nullptr);
 					}
+					auto frame_ptr = std::make_shared<FrameInfo>(
+						texture_id_map.at(frame.texture_id),
+						frame.subtex_id);
+					if (frame.index < frame_infos.size()) {
+						// Duplicate index: replace the earlier entry.
+						frame_infos[frame.index] = frame_ptr;
+					}
+					else {
+						frame_infos.push_back(std::move(frame_ptr));
+					}
 				}
-				frame_infos.push_back(std::make_shared<FrameInfo>(
-					texture_id_map.at(frame.texture_id),
-					frame.subtex_id));
 			}
-			if (frame_infos.size() < largest_frame_idx) {
-				// insert empty frames at the end if an indices are missing
-				for (size_t i = frame_infos.size() - 1; i < largest_frame_idx; ++i) {
-					frame_infos.push_back(nullptr);
-				}
+			// Ensure the vector covers every index up to the largest seen.
+			while (frame_infos.size() <= largest_frame_idx) {
+				frame_infos.push_back(nullptr);
 			}
 
 			angle_infos.push_back(std::make_shared<AngleInfo>(angle_start, frame_infos));

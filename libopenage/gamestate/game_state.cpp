@@ -3,6 +3,7 @@
 #include "game_state.h"
 
 #include <algorithm>
+#include <shared_mutex>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -31,7 +32,13 @@
 #include "gamestate/map.h"
 #include "gamestate/definitions.h"
 #include "gamestate/player.h"
+#include "gamestate/terrain.h"
+#include "gamestate/terrain_chunk.h"
+#include "gamestate/terrain_tile.h"
 #include "renderer/stages/world/render_entity.h"
+
+#include <cctype>
+#include <string>
 
 
 namespace openage::gamestate {
@@ -59,6 +66,9 @@ void GameState::add_game_entity(const std::shared_ptr<GameEntity> &entity) {
 }
 
 void GameState::remove_game_entity(entity_id_t id) {
+	this->unregister_street_by_entity(id);
+	this->unregister_bridge_by_entity(id);
+	this->fog_of_war.clear_entity(id);
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
 	this->rally_points.erase(id);
@@ -112,6 +122,10 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	population_demand = this->get_entity_population_demand(id);
 	population_provision = this->get_entity_population_provision(id);
 
+	this->unregister_street_by_entity(id);
+	this->unregister_bridge_by_entity(id);
+	this->fog_of_war.clear_entity(id);
+
 	this->game_entities.erase(id);
 	this->carried_resources.erase(id);
 	this->rally_points.erase(id);
@@ -128,16 +142,21 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	}
 
 	// Release the population space a unit reserved when it was trained.
-	if (is_owned_unit and this->has_player(owner_id)) {
-		int64_t demand = population_demand.value_or(DEFAULT_POPULATION_COST);
+	// Only release when demand was recorded — units without a recorded cost
+	// (e.g. 0-pop or test helpers that never called set_entity_population_demand)
+	// must not invent a phantom DEFAULT_POPULATION_COST debit.
+	if (is_owned_unit and this->has_player(owner_id) and population_demand.has_value()) {
+		int64_t demand = population_demand.value();
 		if (demand > 0) {
 			this->get_player(owner_id)->add_population_demand(time, -demand);
 		}
 	}
 
 	// Remove the population headroom a destroyed building had provided.
-	if (is_building and this->has_player(owner_id)) {
-		int64_t provision = population_provision.value_or(DEFAULT_BUILDING_POPULATION_SPACE);
+	// Only release when provision was recorded at spawn — buildings without
+	// ProvideContingent never raised capacity and must not subtract the default.
+	if (is_building and this->has_player(owner_id) and population_provision.has_value()) {
+		int64_t provision = population_provision.value();
 		if (provision > 0) {
 			this->get_player(owner_id)->add_population_capacity(time, -provision);
 		}
@@ -189,6 +208,21 @@ bool GameState::has_player(player_id_t id) const {
 
 const std::unordered_map<player_id_t, std::shared_ptr<Player>> &GameState::get_players() const {
 	return this->players;
+}
+
+void GameState::set_game_result(GameResult result) {
+	std::unique_lock lock{this->game_result_mutex};
+	this->game_result = std::move(result);
+}
+
+GameResult GameState::get_game_result() const {
+	std::shared_lock lock{this->game_result_mutex};
+	return this->game_result;
+}
+
+void GameState::clear_game_result() {
+	std::unique_lock lock{this->game_result_mutex};
+	this->game_result = GameResult{};
 }
 
 size_t GameState::get_alive_player_count() const {
@@ -261,6 +295,7 @@ void GameState::check_defeat(player_id_t owner_id, const time::time_t &time) {
 		// Exactly one player remains — they win.
 		this->players.at(winner_id)->set_state(player_state_t::WINNER);
 		log::log(MSG(info) << "Player " << winner_id << " has won the game!");
+		this->set_game_result(GameResult{true, true, winner_id});
 
 		if (this->event_loop) {
 			this->event_loop->create_event(
@@ -278,6 +313,7 @@ void GameState::check_defeat(player_id_t owner_id, const time::time_t &time) {
 		// No players remain (sole-player loss or simultaneous defeat):
 		// the game is over with no winner.
 		log::log(MSG(info) << "Game over — no players remain.");
+		this->set_game_result(GameResult{true, false, player_id_t{0}});
 
 		if (this->event_loop) {
 			this->event_loop->create_event(
@@ -591,6 +627,435 @@ void GameState::tick_resource_regen(const time::time_t &time) {
 	}
 }
 
+void GameState::set_streets_enabled(bool enabled) {
+	this->streets_enabled = enabled;
+}
+
+bool GameState::is_streets_enabled() const {
+	return this->streets_enabled;
+}
+
+void GameState::set_street_move_mult(double mult) {
+	if (mult > 0) {
+		this->street_move_mult = mult;
+	}
+}
+
+void GameState::register_street_tile(coord::tile tile, entity_id_t building_id) {
+	this->unregister_street_by_entity(building_id);
+	// Evict any previous street owner of this tile so destroy cleanup stays consistent.
+	for (auto it = this->entity_street_tile.begin(); it != this->entity_street_tile.end();) {
+		if (it->second == tile) {
+			it = this->entity_street_tile.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+	this->street_tiles.insert(tile);
+	this->entity_street_tile.insert_or_assign(building_id, tile);
+}
+
+void GameState::unregister_street_tile(coord::tile tile) {
+	this->street_tiles.erase(tile);
+	for (auto it = this->entity_street_tile.begin(); it != this->entity_street_tile.end();) {
+		if (it->second == tile) {
+			it = this->entity_street_tile.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+}
+
+void GameState::unregister_street_by_entity(entity_id_t building_id) {
+	auto it = this->entity_street_tile.find(building_id);
+	if (it == this->entity_street_tile.end()) {
+		return;
+	}
+	this->street_tiles.erase(it->second);
+	this->entity_street_tile.erase(it);
+}
+
+bool GameState::is_street_tile(coord::tile tile) const {
+	return this->street_tiles.contains(tile);
+}
+
+bool GameState::can_place_street(coord::tile tile) const {
+	if (not this->streets_enabled) {
+		return false;
+	}
+	if (this->is_street_tile(tile) or this->is_bridge_tile(tile)) {
+		return false;
+	}
+	if (this->is_tile_occupied(tile)) {
+		return false;
+	}
+	return this->is_land_tile(tile);
+}
+
+void GameState::set_bridges_enabled(bool enabled) {
+	this->bridges_enabled = enabled;
+}
+
+bool GameState::is_bridges_enabled() const {
+	return this->bridges_enabled;
+}
+
+void GameState::register_bridge_tile(coord::tile tile, entity_id_t building_id) {
+	this->unregister_bridge_by_entity(building_id);
+	// Evict any previous bridge owner of this tile.
+	auto existing = this->bridge_tiles.find(tile);
+	if (existing != this->bridge_tiles.end() and existing->second != building_id) {
+		this->entity_bridge_tile.erase(existing->second);
+	}
+	this->bridge_tiles.insert_or_assign(tile, building_id);
+	this->entity_bridge_tile.insert_or_assign(building_id, tile);
+}
+
+void GameState::unregister_bridge_tile(coord::tile tile) {
+	auto it = this->bridge_tiles.find(tile);
+	if (it == this->bridge_tiles.end()) {
+		return;
+	}
+	this->entity_bridge_tile.erase(it->second);
+	this->bridge_tiles.erase(it);
+}
+
+void GameState::unregister_bridge_by_entity(entity_id_t building_id) {
+	auto it = this->entity_bridge_tile.find(building_id);
+	if (it == this->entity_bridge_tile.end()) {
+		return;
+	}
+	this->bridge_tiles.erase(it->second);
+	this->entity_bridge_tile.erase(it);
+}
+
+bool GameState::is_bridge_tile(coord::tile tile) const {
+	return this->bridge_tiles.contains(tile);
+}
+
+bool GameState::can_place_bridge(coord::tile tile) const {
+	if (not this->bridges_enabled) {
+		return false;
+	}
+	if (this->is_bridge_tile(tile) or this->is_street_tile(tile)) {
+		return false;
+	}
+	if (this->is_tile_occupied(tile)) {
+		return false;
+	}
+	// Without Water path grids (unit tests), allow placement so lifecycle
+	// tests can exercise registration without a full nyan PathType setup.
+	if (this->map == nullptr) {
+		return true;
+	}
+	auto water = this->map->find_grid_by_suffix("Water");
+	if (not water.has_value()) {
+		return true;
+	}
+	return this->is_water_tile(tile);
+}
+
+bool GameState::is_land_tile(coord::tile tile) const {
+	if (this->map == nullptr) {
+		return true;
+	}
+	auto land = this->map->find_grid_by_suffix("Land");
+	if (not land.has_value()) {
+		return true;
+	}
+	auto cost = this->map->get_tile_cost(land.value(), tile);
+	if (not cost.has_value()) {
+		return false;
+	}
+	return cost.value() != path::COST_IMPASSABLE;
+}
+
+bool GameState::is_water_tile(coord::tile tile) const {
+	if (this->map == nullptr) {
+		return false;
+	}
+	auto water = this->map->find_grid_by_suffix("Water");
+	if (not water.has_value()) {
+		return false;
+	}
+	auto water_cost = this->map->get_tile_cost(water.value(), tile);
+	if (not water_cost.has_value() or water_cost.value() == path::COST_IMPASSABLE) {
+		return false;
+	}
+	auto land = this->map->find_grid_by_suffix("Land");
+	if (land.has_value()) {
+		auto land_cost = this->map->get_tile_cost(land.value(), tile);
+		if (land_cost.has_value() and land_cost.value() != path::COST_IMPASSABLE) {
+			return false;
+		}
+	}
+	return true;
+}
+
+double GameState::get_tile_move_speed_multiplier(coord::tile tile) const {
+	if (this->streets_enabled and this->is_street_tile(tile)) {
+		return this->street_move_mult;
+	}
+	return 1.0;
+}
+
+void GameState::apply_bridge_path_costs(path::grid_id_t grid_id, const time::time_t &time) {
+	if (not this->bridges_enabled or this->bridge_tiles.empty() or this->map == nullptr) {
+		return;
+	}
+
+	const auto kind = this->map->classify_grid(grid_id);
+	if (kind == path_grid_kind_t::OTHER) {
+		return;
+	}
+
+	const path::cost_t cost = (kind == path_grid_kind_t::LAND)
+	                              ? path::COST_MIN
+	                              : path::COST_IMPASSABLE;
+
+	for (const auto &[tile, building_id] : this->bridge_tiles) {
+		(void) building_id;
+		this->map->set_tile_cost(grid_id, tile, cost, time);
+	}
+}
+
+void GameState::set_day_night_enabled(bool enabled) {
+	this->day_night_enabled = enabled;
+}
+
+bool GameState::is_day_night_enabled() const {
+	return this->day_night_enabled;
+}
+
+void GameState::set_day_night_params(double day_sec, double night_sec) {
+	if (day_sec > 0) {
+		this->day_length_sec = day_sec;
+	}
+	if (night_sec > 0) {
+		this->night_length_sec = night_sec;
+	}
+}
+
+day_phase_t GameState::get_day_phase(const time::time_t &time) const {
+	if (not this->day_night_enabled) {
+		return day_phase_t::DAY;
+	}
+
+	const double cycle = this->day_length_sec + this->night_length_sec;
+	if (cycle <= 0) {
+		return day_phase_t::DAY;
+	}
+
+	double t = std::fmod(time.to_double(), cycle);
+	if (t < 0) {
+		t += cycle;
+	}
+
+	const double dusk_start = this->day_length_sec * (1.0 - TWILIGHT_FRACTION);
+	const double night_start = this->day_length_sec;
+	const double dawn_start = this->day_length_sec
+	                          + this->night_length_sec * (1.0 - TWILIGHT_FRACTION);
+
+	if (t < dusk_start) {
+		return day_phase_t::DAY;
+	}
+	if (t < night_start) {
+		return day_phase_t::DUSK;
+	}
+	if (t < dawn_start) {
+		return day_phase_t::NIGHT;
+	}
+	return day_phase_t::DAWN;
+}
+
+void GameState::set_weather_enabled(bool enabled) {
+	this->weather_enabled = enabled;
+	if (not enabled) {
+		this->current_weather = weather_t::CLEAR;
+	}
+}
+
+bool GameState::is_weather_enabled() const {
+	return this->weather_enabled;
+}
+
+void GameState::set_weather(weather_t weather) {
+	this->current_weather = weather;
+}
+
+weather_t GameState::get_weather() const {
+	if (not this->weather_enabled) {
+		return weather_t::CLEAR;
+	}
+	return this->current_weather;
+}
+
+void GameState::tick_environment(const time::time_t &time) {
+	if (not this->weather_enabled) {
+		return;
+	}
+
+	double elapsed = time.to_double() - this->last_weather_change_time.to_double();
+	if (elapsed < WEATHER_CYCLE_INTERVAL_SEC) {
+		return;
+	}
+
+	// Cycle CLEAR -> FOG -> RAIN -> CLEAR.
+	switch (this->current_weather) {
+	case weather_t::CLEAR:
+		this->current_weather = weather_t::FOG;
+		break;
+	case weather_t::FOG:
+		this->current_weather = weather_t::RAIN;
+		break;
+	case weather_t::RAIN:
+		this->current_weather = weather_t::CLEAR;
+		break;
+	}
+	this->last_weather_change_time = time;
+}
+
+double GameState::get_sight_multiplier(const time::time_t &time) const {
+	double mult = 1.0;
+
+	if (this->day_night_enabled) {
+		switch (this->get_day_phase(time)) {
+		case day_phase_t::DAY:
+			mult *= DAY_SIGHT_MULT;
+			break;
+		case day_phase_t::DUSK:
+		case day_phase_t::DAWN:
+			mult *= TWILIGHT_SIGHT_MULT;
+			break;
+		case day_phase_t::NIGHT:
+			mult *= NIGHT_SIGHT_MULT;
+			break;
+		}
+	}
+
+	if (this->weather_enabled) {
+		switch (this->current_weather) {
+		case weather_t::CLEAR:
+			mult *= WEATHER_CLEAR_SIGHT_MULT;
+			break;
+		case weather_t::FOG:
+			mult *= WEATHER_FOG_SIGHT_MULT;
+			break;
+		case weather_t::RAIN:
+			mult *= WEATHER_RAIN_SIGHT_MULT;
+			break;
+		}
+	}
+
+	return mult;
+}
+
+double GameState::get_move_speed_multiplier() const {
+	if (not this->weather_enabled) {
+		return WEATHER_CLEAR_MOVE_MULT;
+	}
+
+	switch (this->current_weather) {
+	case weather_t::CLEAR:
+		return WEATHER_CLEAR_MOVE_MULT;
+	case weather_t::FOG:
+		return WEATHER_FOG_MOVE_MULT;
+	case weather_t::RAIN:
+		return WEATHER_RAIN_MOVE_MULT;
+	}
+	return WEATHER_CLEAR_MOVE_MULT;
+}
+
+void GameState::set_forest_hide_enabled(bool enabled) {
+	this->forest_hide_enabled = enabled;
+}
+
+bool GameState::is_forest_hide_enabled() const {
+	return this->forest_hide_enabled;
+}
+
+void GameState::set_forest_hide_threshold(int tiles) {
+	if (tiles >= 0) {
+		this->forest_hide_threshold = tiles;
+	}
+}
+
+int GameState::get_forest_hide_threshold() const {
+	return this->forest_hide_threshold;
+}
+
+void GameState::mark_forest_tile(coord::tile tile) {
+	this->forest_tiles.insert(tile);
+}
+
+void GameState::unmark_forest_tile(coord::tile tile) {
+	this->forest_tiles.erase(tile);
+}
+
+bool GameState::is_forest_tile(coord::tile tile) const {
+	return this->forest_tiles.contains(tile);
+}
+
+void GameState::clear_forest_tiles() {
+	this->forest_tiles.clear();
+}
+
+namespace {
+
+bool name_contains_forest(const std::string &name) {
+	std::string lower;
+	lower.reserve(name.size());
+	for (char c : name) {
+		lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+	}
+	return lower.find("forest") != std::string::npos;
+}
+
+} // namespace
+
+void GameState::rebuild_forest_tiles_from_terrain() {
+	this->forest_tiles.clear();
+	if (this->map == nullptr) {
+		return;
+	}
+
+	const auto &terrain = this->map->get_terrain();
+	if (terrain == nullptr) {
+		return;
+	}
+
+	for (const auto &chunk : terrain->get_chunks()) {
+		const auto &offset = chunk->get_offset();
+		const auto &size = chunk->get_size();
+		const auto &tiles = chunk->get_tiles();
+		if (tiles.empty()) {
+			continue;
+		}
+
+		for (size_t se = 0; se < size[1]; ++se) {
+			for (size_t ne = 0; ne < size[0]; ++ne) {
+				const size_t idx = ne + se * size[0];
+				if (idx >= tiles.size()) {
+					continue;
+				}
+				const auto &tile = tiles[idx];
+				// Match terrain asset paths / fqons that mention "forest"
+				// (e.g. aoe1_base.data.terrain.forest.forest.Forest).
+				if (name_contains_forest(tile.terrain_asset_path)
+				    || name_contains_forest(tile.terrain_fqon)) {
+					coord::tile world{
+						offset.ne + static_cast<coord::tile_t>(ne),
+						offset.se + static_cast<coord::tile_t>(se)};
+					this->forest_tiles.insert(world);
+				}
+			}
+		}
+	}
+}
+
+
 void GameState::finish_deconstruct(entity_id_t building_id, const time::time_t &time) {
 	if (not this->game_entities.contains(building_id)) {
 		return;
@@ -670,7 +1135,14 @@ void GameState::refresh_visibility(const time::time_t &time) {
 			entity->get_component(component::component_t::POSITION));
 		auto center = pos_comp->get_positions().get(time).to_tile();
 
-		this->update_player_visibility(owner_id, center, DEFAULT_SIGHT_RANGE_TILES);
+		double sight_mult = this->get_sight_multiplier(time);
+		int sight_range = static_cast<int>(
+			std::lround(DEFAULT_SIGHT_RANGE_TILES * sight_mult));
+		if (sight_range < 0) {
+			sight_range = 0;
+		}
+
+		this->update_player_visibility(owner_id, center, sight_range);
 	}
 
 	this->update_fog_render_visibility(time);
@@ -713,17 +1185,64 @@ bool GameState::is_entity_visible(player_id_t observer,
 	auto tile = pos.to_tile();
 
 	bool visible = this->fog_of_war.is_visible(observer, tile);
+	if (not visible) {
+		return false;
+	}
+
+	// Forest hiding: enemy units on forest tiles are only visible when an
+	// observer unit is within the Chebyshev detection threshold.
+	if (this->forest_hide_enabled && this->is_forest_tile(tile)) {
+		player_id_t owner_id = observer;
+		if (entity->has_component(component::component_t::OWNERSHIP)) {
+			auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+				entity->get_component(component::component_t::OWNERSHIP));
+			owner_id = ownership->get_owners().get(time);
+		}
+
+		if (owner_id != observer) {
+			bool detected = false;
+			for (const auto &[ally_id, ally] : this->game_entities) {
+				(void) ally_id;
+				if (not ally->has_component(component::component_t::POSITION)
+				    || not ally->has_component(component::component_t::OWNERSHIP)) {
+					continue;
+				}
+				auto ally_own = std::dynamic_pointer_cast<component::Ownership>(
+					ally->get_component(component::component_t::OWNERSHIP));
+				if (ally_own->get_owners().get(time) != observer) {
+					continue;
+				}
+				auto ally_pos = std::dynamic_pointer_cast<component::Position>(
+					ally->get_component(component::component_t::POSITION));
+				auto ally_tile = ally_pos->get_positions().get(time).to_tile();
+				auto dne = ally_tile.ne - tile.ne;
+				auto dse = ally_tile.se - tile.se;
+				if (dne < 0) {
+					dne = -dne;
+				}
+				if (dse < 0) {
+					dse = -dse;
+				}
+				auto chebyshev = std::max(dne, dse);
+				if (chebyshev <= static_cast<coord::tile_t>(this->forest_hide_threshold)) {
+					detected = true;
+					break;
+				}
+			}
+			if (not detected) {
+				return false;
+			}
+		}
+	}
 
 	// Remember the entity's position whenever it is visible to the observer.
 	// Once it leaves vision we keep that remembered spot untouched so it can
 	// be rendered as a "ghost" at the place it was last seen. Entities the
 	// observer has never seen have no recorded position and stay hidden.
 	// Because is_entity_visible is a const query we use mutable fog_of_war.
-	if (visible) {
-		const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
-	}
+	const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
 
-	return visible;
+	return true;
 }
 
 std::optional<coord::phys3> GameState::get_last_known_position(player_id_t observer,

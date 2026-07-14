@@ -32,7 +32,11 @@ void TimeLoop::start() {
 	this->running = true;
 
 	if (this->clock->get_state() == ClockState::INIT) {
+		// Start then immediately pause so the clock is ready but does not
+		// advance until the menu (or headless entry) resumes it. Otherwise the
+		// time-loop thread can race ahead of the presenter main menu.
 		this->clock->start();
+		this->clock->pause();
 	}
 
 	log::log(MSG(info) << "Time loop started");

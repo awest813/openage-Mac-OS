@@ -35,6 +35,7 @@
 #include "event/send_command.h"
 #include "api/creatable.h"
 #include "api/population.h"
+#include "api/building_kind.h"
 #include "fog_of_war.h"
 #include "game_entity.h"
 #include "game_state.h"
@@ -387,6 +388,13 @@ void player_defeated_on_last_building_destroyed() {
 	TESTEQUALS(p0->get_state() == player_state_t::DEFEATED, true);
 	TESTEQUALS(p1->get_state() == player_state_t::WINNER, true);
 	TESTEQUALS(state->get_alive_player_count(), 0);
+	TESTEQUALS(state->get_game_result().finished, true);
+	TESTEQUALS(state->get_game_result().has_winner, true);
+	TESTEQUALS(state->get_game_result().winner_id, player_id_t{1});
+
+	state->clear_game_result();
+	TESTEQUALS(state->get_game_result().finished, false);
+	TESTEQUALS(state->get_game_result().has_winner, false);
 }
 
 void building_population_capacity() {
@@ -404,13 +412,16 @@ void building_population_capacity() {
 
 	auto t0 = time::time_t::from_int(0);
 
-	// Two completed buildings' worth of population headroom.
+	// Two completed buildings' worth of population headroom, each with a
+	// recorded provision matching the capacity they contributed at spawn.
 	p0->init_population(t0, 0);
 	p0->add_population_capacity(t0, 2 * DEFAULT_BUILDING_POPULATION_SPACE);
 	TESTEQUALS(p0->get_population_capacity(t0), 2 * DEFAULT_BUILDING_POPULATION_SPACE);
 
 	make_building(10, 0, loop, state, t0);
 	make_building(11, 0, loop, state, t0);
+	state->set_entity_population_provision(10, DEFAULT_BUILDING_POPULATION_SPACE);
+	state->set_entity_population_provision(11, DEFAULT_BUILDING_POPULATION_SPACE);
 
 	// Destroying one building releases the headroom it provided; the player is
 	// still alive (one building remains), so demand/capacity bookkeeping — not
@@ -982,9 +993,10 @@ void building_cost_and_salvage_spawn() {
 	pos->set_position(t0, coord::phys3{5, 5, 0});
 	state->add_game_entity(building);
 
-	TESTEQUALS(state->get_building_cost(10).has_value(), true);
-	TESTEQUALS(state->get_building_cost(10)->entries.size(), 1);
-	TESTEQUALS(state->get_building_cost(10)->entries[0].amount, 200);
+	auto cost_after = state->get_building_cost(10);
+	TESTEQUALS(cost_after.has_value(), true);
+	TESTEQUALS(cost_after->entries.size(), 1);
+	TESTEQUALS(cost_after->entries[0].amount, 200);
 
 	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
 	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
@@ -1132,6 +1144,10 @@ void entity_population_tracking() {
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
 
+	// remove_game_entity may fire defeat events when the last building dies.
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
 	auto view = db->new_view();
 	auto player = std::make_shared<Player>(0, view, loop);
 	state->add_player(player);
@@ -1225,6 +1241,320 @@ void resource_node_regen() {
 	state->tick_resource_regen(t0 + FOREST_REGEN_INTERVAL_SEC * 10);
 	TESTEQUALS(state->is_resource_node(2), true);
 }
+
+void streets_move_speed_multiplier() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	coord::tile street{5, 5};
+	coord::tile plain{6, 6};
+
+	TESTEQUALS(state->is_streets_enabled(), false);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(street), 1.0);
+
+	state->set_streets_enabled(true);
+	state->register_street_tile(street, entity_id_t{42});
+	TESTEQUALS(state->is_street_tile(street), true);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(street), STREET_MOVE_MULT);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(plain), 1.0);
+
+	state->set_street_move_mult(1.5);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(street), 1.5);
+
+	state->set_streets_enabled(false);
+	TESTEQUALS(state->get_tile_move_speed_multiplier(street), 1.0);
+}
+
+void streets_lifecycle() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	state->set_streets_enabled(true);
+	TESTEQUALS(state->can_place_street(coord::tile{3, 3}), true);
+
+	auto building = std::make_shared<GameEntity>(7);
+	auto ownership = std::make_shared<component::Ownership>(loop);
+	ownership->set_owner(t0, player_id_t{0});
+	building->add_component(ownership);
+	state->add_game_entity(building);
+
+	auto player = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(player);
+
+	state->register_street_tile(coord::tile{3, 3}, 7);
+	TESTEQUALS(state->is_street_tile(coord::tile{3, 3}), true);
+	TESTEQUALS(state->can_place_street(coord::tile{3, 3}), false);
+
+	state->remove_game_entity(7, t0);
+	TESTEQUALS(state->is_street_tile(coord::tile{3, 3}), false);
+}
+
+void bridges_lifecycle() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	TESTEQUALS(state->is_bridges_enabled(), false);
+	TESTEQUALS(state->can_place_bridge(coord::tile{2, 2}), false);
+
+	state->set_bridges_enabled(true);
+	TESTEQUALS(state->can_place_bridge(coord::tile{2, 2}), true);
+
+	auto player = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	state->add_player(player);
+
+	auto building = std::make_shared<GameEntity>(9);
+	auto ownership = std::make_shared<component::Ownership>(loop);
+	ownership->set_owner(t0, player_id_t{0});
+	building->add_component(ownership);
+	state->add_game_entity(building);
+
+	state->register_bridge_tile(coord::tile{2, 2}, 9);
+	TESTEQUALS(state->is_bridge_tile(coord::tile{2, 2}), true);
+	TESTEQUALS(state->can_place_bridge(coord::tile{2, 2}), false);
+	TESTEQUALS(state->can_place_street(coord::tile{2, 2}), false);
+
+	// Bridge overlay is a no-op without Land/Water grids.
+	state->apply_bridge_path_costs(path::grid_id_t{0}, t0);
+
+	state->remove_game_entity(9, t0);
+	TESTEQUALS(state->is_bridge_tile(coord::tile{2, 2}), false);
+}
+
+void building_kind_helpers() {
+	TESTEQUALS(api::is_street_building("test.building.Street"), true);
+	TESTEQUALS(api::is_street_building("aoe2_base.data.building.road.Road"), true);
+	TESTEQUALS(api::is_street_building("test.building.House"), false);
+	TESTEQUALS(api::is_bridge_building("test.building.WoodenBridge"), true);
+	TESTEQUALS(api::is_bridge_building("test.building.Barracks"), false);
+}
+
+void population_no_phantom_release() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+
+	auto player = std::make_shared<Player>(0, db->new_view(), loop);
+	state->add_player(player);
+	player->init_population(t0, 20);
+
+	// Building without recorded ProvideContingent must not subtract default capacity.
+	make_building(1, 0, loop, state, t0);
+	// Keep a second building so destroy does not also defeat the player mid-assert.
+	make_building(99, 0, loop, state, t0);
+	state->remove_game_entity(1, t0);
+	TESTEQUALS(player->get_population_capacity(t0), 20);
+
+	// Recorded provision is still released correctly.
+	state->set_entity_population_provision(99, 7);
+	player->add_population_capacity(t0, 7);
+	TESTEQUALS(player->get_population_capacity(t0), 27);
+	state->remove_game_entity(99, t0);
+	TESTEQUALS(player->get_population_capacity(t0), 20);
+}
+
+void street_tile_overwrite() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
+	auto player = std::make_shared<Player>(0, db->new_view(), loop);
+	state->add_player(player);
+
+	state->set_streets_enabled(true);
+	make_building(1, 0, loop, state, t0);
+	make_building(2, 0, loop, state, t0);
+
+	coord::tile tile{4, 4};
+	state->register_street_tile(tile, 1);
+	state->register_street_tile(tile, 2); // overwrites owner 1
+	TESTEQUALS(state->is_street_tile(tile), true);
+
+	// Destroying the overwritten owner must not clear the tile still owned by 2.
+	state->remove_game_entity(1, t0);
+	TESTEQUALS(state->is_street_tile(tile), true);
+
+	state->remove_game_entity(2, t0);
+	TESTEQUALS(state->is_street_tile(tile), false);
+}
+
+void fog_last_known_cleared_on_remove() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	auto observer = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	auto enemy_player = std::make_shared<Player>(player_id_t{1}, db->new_view(), loop);
+	state->add_player(observer);
+	state->add_player(enemy_player);
+
+	auto scout = std::make_shared<GameEntity>(entity_id_t{1});
+	auto scout_pos = std::make_shared<component::Position>(loop);
+	scout_pos->set_position(t0, coord::phys3{10, 10, 0});
+	scout->add_component(scout_pos);
+	auto scout_own = std::make_shared<component::Ownership>(loop);
+	scout_own->set_owner(t0, player_id_t{0});
+	scout->add_component(scout_own);
+	state->add_game_entity(scout);
+
+	auto enemy = std::make_shared<GameEntity>(entity_id_t{2});
+	auto enemy_pos = std::make_shared<component::Position>(loop);
+	enemy_pos->set_position(t0, coord::phys3{12, 12, 0});
+	enemy->add_component(enemy_pos);
+	auto enemy_own = std::make_shared<component::Ownership>(loop);
+	enemy_own->set_owner(t0, player_id_t{1});
+	enemy->add_component(enemy_own);
+	state->add_game_entity(enemy);
+
+	state->refresh_visibility(t0);
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), true);
+	TESTEQUALS(state->get_last_known_position(player_id_t{0}, entity_id_t{2}).has_value(), true);
+
+	state->remove_game_entity(entity_id_t{2});
+	TESTEQUALS(state->get_last_known_position(player_id_t{0}, entity_id_t{2}).has_value(), false);
+}
+
+void environment_day_night() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+
+	// Disabled by default: always daytime, full sight.
+	TESTEQUALS(state->is_day_night_enabled(), false);
+	TESTEQUALS(state->get_day_phase(time::time_t::from_int(0)) == day_phase_t::DAY, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_int(0)), 1.0);
+
+	state->set_day_night_enabled(true);
+	state->set_day_night_params(100.0, 100.0);
+
+	// Mid-day.
+	TESTEQUALS(state->get_day_phase(time::time_t::from_double(40.0)) == day_phase_t::DAY, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_double(40.0)), DAY_SIGHT_MULT);
+
+	// Dusk: last 10% of day.
+	TESTEQUALS(state->get_day_phase(time::time_t::from_double(95.0)) == day_phase_t::DUSK, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_double(95.0)), TWILIGHT_SIGHT_MULT);
+
+	// Night.
+	TESTEQUALS(state->get_day_phase(time::time_t::from_double(140.0)) == day_phase_t::NIGHT, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_double(140.0)), NIGHT_SIGHT_MULT);
+
+	// Dawn: last 10% of night.
+	TESTEQUALS(state->get_day_phase(time::time_t::from_double(195.0)) == day_phase_t::DAWN, true);
+	TESTEQUALS(state->get_sight_multiplier(time::time_t::from_double(195.0)), TWILIGHT_SIGHT_MULT);
+}
+
+void environment_weather() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	TESTEQUALS(state->is_weather_enabled(), false);
+	TESTEQUALS(state->get_weather() == weather_t::CLEAR, true);
+	TESTEQUALS(state->get_move_speed_multiplier(), WEATHER_CLEAR_MOVE_MULT);
+	TESTEQUALS(state->get_sight_multiplier(t0), 1.0);
+
+	state->set_weather_enabled(true);
+	state->set_weather(weather_t::FOG);
+	TESTEQUALS(state->get_weather() == weather_t::FOG, true);
+	TESTEQUALS(state->get_sight_multiplier(t0), WEATHER_FOG_SIGHT_MULT);
+	TESTEQUALS(state->get_move_speed_multiplier(), WEATHER_FOG_MOVE_MULT);
+
+	state->set_weather(weather_t::RAIN);
+	TESTEQUALS(state->get_sight_multiplier(t0), WEATHER_RAIN_SIGHT_MULT);
+	TESTEQUALS(state->get_move_speed_multiplier(), WEATHER_RAIN_MOVE_MULT);
+
+	// Weather cycles CLEAR -> FOG -> RAIN after the interval.
+	state->set_weather(weather_t::CLEAR);
+	state->tick_environment(t0);
+	TESTEQUALS(state->get_weather() == weather_t::CLEAR, true);
+	state->tick_environment(t0 + WEATHER_CYCLE_INTERVAL_SEC);
+	TESTEQUALS(state->get_weather() == weather_t::FOG, true);
+	state->tick_environment(t0 + WEATHER_CYCLE_INTERVAL_SEC * 2);
+	TESTEQUALS(state->get_weather() == weather_t::RAIN, true);
+
+	// Stacked with night: night * fog.
+	state->set_day_night_enabled(true);
+	state->set_day_night_params(100.0, 100.0);
+	state->set_weather(weather_t::FOG);
+	auto night = time::time_t::from_double(140.0);
+	TESTEQUALS(state->get_sight_multiplier(night), NIGHT_SIGHT_MULT * WEATHER_FOG_SIGHT_MULT);
+}
+
+void environment_forest_hide() {
+	auto loop = std::make_shared<openage::event::EventLoop>();
+	auto db = nyan::Database::create();
+	auto state = std::make_shared<GameState>(db, loop);
+	auto t0 = time::time_t::from_int(0);
+
+	TESTEQUALS(state->is_forest_hide_enabled(), false);
+
+	auto observer = std::make_shared<Player>(player_id_t{0}, db->new_view(), loop);
+	auto enemy_player = std::make_shared<Player>(player_id_t{1}, db->new_view(), loop);
+	state->add_player(observer);
+	state->add_player(enemy_player);
+
+	auto make_unit = [&](entity_id_t id, player_id_t owner, coord::phys3 pos) {
+		auto entity = std::make_shared<GameEntity>(id);
+		auto position = std::make_shared<component::Position>(loop);
+		position->set_position(t0, pos);
+		entity->add_component(position);
+		auto ownership = std::make_shared<component::Ownership>(loop);
+		ownership->set_owner(t0, owner);
+		entity->add_component(ownership);
+		state->add_game_entity(entity);
+	};
+
+	// Scout at (10,10); enemy at (12,12) — within default sight range 4.
+	make_unit(entity_id_t{1}, player_id_t{0}, coord::phys3{10, 10, 0});
+	make_unit(entity_id_t{2}, player_id_t{1}, coord::phys3{12, 12, 0});
+
+	coord::tile forest_tile{12, 12};
+	state->mark_forest_tile(forest_tile);
+	TESTEQUALS(state->is_forest_tile(forest_tile), true);
+
+	state->refresh_visibility(t0);
+	// Without forest hide, the enemy is fog-visible.
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), true);
+
+	state->set_forest_hide_enabled(true);
+	state->set_forest_hide_threshold(1);
+	// Chebyshev distance from scout (10,10) to enemy (12,12) is 2 > threshold 1.
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), false);
+
+	// Threshold 2 detects the enemy.
+	state->set_forest_hide_threshold(2);
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{2}, t0), true);
+
+	// Own units on forest tiles remain visible to themselves.
+	state->mark_forest_tile(coord::tile{10, 10});
+	TESTEQUALS(state->is_entity_visible(player_id_t{0}, entity_id_t{1}, t0), true);
+
+	state->unmark_forest_tile(forest_tile);
+	TESTEQUALS(state->is_forest_tile(forest_tile), false);
+	state->clear_forest_tiles();
+	TESTEQUALS(state->is_forest_tile(coord::tile{10, 10}), false);
+}
+
 
 void player_statistics() {
 	auto loop = std::make_shared<openage::event::EventLoop>();

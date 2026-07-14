@@ -1,4 +1,4 @@
-// Copyright 2015-2024 the openage authors. See copying.md for legal info.
+// Copyright 2015-2026 the openage authors. See copying.md for legal info.
 
 #include "gui.h"
 
@@ -24,21 +24,24 @@ GUI::GUI(std::shared_ptr<qtgui::GuiApplication> app,
          const util::Path &source,
          const util::Path &rootdir,
          const util::Path &assetdir,
-         const std::shared_ptr<Renderer> &renderer) :
+         const std::shared_ptr<Renderer> &renderer,
+         QObject *menu_controller) :
 	application{app},
 	gui_renderer{std::make_shared<qtgui::GuiRenderer>(window)},
 	gui_input{std::make_shared<qtgui::GuiInput>(gui_renderer)},
 	engine{std::make_shared<qtgui::GuiQmlEngine>(gui_renderer)},
-	subtree{
+	subtree{nullptr},
+	renderer{renderer} {
+	if (menu_controller) {
+		this->engine->set_context_property("menuController", menu_controller);
+	}
+
+	this->subtree = std::make_unique<qtgui::GuiSubtree>(
 		gui_renderer,
 		engine,
 		source.resolve_native_path(),
-		rootdir.resolve_native_path()},
-	// input{&gui_renderer, &game_logic_updater}
-    // image_provider_by_filename{
-    //	&render_updater,
-    //	openage::gui::GuiGameSpecImageProvider::Type::ByFilename},
-	renderer{renderer} {
+		rootdir.resolve_native_path());
+
 	// everything alright before we create the gui stuff?
 	renderer::opengl::GlContext::check_error();
 
