@@ -283,17 +283,27 @@ Animation2dInfo parse_sprite_file(const util::Path &path,
 				continue;
 			}
 
-			for (auto frame : frames.at(angle.degree)) {
-				if (frame.layer_id != layer.layer_id) {
-					continue;
+			auto frame_it = frames.find(angle.degree);
+			if (frame_it != frames.end()) {
+				for (auto frame : frame_it->second) {
+					if (frame.layer_id != layer.layer_id) {
+						continue;
+					}
+					// Pad missing indices so frame.index lands at the correct slot.
+					while (frame_infos.size() < frame.index) {
+						frame_infos.push_back(nullptr);
+					}
+					auto frame_ptr = std::make_shared<FrameInfo>(
+						texture_id_map.at(frame.texture_id),
+						frame.subtex_id);
+					if (frame.index < frame_infos.size()) {
+						// Duplicate index: replace the earlier entry.
+						frame_infos[frame.index] = frame_ptr;
+					}
+					else {
+						frame_infos.push_back(std::move(frame_ptr));
+					}
 				}
-				// Pad missing indices so frame.index lands at the correct slot.
-				while (frame_infos.size() < frame.index) {
-					frame_infos.push_back(nullptr);
-				}
-				frame_infos.push_back(std::make_shared<FrameInfo>(
-					texture_id_map.at(frame.texture_id),
-					frame.subtex_id));
 			}
 			// Ensure the vector covers every index up to the largest seen.
 			while (frame_infos.size() <= largest_frame_idx) {

@@ -393,6 +393,7 @@ void player_defeated_on_last_building_destroyed() {
 
 	state->clear_game_result();
 	TESTEQUALS(state->get_game_result().finished, false);
+	TESTEQUALS(state->get_game_result().has_winner, false);
 }
 
 void building_population_capacity() {

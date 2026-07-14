@@ -266,9 +266,9 @@ public:
 	void set_game_result(GameResult result);
 
 	/**
-	 * @return Match outcome for UI / after-game summary screens.
+	 * @return Match outcome for UI / after-game summary screens (copy).
 	 */
-	const GameResult &get_game_result() const;
+	GameResult get_game_result() const;
 
 	/**
 	 * Clear a previous match outcome (e.g. when returning to the main menu).
@@ -802,8 +802,14 @@ private:
 
 	/**
 	 * Match outcome once the game has ended (empty until then).
+	 * Protected by \p game_result_mutex (sim writes, presenter reads).
 	 */
 	GameResult game_result;
+
+	/**
+	 * Guards \p game_result between the simulation and presenter threads.
+	 */
+	mutable std::shared_mutex game_result_mutex;
 
 	/**
 	 * Player whose fog-of-war view is used for rendering (local player).

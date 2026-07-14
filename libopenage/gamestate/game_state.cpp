@@ -3,6 +3,7 @@
 #include "game_state.h"
 
 #include <algorithm>
+#include <shared_mutex>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -192,14 +193,17 @@ const std::unordered_map<player_id_t, std::shared_ptr<Player>> &GameState::get_p
 }
 
 void GameState::set_game_result(GameResult result) {
+	std::unique_lock lock{this->game_result_mutex};
 	this->game_result = std::move(result);
 }
 
-const GameResult &GameState::get_game_result() const {
+GameResult GameState::get_game_result() const {
+	std::shared_lock lock{this->game_result_mutex};
 	return this->game_result;
 }
 
 void GameState::clear_game_result() {
+	std::unique_lock lock{this->game_result_mutex};
 	this->game_result = GameResult{};
 }
 

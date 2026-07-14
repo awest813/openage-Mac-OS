@@ -247,9 +247,15 @@ TerrainInfo parse_terrain_file(const util::Path &path,
 			while (frame_infos.size() < frame.index) {
 				frame_infos.push_back(nullptr);
 			}
-			frame_infos.push_back(std::make_shared<TerrainFrameInfo>(
+			auto frame_ptr = std::make_shared<TerrainFrameInfo>(
 				texture_id_map[frame.texture_id],
-				frame.subtex_id));
+				frame.subtex_id);
+			if (frame.index < frame_infos.size()) {
+				frame_infos[frame.index] = frame_ptr;
+			}
+			else {
+				frame_infos.push_back(std::move(frame_ptr));
+			}
 		}
 		while (frame_infos.size() <= largest_frame_idx) {
 			frame_infos.push_back(nullptr);

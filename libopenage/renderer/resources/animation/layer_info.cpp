@@ -26,6 +26,9 @@ LayerInfo::LayerInfo(std::vector<std::shared_ptr<AngleInfo>> &angles,
 	if (this->angles.size() > 0) {
 		// set frame timings by calculating when they appear in the animation sequence
 		auto frame_count = this->angles[0]->get_frame_count();
+		if (frame_count == 0) {
+			return;
+		}
 		time::time_t t = 0;
 		std::vector<time::time_t> keyframes;
 		for (size_t i = 0; i < frame_count; ++i) {

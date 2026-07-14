@@ -70,6 +70,7 @@ const std::shared_ptr<BlendPatternInfo> &AssetManager::request_blpattern(const u
 		if (this->placeholder_blpattern) {
 			log::log(MSG(warn) << "Failed to load blend pattern file from: " << path
 			                   << " - using placeholder instead.");
+			this->cache->add_blpattern(path, (*this->placeholder_blpattern).second);
 			return (*this->placeholder_blpattern).second;
 		}
 		else {
@@ -92,6 +93,7 @@ const std::shared_ptr<BlendTableInfo> &AssetManager::request_bltable(const util:
 		if (this->placeholder_bltable) {
 			log::log(MSG(warn) << "Failed to load blend table file from: " << path
 			                   << " - using placeholder instead.");
+			this->cache->add_bltable(path, (*this->placeholder_bltable).second);
 			return (*this->placeholder_bltable).second;
 		}
 		else {
@@ -114,6 +116,7 @@ const std::shared_ptr<PaletteInfo> &AssetManager::request_palette(const util::Pa
 		if (this->placeholder_palette) {
 			log::log(MSG(warn) << "Failed to load palette file from: " << path
 			                   << " - using placeholder instead.");
+			this->cache->add_palette(path, (*this->placeholder_palette).second);
 			return (*this->placeholder_palette).second;
 		}
 		else {
@@ -136,6 +139,7 @@ const std::shared_ptr<TerrainInfo> &AssetManager::request_terrain(const util::Pa
 		if (this->placeholder_terrain) {
 			log::log(MSG(warn) << "Failed to load terrain file from: " << path
 			                   << " - using placeholder instead.");
+			this->cache->add_terrain(path, (*this->placeholder_terrain).second);
 			return (*this->placeholder_terrain).second;
 		}
 		else {

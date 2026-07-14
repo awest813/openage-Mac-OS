@@ -49,6 +49,10 @@ void WorldObject::set_render_entity(const std::shared_ptr<RenderEntity> &entity)
 }
 
 void WorldObject::fetch_updates(const time::time_t &time) {
+	if (this->render_entity == nullptr) {
+		return;
+	}
+
 	// TODO: Calling this once per frame is very expensive
 	auto layer_count = this->get_required_layer_count(time);
 	if (this->layer_uniforms.size() != layer_count) {

@@ -62,6 +62,7 @@ Item {
 		width: Math.min(parent.width * 0.72, 420)
 
 		Text {
+			id: brand
 			width: parent.width
 			horizontalAlignment: Text.AlignHCenter
 			text: "openage"
@@ -73,16 +74,19 @@ Item {
 			scale: 0.92
 
 			SequentialAnimation on opacity {
-				running: true
+				id: brandFade
+				running: false
 				NumberAnimation { to: 1; duration: 700; easing.type: Easing.OutCubic }
 			}
 			SequentialAnimation on scale {
-				running: true
+				id: brandScale
+				running: false
 				NumberAnimation { to: 1; duration: 700; easing.type: Easing.OutCubic }
 			}
 		}
 
 		Text {
+			id: titleText
 			width: parent.width
 			horizontalAlignment: Text.AlignHCenter
 			text: root.title
@@ -92,13 +96,15 @@ Item {
 			visible: root.title.length > 0
 			opacity: 0
 			SequentialAnimation on opacity {
-				running: true
+				id: titleFade
+				running: false
 				PauseAnimation { duration: 120 }
 				NumberAnimation { to: 1; duration: 450; easing.type: Easing.OutCubic }
 			}
 		}
 
 		Text {
+			id: bodyText
 			width: parent.width
 			horizontalAlignment: Text.AlignHCenter
 			wrapMode: Text.WordWrap
@@ -109,7 +115,8 @@ Item {
 			visible: root.body.length > 0
 			opacity: 0
 			SequentialAnimation on opacity {
-				running: true
+				id: bodyFade
+				running: false
 				PauseAnimation { duration: 200 }
 				NumberAnimation { to: 1; duration: 500; easing.type: Easing.OutCubic }
 			}
@@ -120,6 +127,32 @@ Item {
 			anchors.horizontalCenter: parent.horizontalCenter
 			spacing: 12
 			width: parent.width
+		}
+	}
+
+	function playIntro() {
+		brand.opacity = 0
+		brand.scale = 0.92
+		titleText.opacity = 0
+		bodyText.opacity = 0
+		brandFade.restart()
+		brandScale.restart()
+		titleFade.restart()
+		bodyFade.restart()
+		if (buttonColumn.children.length > 0) {
+			buttonColumn.children[0].forceActiveFocus()
+		}
+	}
+
+	onVisibleChanged: {
+		if (visible) {
+			playIntro()
+		}
+	}
+
+	Component.onCompleted: {
+		if (visible) {
+			playIntro()
 		}
 	}
 }

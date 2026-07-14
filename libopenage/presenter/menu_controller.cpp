@@ -16,7 +16,10 @@
 namespace openage::presenter {
 
 MenuController::MenuController(QObject *parent) :
-	QObject{parent} {}
+	QObject{parent} {
+	// Main menu holds simulation time until Start is chosen.
+	this->is_paused = true;
+}
 
 void MenuController::set_window(const std::shared_ptr<renderer::Window> &window) {
 	this->window = window;
@@ -93,6 +96,14 @@ void MenuController::set_paused(bool paused) {
 	emit this->pausedChanged();
 }
 
+void MenuController::clear_stats() {
+	this->stat_units_killed = 0;
+	this->stat_units_lost = 0;
+	this->stat_resources_gathered = 0;
+	this->stat_apm = 0.0;
+	emit this->statsChanged();
+}
+
 void MenuController::startGame() {
 	if (this->simulation) {
 		auto game = this->simulation->get_game();
@@ -105,6 +116,7 @@ void MenuController::startGame() {
 	this->winner_present = false;
 	this->winner_id = 0;
 	emit this->gameOverChanged();
+	this->clear_stats();
 
 	this->is_in_game = true;
 	emit this->inGameChanged();
@@ -126,7 +138,13 @@ void MenuController::startGame() {
 }
 
 void MenuController::togglePause() {
-	if (not this->is_in_game || this->is_game_over) {
+	if (this->is_game_over) {
+		// Escape on the summary screen returns to the main menu.
+		this->quitToMenu();
+		return;
+	}
+
+	if (not this->is_in_game) {
 		return;
 	}
 
@@ -175,6 +193,7 @@ void MenuController::quitToMenu() {
 	this->is_game_over = false;
 	this->winner_present = false;
 	emit this->gameOverChanged();
+	this->clear_stats();
 
 	this->set_screen(QStringLiteral("main"));
 	log::log(MSG(info) << "Menu: returned to main menu");
@@ -232,13 +251,23 @@ void MenuController::refresh_stats() {
 		elapsed = 1.0;
 	}
 
-	// Prefer the winner's stats; otherwise the first alive/defeated player.
+	// Prefer the winner; otherwise the local view player; else lowest player id.
 	std::shared_ptr<gamestate::Player> focus;
-	if (this->winner_present && state->get_players().contains(this->winner_id)) {
+	if (this->winner_present && state->has_player(this->winner_id)) {
 		focus = state->get_player(this->winner_id);
 	}
+	else if (state->has_player(state->get_view_player())) {
+		focus = state->get_player(state->get_view_player());
+	}
 	else if (not state->get_players().empty()) {
-		focus = state->get_players().begin()->second;
+		gamestate::player_id_t lowest = state->get_players().begin()->first;
+		for (const auto &[pid, player] : state->get_players()) {
+			(void)player;
+			if (pid < lowest) {
+				lowest = pid;
+			}
+		}
+		focus = state->get_player(lowest);
 	}
 
 	if (focus) {

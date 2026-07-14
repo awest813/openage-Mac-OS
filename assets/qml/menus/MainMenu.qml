@@ -3,10 +3,10 @@
 import QtQuick 2.15
 
 MenuFrame {
-	body: "Free and open Age of Empires engine. Configure a match, then take the field."
+	body: "Free and open Age of Empires engine. Enter the current match when you are ready. Full match restart is not available yet."
 
 	MenuButton {
-		text: "New Game"
+		text: "Start"
 		onClicked: menuController.startGame()
 	}
 	MenuButton {

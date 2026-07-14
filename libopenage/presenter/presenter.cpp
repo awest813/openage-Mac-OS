@@ -120,6 +120,8 @@ void Presenter::init_graphics(const renderer::window_settings &window_settings) 
 	auto missing_png = this->root_dir / "assets" / "test" / "textures" / "missing.png";
 	this->asset_manager->set_placeholder_animation(missing_sprite);
 	this->asset_manager->set_placeholder_texture(missing_texture);
+	this->asset_manager->set_placeholder_terrain(
+		this->root_dir / "assets" / "test" / "textures" / "test_terrain.terrain");
 	this->asset_manager->get_texture_manager()->set_placeholder(missing_png);
 
 	// Camera
@@ -216,7 +218,8 @@ void Presenter::init_gui() {
 	this->menu_controller->set_time_loop(this->time_loop);
 	this->menu_controller->set_simulation(this->simulation);
 
-	// Hold the simulation on the main menu until New Game is chosen.
+	// Hold the simulation on the main menu until Start is chosen.
+	// TimeLoop starts the clock paused; keep it paused if a race already resumed it.
 	if (this->time_loop) {
 		auto clock = this->time_loop->get_clock();
 		if (clock->get_state() == time::ClockState::RUNNING) {

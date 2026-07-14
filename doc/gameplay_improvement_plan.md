@@ -234,10 +234,12 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
 - [x] **After-game summary + menu shell (QML)** — Presenter loads
   `assets/qml/menus/main.qml` instead of the test GUI. `MenuController` bridges
   main / pause / game-over screens to the simulation clock and window. Escape
-  toggles pause; match end stores `GameState::GameResult` and opens the summary
-  with kills / losses / resources / APM. Menu screens block game/camera input;
-  texture/animation placeholders (`missing.png` / `test_missing.*`) are wired so
-  missing sprites fall back instead of crashing.
+  toggles pause (and returns from game-over to the main menu); match end stores
+  `GameState::GameResult` (mutex-guarded) and opens the summary with kills /
+  losses / resources / APM. Menu screens block game/camera input; texture /
+  animation / terrain placeholders are wired so missing assets fall back instead
+  of crashing. The time loop starts paused until **Start**. Full match reset from
+  the menu is still pending (Start re-enters the current simulation).
 - [x] **Zoom towards mouse cursor** — wheel zoom uses `Camera::zoom_towards` anchored
   on the cursor by default (`CameraManager::ZoomAnchor::MOUSE_CURSOR`). Set
   `CAMERA_ZOOM_ANCHOR screen_center` in `cfg/camera.oac` for legacy centre zoom.

@@ -105,6 +105,7 @@ signals:
 
 private:
 	void set_paused(bool paused);
+	void clear_stats();
 	void refresh_stats();
 	void apply_game_over(bool has_winner, gamestate::player_id_t winner_id);
 
