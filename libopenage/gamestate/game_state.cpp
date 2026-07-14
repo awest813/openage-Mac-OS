@@ -191,6 +191,18 @@ const std::unordered_map<player_id_t, std::shared_ptr<Player>> &GameState::get_p
 	return this->players;
 }
 
+void GameState::set_game_result(GameResult result) {
+	this->game_result = std::move(result);
+}
+
+const GameResult &GameState::get_game_result() const {
+	return this->game_result;
+}
+
+void GameState::clear_game_result() {
+	this->game_result = GameResult{};
+}
+
 size_t GameState::get_alive_player_count() const {
 	size_t count = 0;
 	for (const auto &[id, player] : this->players) {
@@ -261,6 +273,7 @@ void GameState::check_defeat(player_id_t owner_id, const time::time_t &time) {
 		// Exactly one player remains — they win.
 		this->players.at(winner_id)->set_state(player_state_t::WINNER);
 		log::log(MSG(info) << "Player " << winner_id << " has won the game!");
+		this->set_game_result(GameResult{true, true, winner_id});
 
 		if (this->event_loop) {
 			this->event_loop->create_event(
@@ -278,6 +291,7 @@ void GameState::check_defeat(player_id_t owner_id, const time::time_t &time) {
 		// No players remain (sole-player loss or simultaneous defeat):
 		// the game is over with no winner.
 		log::log(MSG(info) << "Game over — no players remain.");
+		this->set_game_result(GameResult{true, false, player_id_t{0}});
 
 		if (this->event_loop) {
 			this->event_loop->create_event(

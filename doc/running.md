@@ -61,8 +61,9 @@ bin/run main
 ```
 
 This run mode is supposed to start a main menu or launcher which allows configuring a
-game. Neither of these are implemented at the moment, so `main` just does the same
-thing as `game`.
+game. The presenter loads the QML menu shell in `assets/qml/menus/` (main menu, pause,
+after-game summary). Match configuration beyond "New Game" is still limited, so deep
+game-setup options remain future work.
 
 
 ### `test`

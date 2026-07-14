@@ -1,4 +1,4 @@
-// Copyright 2014-2025 the openage authors. See copying.md for legal info.
+// Copyright 2014-2026 the openage authors. See copying.md for legal info.
 
 #pragma once
 
@@ -45,11 +45,15 @@ bool fail(const log::message &msg);
 /**
  * Asserts that the left expression equals the right expression,
  * and that no exception is thrown.
+ *
+ * Results are stored by value (not auto&&). Binding a reference through
+ * temporary std::optional::operator-> otherwise dangles after the full
+ * expression ends (visible as 0xDD.. on MSVC debug heaps).
  */
 #define TESTEQUALS(left, right) \
 	do { \
 		try { \
-			auto &&test_result_left = (left); \
+			auto test_result_left = (left); \
 			if (test_result_left != (right)) { \
 				TESTFAILMSG(__FILE__ << ":" << __LINE__ << ": Expected " \
 				                     << test_result_left << " and " \
@@ -72,7 +76,7 @@ bool fail(const log::message &msg);
 #define TESTNOTEQUALS(left, right) \
 	do { \
 		try { \
-			auto &&test_result_left = (left); \
+			auto test_result_left = (left); \
 			if (test_result_left == (right)) { \
 				TESTFAILMSG(__FILE__ << ":" << __LINE__ << ": Expected " \
 				                     << test_result_left << " and " \
@@ -95,8 +99,8 @@ bool fail(const log::message &msg);
 #define TESTEQUALS_FLOAT(left, right, epsilon) \
 	do { \
 		try { \
-			auto &&test_result_left = (left); \
-			auto &&test_result_right = (right); \
+			auto test_result_left = (left); \
+			auto test_result_right = (right); \
 			if ((test_result_left < (test_result_right - epsilon)) or (test_result_left > (test_result_right + epsilon))) { \
 				TESTFAILMSG(__FILE__ << ":" << __LINE__ << ": Expected " << (test_result_left) << " and " << (test_result_right) << " to be equal"); \
 			} \

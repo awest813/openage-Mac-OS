@@ -387,6 +387,12 @@ void player_defeated_on_last_building_destroyed() {
 	TESTEQUALS(p0->get_state() == player_state_t::DEFEATED, true);
 	TESTEQUALS(p1->get_state() == player_state_t::WINNER, true);
 	TESTEQUALS(state->get_alive_player_count(), 0);
+	TESTEQUALS(state->get_game_result().finished, true);
+	TESTEQUALS(state->get_game_result().has_winner, true);
+	TESTEQUALS(state->get_game_result().winner_id, player_id_t{1});
+
+	state->clear_game_result();
+	TESTEQUALS(state->get_game_result().finished, false);
 }
 
 void building_population_capacity() {
@@ -982,9 +988,10 @@ void building_cost_and_salvage_spawn() {
 	pos->set_position(t0, coord::phys3{5, 5, 0});
 	state->add_game_entity(building);
 
-	TESTEQUALS(state->get_building_cost(10).has_value(), true);
-	TESTEQUALS(state->get_building_cost(10)->entries.size(), 1);
-	TESTEQUALS(state->get_building_cost(10)->entries[0].amount, 200);
+	auto cost_after = state->get_building_cost(10);
+	TESTEQUALS(cost_after.has_value(), true);
+	TESTEQUALS(cost_after->entries.size(), 1);
+	TESTEQUALS(cost_after->entries[0].amount, 200);
 
 	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
 	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
@@ -1131,6 +1138,10 @@ void entity_population_tracking() {
 	auto loop = std::make_shared<openage::event::EventLoop>();
 	auto db = nyan::Database::create();
 	auto state = std::make_shared<GameState>(db, loop);
+
+	// remove_game_entity may fire defeat events when the last building dies.
+	loop->add_event_handler(std::make_shared<gamestate::event::PlayerDefeatedHandler>());
+	loop->add_event_handler(std::make_shared<gamestate::event::GameOverHandler>());
 
 	auto view = db->new_view();
 	auto player = std::make_shared<Player>(0, view, loop);

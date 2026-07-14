@@ -221,7 +221,7 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
   builds an RGBA minimap each visibility tick: fog-based terrain shading plus markers
   (larger symbols for buildings, dots for units, colour by ownership). Test:
   `minimap_texture`. HUD texture display and big-map overlay still pending QML wiring.
-- [~] **After-game statistics (data layer)** — `Player` accumulates per-game
+- [x] **After-game statistics (data layer)** — `Player` accumulates per-game
   stats as time-indexed curves: `units_killed` (credited to the attacker's owner
   in `Attack::attack_default` on a kill), `units_lost` (recorded in
   `GameState::remove_game_entity(id, time)` for any owned unit/building death),
@@ -230,8 +230,12 @@ combat stance over time; default is AGGRESSIVE. The `Idle` system was extended t
   `get_resource_gathered` / `get_total_resources_gathered`. APM is tracked via
   `record_action` (counted once per player-issued command in `SendCommandHandler`;
   internal re-enqueues bypass it) and queried with `get_actions_issued` /
-  `get_apm`. Test: `player_statistics`. The end-game summary screen (QML) is
-  still pending.
+  `get_apm`. Test: `player_statistics`.
+- [x] **After-game summary + menu shell (QML)** — Presenter loads
+  `assets/qml/menus/main.qml` instead of the test GUI. `MenuController` bridges
+  main / pause / game-over screens to the simulation clock and window. Escape
+  toggles pause; match end stores `GameState::GameResult` and opens the summary
+  with kills / losses / resources / APM.
 - [x] **Zoom towards mouse cursor** — wheel zoom uses `Camera::zoom_towards` anchored
   on the cursor by default (`CameraManager::ZoomAnchor::MOUSE_CURSOR`). Set
   `CAMERA_ZOOM_ANCHOR screen_center` in `cfg/camera.oac` for legacy centre zoom.
