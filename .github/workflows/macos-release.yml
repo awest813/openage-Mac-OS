@@ -106,13 +106,22 @@ jobs:
           --download-nyan
           --target-arch=${{ matrix.arch }}
           --macos-deployment-target=13.0
-          --prefix=/usr/local
+          --prefix="$(brew --prefix)"
 
       - name: Build
         run: make -j$(sysctl -n hw.logicalcpu) VERBOSE=1
 
       - name: Test
         run: make test
+
+      - name: Verify build architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$(find bin -name 'libopenage*.dylib' | head -n1)"
+          test -n "${TARGET}"
+          file "${TARGET}"
+          lipo -archs "${TARGET}" | grep -qw '${{ matrix.arch }}'
 
       # ------------------------------------------------------------------ #
       # Package
@@ -127,19 +136,23 @@ jobs:
           VERSION=${VERSION#v}
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Create tarball
+      - name: Create portable package
         shell: bash
         run: |
           set -euo pipefail
           ARTIFACT="openage-${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}"
-          test -e bin/run
-          mkdir -p "dist/${ARTIFACT}"
-          # package the produced build tree for this architecture
-          cp -R bin/. "dist/${ARTIFACT}/"
-          tar -czf "${ARTIFACT}.tar.gz" -C dist "${ARTIFACT}"
-          test -s "${ARTIFACT}.tar.gz"
+          packaging/macos/package_portable.sh \
+            --source-dir bin \
+            --artifact-name "${ARTIFACT}" \
+            --arch "${{ matrix.arch }}" \
+            --out-dir dist \
+            --dmg
+          # Prefer the tarball produced under dist/; keep env vars for smoke test.
           echo "ARTIFACT_NAME=${ARTIFACT}" >> "$GITHUB_ENV"
-          echo "ARTIFACT_FILE=${ARTIFACT}.tar.gz" >> "$GITHUB_ENV"
+          echo "ARTIFACT_FILE=dist/${ARTIFACT}.tar.gz" >> "$GITHUB_ENV"
+          if [[ -f "dist/${ARTIFACT}.dmg" ]]; then
+            echo "DMG_FILE=dist/${ARTIFACT}.dmg" >> "$GITHUB_ENV"
+          fi
 
       # Verify the *packaged* artifact actually launches before we publish it.
       # `make test` only exercises the in-tree build; this re-extracts the
@@ -164,7 +177,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.ARTIFACT_FILE }}
+          path: dist/${{ env.ARTIFACT_NAME }}.*
           if-no-files-found: error
           retention-days: 30
 
@@ -194,7 +207,9 @@ jobs:
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-artifacts/*.tar.gz
-          fail_on_unmatched_files: true
+          files: |
+            release-artifacts/*.tar.gz
+            release-artifacts/*.dmg
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -13,6 +13,7 @@ find_library(GCCBacktrace_LIBRARY
 	PATHS
 		/usr/lib
 		/usr/local/lib
+		/opt/homebrew/lib
 		/sw
 		/usr/freeware
 )

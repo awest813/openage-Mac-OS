@@ -125,6 +125,33 @@ cd bin && ./run
 
 Try `./run --help` for available options.
 
+## Asset conversion on macOS
+
+The converter proposes install paths from:
+
+1. Edition-specific defaults in `cfg/converter/games/game_editions.toml`
+   (including `~/Library/Application Support/Steam/steamapps/common/...`).
+2. Extra Steam libraries listed in `libraryfolders.vdf` (secondary drives).
+3. Wine / CrossOver bottle prefixes (`~/.wine`, `$WINEPREFIX`, CrossOver Bottles).
+
+If your Steam library lives on an external volume, conversion should still
+find it as long as Steam has registered that library.
+
+## Portable release packaging
+
+CI release tags build a relocatable tree with:
+
+```bash
+packaging/macos/package_portable.sh \
+  --source-dir bin \
+  --artifact-name "openage-$(tr -d '\n' < openage_version)-macos-$(uname -m)" \
+  --arch "$(uname -m)" \
+  --dmg
+```
+
+The script bundles Homebrew dylibs, ad-hoc codesigns, and writes `.tar.gz`
+plus `.dmg` under `dist/`.
+
 ## Creating documentation
 
 ```bash
@@ -144,6 +171,32 @@ were built for a different architecture than the one you are targeting.
 - On Intel: `brew --prefix` should print `/usr/local`.
 - If you need x86_64 on an Apple Silicon machine, open a dedicated shell with
   `arch -x86_64 /bin/zsh` before running Homebrew or `./configure`.
+
+### Install prefix
+
+`./configure` defaults `--prefix` to `$(brew --prefix)` on macOS.  Passing
+`--prefix=/usr/local` on Apple Silicon will install into the wrong tree for
+native arm64 Homebrew packages.  Prefer:
+
+```bash
+./configure --prefix="$(brew --prefix)" --compiler="$(brew --prefix llvm)/bin/clang++" --download-nyan
+```
+
+### Black / frozen GUI window
+
+The presenter must run on the main thread on macOS.  This fork already swaps
+simulation onto a worker thread when `__APPLE__` is defined.  If you are
+debugging a custom build, do not move Qt/OpenGL initialization onto a
+background thread.
+
+### Quarantine / “damaged” app after download
+
+Ad-hoc signed release archives downloaded from the internet may still be
+quarantined.  Clear the flag on the extracted folder:
+
+```bash
+xattr -dr com.apple.quarantine /path/to/openage-*-macos-*
+```
 
 ### Rosetta 2
 

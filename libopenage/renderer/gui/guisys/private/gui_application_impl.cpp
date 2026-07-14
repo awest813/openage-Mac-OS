@@ -1,4 +1,4 @@
-// Copyright 2015-2023 the openage authors. See copying.md for legal info.
+// Copyright 2015-2026 the openage authors. See copying.md for legal info.
 
 #include "gui_application_impl.h"
 
@@ -35,9 +35,10 @@ GuiApplicationImpl::~GuiApplicationImpl() {
 
 void GuiApplicationImpl::processEvents() {
 	assert(std::this_thread::get_id() == this->owner);
-#ifndef __APPLE__
+	// Process Qt events on every platform, including Apple Silicon. The
+	// previous __APPLE__ guard left the GUI starved of events; combined with
+	// running the presenter on the main thread (engine.cpp) this is safe.
 	this->app.processEvents();
-#endif
 }
 
 namespace {

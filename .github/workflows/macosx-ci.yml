@@ -59,6 +59,8 @@ jobs:
         run: brew install --cask font-dejavu
       - name: Install environment helpers with homebrew
         run: brew install --force ccache
+      - name: Install LLVM with homebrew
+        run: brew install --force llvm
       - name: Install openage dependencies with homebrew
         run: brew install --force cmake python3 libepoxy freetype fontconfig harfbuzz opus opusfile qt6 libogg libpng toml11 eigen
       - name: Install nyan dependencies with homebrew
@@ -71,16 +73,27 @@ jobs:
       - name: Configure
         run: >
           ./configure
-          --compiler=clang
+          --compiler="$(brew --prefix llvm)/bin/clang++"
           --mode=release
           --ccache
           --download-nyan
           --target-arch=${{ matrix.arch }}
           --macos-deployment-target=13.0
+          --prefix="$(brew --prefix)"
       - name: Build
         run: make -j$(sysctl -n hw.logicalcpu) VERBOSE=1
       - name: Test
         run: make test
+      - name: Verify build architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$(find bin -name 'libopenage*.dylib' | head -n1)"
+          test -n "${TARGET}"
+          echo "binary: ${TARGET}"
+          file "${TARGET}"
+          lipo -archs "${TARGET}" | tee /dev/stderr | grep -qw '${{ matrix.arch }}'
+          echo "Homebrew prefix: $(brew --prefix)"
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         if: success()

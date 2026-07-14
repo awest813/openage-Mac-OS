@@ -1,4 +1,4 @@
-// Copyright 2023-2024 the openage authors. See copying.md for legal info.
+// Copyright 2023-2026 the openage authors. See copying.md for legal info.
 
 #include "engine.h"
 
@@ -20,7 +20,8 @@ Engine::Engine(mode mode,
 	running{true},
 	run_mode{mode},
 	root_dir{root_dir},
-	threads{} {
+	threads{},
+	window_settings{window_settings} {
 	log::log(INFO
 	         << "launching engine with root directory"
 	         << root_dir);
@@ -33,7 +34,6 @@ Engine::Engine(mode mode,
 	this->time_loop = std::make_shared<time::TimeLoop>();
 
 	// game simulation
-	// this is run in the main thread
 	this->simulation = std::make_shared<gamestate::GameSimulation>(this->root_dir,
 	                                                               this->cvar_manager,
 	                                                               this->time_loop);
@@ -53,10 +53,12 @@ Engine::Engine(mode mode,
 		this->time_loop.reset();
 	});
 
-	// if presenter is used, run it in a separate thread
+#ifndef __APPLE__
+	// On non-Apple platforms the presenter runs in a worker thread and the
+	// simulation owns the main thread (see Engine::loop).
 	if (this->run_mode == mode::FULL) {
 		this->threads.emplace_back([&]() {
-			this->presenter->run(window_settings);
+			this->presenter->run(this->window_settings);
 
 			// Make sure that the presenter gets destructed in the same thread
 			// otherwise OpenGL complains about missing contexts
@@ -64,12 +66,30 @@ Engine::Engine(mode mode,
 			this->running = false;
 		});
 	}
+#endif
 
 	log::log(INFO << "Using " << this->threads.size() + 1 << " threads "
 	              << "(" << std::jthread::hardware_concurrency() << " available)");
 }
 
 void Engine::loop() {
+#ifdef __APPLE__
+	// Cocoa / Qt require GUI work on the process main thread on macOS
+	// (including Apple Silicon). Run the simulation on a worker and keep the
+	// presenter here so QML / OpenGL contexts stay valid.
+	if (this->run_mode == mode::FULL && this->presenter) {
+		this->threads.emplace_back([&]() {
+			this->simulation->run();
+			this->simulation.reset();
+		});
+
+		this->presenter->run(this->window_settings);
+		this->presenter.reset();
+		this->running = false;
+		return;
+	}
+#endif
+
 	// Run the main game simulation loop:
 	this->simulation->run();
 

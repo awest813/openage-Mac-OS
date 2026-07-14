@@ -134,6 +134,12 @@ private:
 	 * Video/audio/input management. Can be nullptr in headless mode.
 	 */
 	std::shared_ptr<presenter::Presenter> presenter;
+
+	/**
+	 * Window settings for the presenter (needed when GUI runs on the main
+	 * thread on Apple platforms).
+	 */
+	renderer::window_settings window_settings;
 };
 
 } // namespace engine
