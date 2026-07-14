@@ -82,9 +82,101 @@ constexpr double FOREST_REGEN_INTERVAL_SEC = 5.0;
 constexpr int64_t FOREST_REGEN_AMOUNT = 1;
 
 /**
+ * Whether the day/night cycle is enabled by default.
+ *
+ * Disabled keeps constant daytime sight (original behaviour). When enabled
+ * (opt-in via GAMEPLAY_DAY_NIGHT / cfg/gameplay.oac), line-of-sight shrinks
+ * at night and during twilight.
+ */
+constexpr bool DAY_NIGHT_ENABLED_DEFAULT = false;
+
+/**
+ * Default length of daytime in seconds of game time.
+ */
+constexpr double DAY_LENGTH_SEC = 300.0;
+
+/**
+ * Default length of nighttime in seconds of game time.
+ */
+constexpr double NIGHT_LENGTH_SEC = 180.0;
+
+/**
+ * Sight-range multipliers for each day phase (applied to DEFAULT_SIGHT_RANGE).
+ */
+constexpr double DAY_SIGHT_MULT = 1.0;
+constexpr double TWILIGHT_SIGHT_MULT = 0.75;
+constexpr double NIGHT_SIGHT_MULT = 0.5;
+
+/**
+ * Fraction of the day/night segment used as dusk/dawn transition.
+ */
+constexpr double TWILIGHT_FRACTION = 0.1;
+
+/**
+ * Whether dynamic weather is enabled by default.
+ *
+ * Disabled keeps clear weather (original behaviour). When enabled (opt-in via
+ * GAMEPLAY_WEATHER / cfg/gameplay.oac), fog and rain reduce sight and rain
+ * slows movement.
+ */
+constexpr bool WEATHER_ENABLED_DEFAULT = false;
+
+/**
+ * Seconds between automatic weather transitions when weather cycling is on.
+ */
+constexpr double WEATHER_CYCLE_INTERVAL_SEC = 120.0;
+
+/**
+ * Sight-range multipliers for weather conditions (stacked with day/night).
+ */
+constexpr double WEATHER_CLEAR_SIGHT_MULT = 1.0;
+constexpr double WEATHER_FOG_SIGHT_MULT = 0.6;
+constexpr double WEATHER_RAIN_SIGHT_MULT = 0.8;
+
+/**
+ * Movement-speed multipliers for weather conditions.
+ */
+constexpr double WEATHER_CLEAR_MOVE_MULT = 1.0;
+constexpr double WEATHER_FOG_MOVE_MULT = 1.0;
+constexpr double WEATHER_RAIN_MOVE_MULT = 0.85;
+
+/**
+ * Whether forest hiding is enabled by default.
+ *
+ * Disabled keeps all fog-visible units visible (original behaviour). When
+ * enabled (opt-in via GAMEPLAY_FOREST_HIDE / cfg/gameplay.oac), enemy units
+ * standing on forest tiles are invisible beyond FOREST_HIDE_THRESHOLD_TILES.
+ */
+constexpr bool FOREST_HIDE_ENABLED_DEFAULT = false;
+
+/**
+ * Chebyshev distance (tiles) within which a forest-hidden unit remains visible.
+ */
+constexpr int FOREST_HIDE_THRESHOLD_TILES = 2;
+
+/**
  * Maximum distance (in tiles) for builders to start build or deconstruct actions.
  */
 constexpr double BUILDER_INTERACTION_RANGE = 2.0;
+
+/**
+ * Phase of the day/night cycle.
+ */
+enum class day_phase_t : uint8_t {
+	DAY = 0,
+	DUSK = 1,
+	NIGHT = 2,
+	DAWN = 3,
+};
+
+/**
+ * Active weather condition.
+ */
+enum class weather_t : uint8_t {
+	CLEAR = 0,
+	FOG = 1,
+	RAIN = 2,
+};
 
 /**
  * Clamp a resource recovery fraction to [0, 1].

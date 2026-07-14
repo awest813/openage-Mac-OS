@@ -240,7 +240,12 @@ std::shared_ptr<TerrainChunk> TerrainFactory::add_chunk(const std::shared_ptr<Ga
 				terrain_info_path = test_terrain_paths.at(test_chunk_index % test_terrain_paths.size());
 			}
 
-			tiles.push_back({terrain_obj, terrain_info_path, terrain_elevation_t::zero()});
+			tiles.push_back({
+				terrain_obj,
+				terrain_info_path,
+				terrain_elevation_t::zero(),
+				test_terrains.at(terrain_index),
+			});
 		}
 
 		test_chunk_index += 1;

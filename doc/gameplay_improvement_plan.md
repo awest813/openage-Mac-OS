@@ -265,9 +265,26 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 
 *(see `doc/ideas/gameplay.md` — Environment section)*
 
-- [ ] Day/night cycle affecting line-of-sight
-- [ ] Weather effects (fog, rain) modifying movement speed and visibility
-- [ ] Forest hiding: a unit in a forest tile is invisible to enemies beyond a threshold
+**Status:** ✅ Complete (opt-in; vanilla defaults preserved)
+
+- [x] **Day/night cycle affecting line-of-sight** — opt-in via `GAMEPLAY_DAY_NIGHT`
+  (`cfg/gameplay.oac`, default off). `GameState` resolves `day_phase_t`
+  (DAY / DUSK / NIGHT / DAWN) from simulation time and applies sight multipliers
+  (`DAY_SIGHT_MULT` / `TWILIGHT_SIGHT_MULT` / `NIGHT_SIGHT_MULT`) in
+  `refresh_visibility`. Day/night lengths configurable via
+  `set_day_night_params`. Test: `environment_day_night`.
+- [x] **Weather effects (fog, rain) modifying movement speed and visibility** —
+  opt-in via `GAMEPLAY_WEATHER`. Cycles CLEAR → FOG → RAIN on
+  `tick_environment` (each simulation tick). Fog and rain reduce sight
+  (stacked with day/night); rain also applies `WEATHER_RAIN_MOVE_MULT` through
+  `GameState::get_move_speed_multiplier` used by `Move::move_default`. Test:
+  `environment_weather`.
+- [x] **Forest hiding** — opt-in via `GAMEPLAY_FOREST_HIDE`. Enemy units on
+  forest tiles are invisible beyond `FOREST_HIDE_THRESHOLD_TILES` (Chebyshev,
+  default 2) even when fog-visible. Forest tiles are marked via
+  `mark_forest_tile` or `rebuild_forest_tiles_from_terrain` (matches "forest"
+  in terrain asset path / fqon). Idle auto-attack respects
+  `is_entity_visible`. Test: `environment_forest_hide`.
 
 ### 3.2 New Resources and Economy
 

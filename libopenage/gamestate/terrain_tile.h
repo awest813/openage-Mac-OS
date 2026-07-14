@@ -34,6 +34,12 @@ struct TerrainTile {
 	 * Height of this tile on the terrain.
 	 */
 	terrain_elevation_t elevation;
+
+	/**
+	 * Optional nyan fqon of the terrain type (e.g. for forest detection).
+	 * May be empty when the tile was constructed without a modpack object.
+	 */
+	std::string terrain_fqon;
 };
 
 } // namespace openage::gamestate

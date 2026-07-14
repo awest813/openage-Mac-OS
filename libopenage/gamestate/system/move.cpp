@@ -201,7 +201,11 @@ const time::time_t Move::move_default(const std::shared_ptr<gamestate::GameEntit
 		double move_time = 0;
 		if (not move_speed->is_infinite_positive()) {
 			auto distance = path_vector.length();
-			move_time = distance / move_speed->get();
+			double speed = move_speed->get() * state->get_move_speed_multiplier();
+			if (speed <= 0) {
+				speed = move_speed->get();
+			}
+			move_time = distance / speed;
 		}
 		total_time += move_time;
 

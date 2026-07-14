@@ -31,7 +31,13 @@
 #include "gamestate/map.h"
 #include "gamestate/definitions.h"
 #include "gamestate/player.h"
+#include "gamestate/terrain.h"
+#include "gamestate/terrain_chunk.h"
+#include "gamestate/terrain_tile.h"
 #include "renderer/stages/world/render_entity.h"
+
+#include <cctype>
+#include <string>
 
 
 namespace openage::gamestate {
@@ -591,6 +597,240 @@ void GameState::tick_resource_regen(const time::time_t &time) {
 	}
 }
 
+void GameState::set_day_night_enabled(bool enabled) {
+	this->day_night_enabled = enabled;
+}
+
+bool GameState::is_day_night_enabled() const {
+	return this->day_night_enabled;
+}
+
+void GameState::set_day_night_params(double day_sec, double night_sec) {
+	if (day_sec > 0) {
+		this->day_length_sec = day_sec;
+	}
+	if (night_sec > 0) {
+		this->night_length_sec = night_sec;
+	}
+}
+
+day_phase_t GameState::get_day_phase(const time::time_t &time) const {
+	if (not this->day_night_enabled) {
+		return day_phase_t::DAY;
+	}
+
+	const double cycle = this->day_length_sec + this->night_length_sec;
+	if (cycle <= 0) {
+		return day_phase_t::DAY;
+	}
+
+	double t = std::fmod(time.to_double(), cycle);
+	if (t < 0) {
+		t += cycle;
+	}
+
+	const double dusk_start = this->day_length_sec * (1.0 - TWILIGHT_FRACTION);
+	const double night_start = this->day_length_sec;
+	const double dawn_start = this->day_length_sec
+	                          + this->night_length_sec * (1.0 - TWILIGHT_FRACTION);
+
+	if (t < dusk_start) {
+		return day_phase_t::DAY;
+	}
+	if (t < night_start) {
+		return day_phase_t::DUSK;
+	}
+	if (t < dawn_start) {
+		return day_phase_t::NIGHT;
+	}
+	return day_phase_t::DAWN;
+}
+
+void GameState::set_weather_enabled(bool enabled) {
+	this->weather_enabled = enabled;
+	if (not enabled) {
+		this->current_weather = weather_t::CLEAR;
+	}
+}
+
+bool GameState::is_weather_enabled() const {
+	return this->weather_enabled;
+}
+
+void GameState::set_weather(weather_t weather) {
+	this->current_weather = weather;
+}
+
+weather_t GameState::get_weather() const {
+	if (not this->weather_enabled) {
+		return weather_t::CLEAR;
+	}
+	return this->current_weather;
+}
+
+void GameState::tick_environment(const time::time_t &time) {
+	if (not this->weather_enabled) {
+		return;
+	}
+
+	double elapsed = time.to_double() - this->last_weather_change_time.to_double();
+	if (elapsed < WEATHER_CYCLE_INTERVAL_SEC) {
+		return;
+	}
+
+	// Cycle CLEAR -> FOG -> RAIN -> CLEAR.
+	switch (this->current_weather) {
+	case weather_t::CLEAR:
+		this->current_weather = weather_t::FOG;
+		break;
+	case weather_t::FOG:
+		this->current_weather = weather_t::RAIN;
+		break;
+	case weather_t::RAIN:
+		this->current_weather = weather_t::CLEAR;
+		break;
+	}
+	this->last_weather_change_time = time;
+}
+
+double GameState::get_sight_multiplier(const time::time_t &time) const {
+	double mult = 1.0;
+
+	if (this->day_night_enabled) {
+		switch (this->get_day_phase(time)) {
+		case day_phase_t::DAY:
+			mult *= DAY_SIGHT_MULT;
+			break;
+		case day_phase_t::DUSK:
+		case day_phase_t::DAWN:
+			mult *= TWILIGHT_SIGHT_MULT;
+			break;
+		case day_phase_t::NIGHT:
+			mult *= NIGHT_SIGHT_MULT;
+			break;
+		}
+	}
+
+	if (this->weather_enabled) {
+		switch (this->current_weather) {
+		case weather_t::CLEAR:
+			mult *= WEATHER_CLEAR_SIGHT_MULT;
+			break;
+		case weather_t::FOG:
+			mult *= WEATHER_FOG_SIGHT_MULT;
+			break;
+		case weather_t::RAIN:
+			mult *= WEATHER_RAIN_SIGHT_MULT;
+			break;
+		}
+	}
+
+	return mult;
+}
+
+double GameState::get_move_speed_multiplier() const {
+	if (not this->weather_enabled) {
+		return WEATHER_CLEAR_MOVE_MULT;
+	}
+
+	switch (this->current_weather) {
+	case weather_t::CLEAR:
+		return WEATHER_CLEAR_MOVE_MULT;
+	case weather_t::FOG:
+		return WEATHER_FOG_MOVE_MULT;
+	case weather_t::RAIN:
+		return WEATHER_RAIN_MOVE_MULT;
+	}
+	return WEATHER_CLEAR_MOVE_MULT;
+}
+
+void GameState::set_forest_hide_enabled(bool enabled) {
+	this->forest_hide_enabled = enabled;
+}
+
+bool GameState::is_forest_hide_enabled() const {
+	return this->forest_hide_enabled;
+}
+
+void GameState::set_forest_hide_threshold(int tiles) {
+	if (tiles >= 0) {
+		this->forest_hide_threshold = tiles;
+	}
+}
+
+int GameState::get_forest_hide_threshold() const {
+	return this->forest_hide_threshold;
+}
+
+void GameState::mark_forest_tile(coord::tile tile) {
+	this->forest_tiles.insert(tile);
+}
+
+void GameState::unmark_forest_tile(coord::tile tile) {
+	this->forest_tiles.erase(tile);
+}
+
+bool GameState::is_forest_tile(coord::tile tile) const {
+	return this->forest_tiles.contains(tile);
+}
+
+void GameState::clear_forest_tiles() {
+	this->forest_tiles.clear();
+}
+
+namespace {
+
+bool name_contains_forest(const std::string &name) {
+	std::string lower;
+	lower.reserve(name.size());
+	for (char c : name) {
+		lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+	}
+	return lower.find("forest") != std::string::npos;
+}
+
+} // namespace
+
+void GameState::rebuild_forest_tiles_from_terrain() {
+	this->forest_tiles.clear();
+	if (this->map == nullptr) {
+		return;
+	}
+
+	const auto &terrain = this->map->get_terrain();
+	if (terrain == nullptr) {
+		return;
+	}
+
+	for (const auto &chunk : terrain->get_chunks()) {
+		const auto &offset = chunk->get_offset();
+		const auto &size = chunk->get_size();
+		const auto &tiles = chunk->get_tiles();
+		if (tiles.empty()) {
+			continue;
+		}
+
+		for (size_t se = 0; se < size[1]; ++se) {
+			for (size_t ne = 0; ne < size[0]; ++ne) {
+				const size_t idx = ne + se * size[0];
+				if (idx >= tiles.size()) {
+					continue;
+				}
+				const auto &tile = tiles[idx];
+				// Match terrain asset paths / fqons that mention "forest"
+				// (e.g. aoe1_base.data.terrain.forest.forest.Forest).
+				if (name_contains_forest(tile.terrain_asset_path)
+				    || name_contains_forest(tile.terrain_fqon)) {
+					coord::tile world{
+						offset.ne + static_cast<coord::tile_t>(ne),
+						offset.se + static_cast<coord::tile_t>(se)};
+					this->forest_tiles.insert(world);
+				}
+			}
+		}
+	}
+}
+
 void GameState::finish_deconstruct(entity_id_t building_id, const time::time_t &time) {
 	if (not this->game_entities.contains(building_id)) {
 		return;
@@ -670,7 +910,14 @@ void GameState::refresh_visibility(const time::time_t &time) {
 			entity->get_component(component::component_t::POSITION));
 		auto center = pos_comp->get_positions().get(time).to_tile();
 
-		this->update_player_visibility(owner_id, center, DEFAULT_SIGHT_RANGE_TILES);
+		double sight_mult = this->get_sight_multiplier(time);
+		int sight_range = static_cast<int>(
+			std::lround(DEFAULT_SIGHT_RANGE_TILES * sight_mult));
+		if (sight_range < 0) {
+			sight_range = 0;
+		}
+
+		this->update_player_visibility(owner_id, center, sight_range);
 	}
 
 	this->update_fog_render_visibility(time);
@@ -713,17 +960,64 @@ bool GameState::is_entity_visible(player_id_t observer,
 	auto tile = pos.to_tile();
 
 	bool visible = this->fog_of_war.is_visible(observer, tile);
+	if (not visible) {
+		return false;
+	}
+
+	// Forest hiding: enemy units on forest tiles are only visible when an
+	// observer unit is within the Chebyshev detection threshold.
+	if (this->forest_hide_enabled && this->is_forest_tile(tile)) {
+		player_id_t owner_id = observer;
+		if (entity->has_component(component::component_t::OWNERSHIP)) {
+			auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+				entity->get_component(component::component_t::OWNERSHIP));
+			owner_id = ownership->get_owners().get(time);
+		}
+
+		if (owner_id != observer) {
+			bool detected = false;
+			for (const auto &[ally_id, ally] : this->game_entities) {
+				(void) ally_id;
+				if (not ally->has_component(component::component_t::POSITION)
+				    || not ally->has_component(component::component_t::OWNERSHIP)) {
+					continue;
+				}
+				auto ally_own = std::dynamic_pointer_cast<component::Ownership>(
+					ally->get_component(component::component_t::OWNERSHIP));
+				if (ally_own->get_owners().get(time) != observer) {
+					continue;
+				}
+				auto ally_pos = std::dynamic_pointer_cast<component::Position>(
+					ally->get_component(component::component_t::POSITION));
+				auto ally_tile = ally_pos->get_positions().get(time).to_tile();
+				auto dne = ally_tile.ne - tile.ne;
+				auto dse = ally_tile.se - tile.se;
+				if (dne < 0) {
+					dne = -dne;
+				}
+				if (dse < 0) {
+					dse = -dse;
+				}
+				auto chebyshev = std::max(dne, dse);
+				if (chebyshev <= static_cast<coord::tile_t>(this->forest_hide_threshold)) {
+					detected = true;
+					break;
+				}
+			}
+			if (not detected) {
+				return false;
+			}
+		}
+	}
 
 	// Remember the entity's position whenever it is visible to the observer.
 	// Once it leaves vision we keep that remembered spot untouched so it can
 	// be rendered as a "ghost" at the place it was last seen. Entities the
 	// observer has never seen have no recorded position and stay hidden.
 	// Because is_entity_visible is a const query we use mutable fog_of_war.
-	if (visible) {
-		const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
-	}
+	const_cast<FogOfWar &>(this->fog_of_war).set_last_known_position(observer, entity_id, pos);
 
-	return visible;
+	return true;
 }
 
 std::optional<coord::phys3> GameState::get_last_known_position(player_id_t observer,
