@@ -82,6 +82,29 @@ constexpr double FOREST_REGEN_INTERVAL_SEC = 5.0;
 constexpr int64_t FOREST_REGEN_AMOUNT = 1;
 
 /**
+ * Whether buildable streets are enabled by default.
+ *
+ * Disabled keeps original movement (no street speed bonus). When enabled
+ * (opt-in via GAMEPLAY_STREETS / cfg/gameplay.oac), units travelling over
+ * registered street tiles move faster.
+ */
+constexpr bool STREETS_ENABLED_DEFAULT = false;
+
+/**
+ * Movement-speed multiplier applied while a unit is on a street tile.
+ */
+constexpr double STREET_MOVE_MULT = 1.25;
+
+/**
+ * Whether buildable bridges are enabled by default.
+ *
+ * Disabled keeps water impassable to land units. When enabled (opt-in via
+ * GAMEPLAY_BRIDGES / cfg/gameplay.oac), bridge buildings make land pathfinding
+ * passable on their tile and block water pathfinding there.
+ */
+constexpr bool BRIDGES_ENABLED_DEFAULT = false;
+
+/**
  * Maximum distance (in tiles) for builders to start build or deconstruct actions.
  */
 constexpr double BUILDER_INTERACTION_RANGE = 2.0;

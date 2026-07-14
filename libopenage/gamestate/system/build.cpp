@@ -8,6 +8,7 @@
 #include "log/log.h"
 #include "log/message.h"
 
+#include "gamestate/api/building_kind.h"
 #include "gamestate/api/creatable.h"
 #include "gamestate/component/api/create.h"
 #include "gamestate/component/internal/command_queue.h"
@@ -100,6 +101,23 @@ const time::time_t Build::build_command(const std::shared_ptr<gamestate::GameEnt
 	}
 
 	auto cost_record = api::building_cost_from_creatable(creatable);
+
+	// Opt-in street/bridge placement rules (Phase 3.3).
+	const coord::tile build_tile = build_site.to_tile();
+	if (api::is_street_building(target_building)) {
+		if (not state->can_place_street(build_tile)) {
+			log::log(MSG(dbg) << "Cannot place street " << target_building
+			                  << " at " << build_tile << ".");
+			return time::time_t::from_int(0);
+		}
+	}
+	else if (api::is_bridge_building(target_building)) {
+		if (not state->can_place_bridge(build_tile)) {
+			log::log(MSG(dbg) << "Cannot place bridge " << target_building
+			                  << " at " << build_tile << ".");
+			return time::time_t::from_int(0);
+		}
+	}
 
 	if (not api::player_can_afford(*player, cost_record, start_time)) {
 		log::log(MSG(dbg) << "Player " << owner_id

@@ -295,8 +295,22 @@ All of these must remain opt-in; a "vanilla mode" is always available.
 
 ### 3.3 New Buildings
 
-- [ ] Bridges: buildable over water, block ships, allow land units
-- [ ] Streets: increase movement speed for units travelling over them
+**Status:** ✅ Complete (opt-in; vanilla defaults preserved)
+
+- [x] **Streets** — opt-in via `GAMEPLAY_STREETS` (`cfg/gameplay.oac`, default
+  off). Street buildings (fqon contains `"street"` / `"road"`) register their
+  tile on spawn; `Move::move_default` applies `STREET_MOVE_MULT` (default 1.25)
+  via `GameState::get_tile_move_speed_multiplier` per waypoint segment. Placement
+  requires a free land tile (`can_place_street`). Destroying the building clears
+  the registration. Tests: `streets_move_speed_multiplier`, `streets_lifecycle`,
+  `building_kind_helpers`.
+- [x] **Bridges** — opt-in via `GAMEPLAY_BRIDGES`. Bridge buildings (fqon contains
+  `"bridge"`) register their tile on spawn. Each path query re-applies bridge
+  costs after `restore_sector_costs` / hazards: Land grid → `COST_MIN`, Water
+  grid → `COST_IMPASSABLE` (`apply_bridge_path_costs`). Placement requires a free
+  water tile when Water/Land grids exist. Tests: `bridges_lifecycle`.
+  *Note:* cross-sector portal refresh after a bridge opens a new land corridor
+  is deferred; same-sector crossings work with the cost overlay.
 
 ### 3.4 AI Improvements
 
@@ -326,7 +340,7 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3.12 \
       -DDOWNLOAD_NYAN=YES -G Ninja ..
 cmake --build . --parallel "$(nproc)"
-./run test -a          # all 60 tests pass (exit 0)
+./run test -a          # all registered C++/Python tests pass (exit 0)
 ```
 
 Notes:
@@ -337,6 +351,25 @@ Notes:
   base object (it builds with no pathfinding grids) so gamestate unit tests can
   construct a `Map` without loading the full nyan API. This fixed an abort in the
   `fog_tile_texture` test that previously took down the whole `./run test -a` run.
+
+### Audit & Polish (gameplay)
+
+A correctness pass over Phase 1–3 fixed several leaks and combat/placement holes:
+
+- [x] **Population release only when recorded** — destroying a building/unit no
+  longer invents `DEFAULT_BUILDING_POPULATION_SPACE` / `DEFAULT_POPULATION_COST`
+  when spawn never recorded provision/demand. Test: `population_no_phantom_release`.
+- [x] **Auto-attack / attack-move / guard / patrol respect fog** — enemy scans
+  gate on `is_entity_visible` so units cannot acquire targets outside LOS.
+- [x] **Street/bridge spawn re-validation** — `SpawnProductionHandler` re-runs
+  `can_place_*` before registering tiles (construction race / feature toggle).
+- [x] **Street/bridge register overwrite** — registering a tile evicts the prior
+  owner so destroy cleanup cannot clear a still-active registration. Test:
+  `street_tile_overwrite`.
+- [x] **Fog last-known cleanup** — `FogOfWar::clear_entity` runs on both
+  `remove_game_entity` overloads. Test: `fog_last_known_cleared_on_remove`.
+- [x] **Placement vs occupancy** — `can_place_street` / `can_place_bridge` reject
+  tiles already occupied by mobile units.
 
 ## Implementation Notes
 

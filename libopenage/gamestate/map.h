@@ -1,12 +1,16 @@
-// Copyright 2024-2024 the openage authors. See copying.md for legal info.
+// Copyright 2024-2026 the openage authors. See copying.md for legal info.
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <string>
 #include <unordered_map>
 
 #include <nyan/nyan.h>
 
+#include "coord/tile.h"
 #include "pathfinding/types.h"
 #include "time/time.h"
 #include "util/vector.h"
@@ -20,6 +24,15 @@ class Pathfinder;
 namespace gamestate {
 class GameState;
 class Terrain;
+
+/**
+ * Classification of a pathfinding grid by its nyan PathType name.
+ */
+enum class path_grid_kind_t : uint8_t {
+	OTHER = 0,
+	LAND = 1,
+	WATER = 2,
+};
 
 class Map {
 public:
@@ -73,6 +86,43 @@ public:
 	 * @param time    Time stamp used to invalidate cached flow fields.
 	 */
 	void restore_sector_costs(path::grid_id_t grid_id, const time::time_t &time) const;
+
+	/**
+	 * Classify a pathfinding grid from its registered nyan PathType fqon.
+	 *
+	 * @param grid_id Grid to classify.
+	 * @return LAND / WATER when the fqon contains those tokens, else OTHER.
+	 */
+	path_grid_kind_t classify_grid(path::grid_id_t grid_id) const;
+
+	/**
+	 * Find the first registered grid whose PathType fqon contains \p suffix
+	 * (case-insensitive).
+	 *
+	 * @param suffix Substring to match (e.g. "Land", "Water").
+	 * @return Grid ID, or std::nullopt if none match.
+	 */
+	std::optional<path::grid_id_t> find_grid_by_suffix(const std::string &suffix) const;
+
+	/**
+	 * Read the live pathfinding cost of a world tile on a grid.
+	 *
+	 * @return Cost, or std::nullopt if the tile/grid is out of range.
+	 */
+	std::optional<path::cost_t> get_tile_cost(path::grid_id_t grid_id, coord::tile tile) const;
+
+	/**
+	 * Write the live pathfinding cost of a world tile on a grid.
+	 *
+	 * Does not update the baseline snapshot (transient overlays like hazards
+	 * and bridges re-apply after restore_sector_costs).
+	 *
+	 * @return true if the cost was written.
+	 */
+	bool set_tile_cost(path::grid_id_t grid_id,
+	                   coord::tile tile,
+	                   path::cost_t cost,
+	                   const time::time_t &time);
 
 private:
 	/**
