@@ -12,6 +12,7 @@
 #include "gamestate/event/send_command.h"
 #include "gamestate/event/spawn_entity.h"
 #include "gamestate/event/deconstruct_complete.h"
+#include "gamestate/event/research_complete.h"
 #include "gamestate/event/spawn_production.h"
 #include "gamestate/event/wait.h"
 #include "gamestate/terrain_factory.h"
@@ -56,6 +57,7 @@ void GameSimulation::run() {
 		state->refresh_visibility(current_time);
 		state->tick_salvage_decay(current_time);
 		state->tick_resource_regen(current_time);
+		state->tick_research(current_time);
 	}
 	log::log(MSG(info) << "Game simulation loop exited");
 }
@@ -195,6 +197,7 @@ void GameSimulation::init_event_handlers() {
 	auto player_defeated_handler = std::make_shared<gamestate::event::PlayerDefeatedHandler>();
 	auto game_over_handler = std::make_shared<gamestate::event::GameOverHandler>();
 	auto deconstruct_complete_handler = std::make_shared<gamestate::event::DeconstructCompleteHandler>();
+	auto research_complete_handler = std::make_shared<gamestate::event::ResearchCompleteHandler>();
 	this->event_loop->add_event_handler(drag_select_handler);
 	this->event_loop->add_event_handler(spawn_handler);
 	this->event_loop->add_event_handler(spawn_production_handler);
@@ -204,6 +207,7 @@ void GameSimulation::init_event_handlers() {
 	this->event_loop->add_event_handler(player_defeated_handler);
 	this->event_loop->add_event_handler(game_over_handler);
 	this->event_loop->add_event_handler(deconstruct_complete_handler);
+	this->event_loop->add_event_handler(research_complete_handler);
 }
 
 } // namespace openage::gamestate

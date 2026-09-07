@@ -21,8 +21,11 @@
 #include "gamestate/component/api/attack.h"
 #include "gamestate/component/api/live.h"
 #include "gamestate/component/internal/position.h"
-#include "gamestate/component/types.h"
+#include "gamestate/component/internal/command_queue.h"
+#include "gamestate/component/internal/commands/base_command.h"
+#include "gamestate/component/internal/commands/garrison.h"
 #include "gamestate/component/internal/ownership.h"
+#include "gamestate/component/internal/position.h"
 #include "gamestate/component/internal/salvage.h"
 #include "pathfinding/cost_field.h"
 #include "pathfinding/definitions.h"
@@ -49,6 +52,104 @@ GameState::GameState(const std::shared_ptr<nyan::Database> &db,
 	event_loop{loop},
 	db_view{db->new_view()},
 	view_player_id{0} {
+	this->market_base_prices[market_resource_t::WOOD] = MARKET_DEFAULT_BASE_PRICE_WOOD;
+	this->market_base_prices[market_resource_t::FOOD] = MARKET_DEFAULT_BASE_PRICE_FOOD;
+	this->market_base_prices[market_resource_t::STONE] = MARKET_DEFAULT_BASE_PRICE_STONE;
+	this->market_resource_fqons[market_resource_t::FOOD] = "test.resource.Food";
+	this->market_resource_fqons[market_resource_t::WOOD] = "test.resource.Wood";
+	this->market_resource_fqons[market_resource_t::STONE] = "test.resource.Stone";
+	this->market_resource_fqons[market_resource_t::GOLD] = "test.resource.Gold";
+
+	// Initialize standard AoE2 technology definitions
+	this->register_tech_definition({
+		.tech_id = TECH_FEUDAL_AGE,
+		.name = "Feudal Age",
+		.required_age = age_t::DARK_AGE,
+		.research_time_sec = FEUDAL_AGE_RESEARCH_TIME_SEC,
+		.cost = {{"test.resource.Food", FEUDAL_AGE_COST_FOOD}},
+		.effect = [](GameState *gs, player_id_t pid, const time::time_t &t) {
+			if (auto player = gs->get_player(pid)) {
+				player->set_age(t, age_t::FEUDAL_AGE);
+			}
+		}
+	});
+
+	this->register_tech_definition({
+		.tech_id = TECH_CASTLE_AGE,
+		.name = "Castle Age",
+		.required_age = age_t::FEUDAL_AGE,
+		.research_time_sec = CASTLE_AGE_RESEARCH_TIME_SEC,
+		.cost = {{"test.resource.Food", CASTLE_AGE_COST_FOOD}, {"test.resource.Gold", CASTLE_AGE_COST_GOLD}},
+		.effect = [](GameState *gs, player_id_t pid, const time::time_t &t) {
+			if (auto player = gs->get_player(pid)) {
+				player->set_age(t, age_t::CASTLE_AGE);
+			}
+		}
+	});
+
+	this->register_tech_definition({
+		.tech_id = TECH_IMPERIAL_AGE,
+		.name = "Imperial Age",
+		.required_age = age_t::CASTLE_AGE,
+		.research_time_sec = IMPERIAL_AGE_RESEARCH_TIME_SEC,
+		.cost = {{"test.resource.Food", IMPERIAL_AGE_COST_FOOD}, {"test.resource.Gold", IMPERIAL_AGE_COST_GOLD}},
+		.effect = [](GameState *gs, player_id_t pid, const time::time_t &t) {
+			if (auto player = gs->get_player(pid)) {
+				player->set_age(t, age_t::IMPERIAL_AGE);
+			}
+		}
+	});
+
+	this->register_tech_definition({
+		.tech_id = TECH_LOOM,
+		.name = "Loom",
+		.required_age = age_t::DARK_AGE,
+		.research_time_sec = LOOM_RESEARCH_TIME_SEC,
+		.cost = {{"test.resource.Gold", LOOM_COST_GOLD}},
+		.effect = nullptr
+	});
+
+	this->register_tech_definition({
+		.tech_id = TECH_COINAGE,
+		.name = "Coinage",
+		.required_age = age_t::CASTLE_AGE,
+		.research_time_sec = 70.0,
+		.cost = {{"test.resource.Food", 200}, {"test.resource.Gold", 100}},
+		.effect = [](GameState *gs, player_id_t pid, const time::time_t &) {
+			gs->set_tribute_fee(pid, TRIBUTE_FEE_COINAGE);
+		}
+	});
+
+	this->register_tech_definition({
+		.tech_id = TECH_BANKING,
+		.name = "Banking",
+		.required_age = age_t::IMPERIAL_AGE,
+		.research_time_sec = 70.0,
+		.cost = {{"test.resource.Food", 300}, {"test.resource.Gold", 200}},
+		.effect = [](GameState *gs, player_id_t pid, const time::time_t &) {
+			gs->set_tribute_fee(pid, TRIBUTE_FEE_BANKING);
+		}
+	});
+
+	this->register_tech_definition({
+		.tech_id = TECH_GUILDS,
+		.name = "Guilds",
+		.required_age = age_t::IMPERIAL_AGE,
+		.research_time_sec = 50.0,
+		.cost = {{"test.resource.Food", 300}, {"test.resource.Gold", 200}},
+		.effect = [](GameState *gs, player_id_t pid, const time::time_t &) {
+			gs->set_market_fee(pid, MARKET_FEE_GUILDS);
+		}
+	});
+
+	this->register_tech_definition({
+		.tech_id = TECH_FORGING,
+		.name = "Forging",
+		.required_age = age_t::FEUDAL_AGE,
+		.research_time_sec = 50.0,
+		.cost = {{"test.resource.Food", 150}},
+		.effect = nullptr
+	});
 }
 
 const std::shared_ptr<nyan::View> &GameState::get_db_view() {
@@ -77,6 +178,14 @@ void GameState::remove_game_entity(entity_id_t id) {
 	this->entity_population_provision.erase(id);
 	this->salvage_pile_ids.erase(id);
 	this->resource_nodes.erase(id);
+	this->market_entities.erase(id);
+	auto res_it1 = this->building_research.find(id);
+	if (res_it1 != this->building_research.end()) {
+		player_id_t p_id = res_it1->second.player_id;
+		int64_t t_id = res_it1->second.tech_id;
+		this->active_techs_in_progress[p_id].erase(t_id);
+		this->building_research.erase(res_it1);
+	}
 	this->release_tile(id);
 }
 
@@ -132,9 +241,43 @@ void GameState::remove_game_entity(entity_id_t id, const time::time_t &time) {
 	this->building_costs.erase(id);
 	this->entity_population_demand.erase(id);
 	this->entity_population_provision.erase(id);
+	this->entity_max_hp.erase(id);
 	this->salvage_pile_ids.erase(id);
 	this->resource_nodes.erase(id);
+	this->market_entities.erase(id);
+	auto res_it2 = this->building_research.find(id);
+	if (res_it2 != this->building_research.end()) {
+		player_id_t p_id = res_it2->second.player_id;
+		int64_t t_id = res_it2->second.tech_id;
+		this->active_techs_in_progress[p_id].erase(t_id);
+		this->building_research.erase(res_it2);
+	}
 	this->release_tile(id);
+
+	// If the removed entity was a garrison container (e.g. building/ram), eject units
+	if (this->building_garrisons.contains(id)) {
+		this->ungarrison_entities(id, time);
+	}
+
+	// If the removed entity was itself garrisoned, unregister from parent
+	auto parent_it = this->unit_garrison_parent.find(id);
+	if (parent_it != this->unit_garrison_parent.end()) {
+		entity_id_t parent_id = parent_it->second;
+		auto garr_it = this->building_garrisons.find(parent_id);
+		if (garr_it != this->building_garrisons.end()) {
+			auto &vec = garr_it->second;
+			vec.erase(std::remove(vec.begin(), vec.end(), id), vec.end());
+			if (vec.empty()) {
+				this->building_garrisons.erase(garr_it);
+			}
+		}
+		this->unit_garrison_parent.erase(parent_it);
+	}
+
+	this->garrison_capacities.erase(id);
+	this->saved_tasks.erase(id);
+	this->entity_armors.erase(id);
+	this->entity_attack_bonuses.erase(id);
 
 	// Record the loss of an owned entity for the after-game statistics.
 	if ((is_owned_unit or is_building) and this->has_player(owner_id)) {
@@ -440,6 +583,492 @@ std::optional<int64_t> GameState::get_entity_population_provision(entity_id_t id
 		return std::nullopt;
 	}
 	return it->second;
+}
+
+void GameState::set_entity_max_hp(entity_id_t id, int64_t max_hp) {
+	if (max_hp > 0) {
+		this->entity_max_hp[id] = max_hp;
+	}
+}
+
+int64_t GameState::get_entity_max_hp(entity_id_t id) const {
+	auto it = this->entity_max_hp.find(id);
+	if (it != this->entity_max_hp.end()) {
+		return it->second;
+	}
+
+	auto entity_it = this->game_entities.find(id);
+	if (entity_it != this->game_entities.end()) {
+		const auto &entity = entity_it->second;
+		if (entity->has_component(component::component_t::LIVE)) {
+			auto live = std::dynamic_pointer_cast<component::Live>(
+				entity->get_component(component::component_t::LIVE));
+			int64_t live_hp = live->get_attribute(time::TIME_MIN, "engine.ability.type.Live.AttributeAmount");
+			if (live_hp > 0) {
+				return live_hp;
+			}
+		}
+
+		if (entity->has_component(component::component_t::MOVE)) {
+			return DEFAULT_UNIT_MAX_HP;
+		}
+		else {
+			return DEFAULT_BUILDING_MAX_HP;
+		}
+	}
+
+	return DEFAULT_BUILDING_MAX_HP;
+}
+
+bool GameState::has_entity_max_hp(entity_id_t id) const {
+	return this->entity_max_hp.contains(id);
+}
+
+void GameState::clear_entity_max_hp(entity_id_t id) {
+	this->entity_max_hp.erase(id);
+}
+
+void GameState::set_entity_armor(entity_id_t id, armor_class_t armor_class, int64_t armor_value) {
+	this->entity_armors[id][armor_class] = armor_value;
+}
+
+int64_t GameState::get_entity_armor(entity_id_t id, armor_class_t armor_class) const {
+	auto it = this->entity_armors.find(id);
+	if (it != this->entity_armors.end()) {
+		auto class_it = it->second.find(armor_class);
+		if (class_it != it->second.end()) {
+			return class_it->second;
+		}
+	}
+	if (armor_class == armor_class_t::MELEE or armor_class == armor_class_t::PIERCE) {
+		return 0;
+	}
+	return DEFAULT_UNPOSSESSED_ARMOR;
+}
+
+bool GameState::has_entity_armor(entity_id_t id, armor_class_t armor_class) const {
+	auto it = this->entity_armors.find(id);
+	if (it != this->entity_armors.end()) {
+		return it->second.contains(armor_class);
+	}
+	return false;
+}
+
+void GameState::set_entity_attack_bonus(entity_id_t id, armor_class_t armor_class, int64_t bonus) {
+	if (bonus != 0) {
+		this->entity_attack_bonuses[id][armor_class] = bonus;
+	}
+	else {
+		auto it = this->entity_attack_bonuses.find(id);
+		if (it != this->entity_attack_bonuses.end()) {
+			it->second.erase(armor_class);
+			if (it->second.empty()) {
+				this->entity_attack_bonuses.erase(it);
+			}
+		}
+	}
+}
+
+int64_t GameState::get_entity_attack_bonus(entity_id_t id, armor_class_t armor_class) const {
+	auto it = this->entity_attack_bonuses.find(id);
+	if (it != this->entity_attack_bonuses.end()) {
+		auto class_it = it->second.find(armor_class);
+		if (class_it != it->second.end()) {
+			return class_it->second;
+		}
+	}
+	return 0;
+}
+
+std::vector<AttackBonus> GameState::get_entity_attack_bonuses(entity_id_t id) const {
+	std::vector<AttackBonus> bonuses;
+	auto it = this->entity_attack_bonuses.find(id);
+	if (it != this->entity_attack_bonuses.end()) {
+		bonuses.reserve(it->second.size());
+		for (const auto &[cls, bonus] : it->second) {
+			bonuses.push_back(AttackBonus{cls, bonus});
+		}
+	}
+	return bonuses;
+}
+
+void GameState::clear_entity_combat_stats(entity_id_t id) {
+	this->entity_armors.erase(id);
+	this->entity_attack_bonuses.erase(id);
+}
+
+void GameState::set_garrison_capacity(entity_id_t building_id, int64_t capacity) {
+	if (capacity > 0) {
+		this->garrison_capacities[building_id] = capacity;
+	}
+}
+
+int64_t GameState::get_garrison_capacity(entity_id_t building_id) const {
+	auto it = this->garrison_capacities.find(building_id);
+	if (it != this->garrison_capacities.end()) {
+		return it->second;
+	}
+
+	auto entity_it = this->game_entities.find(building_id);
+	if (entity_it != this->game_entities.end()) {
+		const auto &entity = entity_it->second;
+		if (entity->has_component(component::component_t::MOVE)) {
+			return GARRISON_CAPACITY_RAM;
+		}
+		if (entity->has_component(component::component_t::ATTACK)) {
+			return GARRISON_CAPACITY_TOWER;
+		}
+		return GARRISON_CAPACITY_TOWN_CENTER;
+	}
+	return GARRISON_CAPACITY_TOWN_CENTER;
+}
+
+bool GameState::can_garrison(entity_id_t unit_id, entity_id_t building_id) const {
+	if (unit_id == building_id) {
+		return false;
+	}
+	if (this->is_garrisoned(unit_id)) {
+		return false;
+	}
+	auto unit_it = this->game_entities.find(unit_id);
+	auto b_it = this->game_entities.find(building_id);
+	if (unit_it == this->game_entities.end() or b_it == this->game_entities.end()) {
+		return false;
+	}
+
+	const auto &unit = unit_it->second;
+	const auto &building = b_it->second;
+
+	// Must be owned by same player or friendly
+	if (unit->has_component(component::component_t::OWNERSHIP)
+	    and building->has_component(component::component_t::OWNERSHIP)) {
+		auto u_own = std::dynamic_pointer_cast<component::Ownership>(
+			unit->get_component(component::component_t::OWNERSHIP));
+		auto b_own = std::dynamic_pointer_cast<component::Ownership>(
+			building->get_component(component::component_t::OWNERSHIP));
+		if (u_own->get_owners().get(time::TIME_MIN) != b_own->get_owners().get(time::TIME_MIN)) {
+			return false;
+		}
+	}
+
+	auto garr_it = this->building_garrisons.find(building_id);
+	int64_t current_count = (garr_it != this->building_garrisons.end())
+	                        ? static_cast<int64_t>(garr_it->second.size())
+	                        : 0;
+	return current_count < this->get_garrison_capacity(building_id);
+}
+
+bool GameState::garrison_entity(entity_id_t unit_id, entity_id_t building_id, const time::time_t &time) {
+	if (not this->can_garrison(unit_id, building_id)) {
+		return false;
+	}
+
+	auto unit_it = this->game_entities.find(unit_id);
+	auto b_it = this->game_entities.find(building_id);
+	if (unit_it == this->game_entities.end() or b_it == this->game_entities.end()) {
+		return false;
+	}
+
+	const auto &unit = unit_it->second;
+	const auto &building = b_it->second;
+
+	// Release tile occupancy while garrisoned
+	this->release_tile(unit_id);
+
+	// Update unit position to building position
+	if (building->has_component(component::component_t::POSITION)
+	    and unit->has_component(component::component_t::POSITION)) {
+		auto b_pos_comp = std::dynamic_pointer_cast<component::Position>(
+			building->get_component(component::component_t::POSITION));
+		auto u_pos_comp = std::dynamic_pointer_cast<component::Position>(
+			unit->get_component(component::component_t::POSITION));
+		u_pos_comp->set_position(time, b_pos_comp->get_positions().get(time));
+	}
+
+	this->building_garrisons[building_id].push_back(unit_id);
+	this->unit_garrison_parent[unit_id] = building_id;
+
+	log::log(MSG(info) << "Unit " << unit_id << " garrisoned in building " << building_id << ".");
+	return true;
+}
+
+std::vector<entity_id_t> GameState::ungarrison_entities(entity_id_t building_id, const time::time_t &time) {
+	std::vector<entity_id_t> ejected;
+	auto it = this->building_garrisons.find(building_id);
+	if (it == this->building_garrisons.end() or it->second.empty()) {
+		return ejected;
+	}
+
+	ejected = std::move(it->second);
+	this->building_garrisons.erase(it);
+
+	coord::phys3 exit_pos{0, 0, 0};
+	bool has_exit_pos = false;
+
+	if (this->has_rally_point(building_id)) {
+		exit_pos = this->get_rally_point(building_id).value();
+		has_exit_pos = true;
+	}
+	else {
+		auto b_it = this->game_entities.find(building_id);
+		if (b_it != this->game_entities.end() and b_it->second->has_component(component::component_t::POSITION)) {
+			auto b_pos_comp = std::dynamic_pointer_cast<component::Position>(
+				b_it->second->get_component(component::component_t::POSITION));
+			auto b_pos = b_pos_comp->get_positions().get(time);
+			exit_pos = b_pos + coord::phys3_delta{coord::phys_t{2.0}, coord::phys_t{0.0}, coord::phys_t{0.0}};
+			has_exit_pos = true;
+		}
+	}
+
+	for (entity_id_t unit_id : ejected) {
+		this->unit_garrison_parent.erase(unit_id);
+
+		auto u_it = this->game_entities.find(unit_id);
+		if (u_it != this->game_entities.end()) {
+			const auto &unit = u_it->second;
+			if (has_exit_pos and unit->has_component(component::component_t::POSITION)) {
+				auto u_pos_comp = std::dynamic_pointer_cast<component::Position>(
+					unit->get_component(component::component_t::POSITION));
+				u_pos_comp->set_position(time, exit_pos);
+				this->occupy_tile(unit_id, exit_pos);
+			}
+
+			// Restore saved task if unit was garrisoned via Town Bell
+			auto task_it = this->saved_tasks.find(unit_id);
+			if (task_it != this->saved_tasks.end() and unit->has_component(component::component_t::COMMANDQUEUE)) {
+				auto cmd_q = std::dynamic_pointer_cast<component::CommandQueue>(
+					unit->get_component(component::component_t::COMMANDQUEUE));
+				cmd_q->add_command(time, task_it->second);
+				this->saved_tasks.erase(task_it);
+			}
+		}
+	}
+
+	log::log(MSG(info) << "Ungarrisoned " << ejected.size() << " units from building " << building_id << ".");
+	return ejected;
+}
+
+bool GameState::is_garrisoned(entity_id_t unit_id) const {
+	return this->unit_garrison_parent.contains(unit_id);
+}
+
+std::optional<entity_id_t> GameState::get_garrison_parent(entity_id_t unit_id) const {
+	auto it = this->unit_garrison_parent.find(unit_id);
+	if (it != this->unit_garrison_parent.end()) {
+		return it->second;
+	}
+	return std::nullopt;
+}
+
+std::vector<entity_id_t> GameState::get_garrisoned_units(entity_id_t building_id) const {
+	auto it = this->building_garrisons.find(building_id);
+	if (it != this->building_garrisons.end()) {
+		return it->second;
+	}
+	return {};
+}
+
+int64_t GameState::get_building_additional_arrows(entity_id_t building_id, const time::time_t & /* time */) const {
+	auto it = this->building_garrisons.find(building_id);
+	if (it == this->building_garrisons.end() or it->second.empty()) {
+		return 0;
+	}
+
+	double building_dps = 2.5;
+	auto b_it = this->game_entities.find(building_id);
+	if (b_it != this->game_entities.end() and b_it->second->has_component(component::component_t::ATTACK)) {
+		auto b_atk = std::dynamic_pointer_cast<component::Attack>(
+			b_it->second->get_component(component::component_t::ATTACK));
+		auto reload = b_atk->get_reload_time();
+		auto dmg = b_atk->get_damage();
+		if (reload and reload->get() > 0.0 and dmg) {
+			building_dps = static_cast<double>(dmg->get()) / reload->get();
+		}
+	}
+
+	if (building_dps <= 0.0) {
+		building_dps = 2.5;
+	}
+
+	double sum_unit_dps = 0.0;
+	for (entity_id_t unit_id : it->second) {
+		auto u_it = this->game_entities.find(unit_id);
+		if (u_it == this->game_entities.end()) {
+			continue;
+		}
+		const auto &unit = u_it->second;
+		if (unit->has_component(component::component_t::ATTACK)) {
+			auto u_atk = std::dynamic_pointer_cast<component::Attack>(
+				unit->get_component(component::component_t::ATTACK));
+			auto reload = u_atk->get_reload_time();
+			auto dmg = u_atk->get_damage();
+			if (reload and reload->get() > 0.0 and dmg) {
+				sum_unit_dps += static_cast<double>(dmg->get()) / reload->get();
+			}
+			else {
+				sum_unit_dps += 2.5;
+			}
+		}
+		else {
+			// Villagers contribute 2.5 pierce DPS by AoE2 rules
+			sum_unit_dps += 2.5;
+		}
+	}
+
+	return static_cast<int64_t>(std::floor(sum_unit_dps / building_dps));
+}
+
+void GameState::ring_town_bell(entity_id_t tc_id, const time::time_t &time) {
+	auto tc_it = this->game_entities.find(tc_id);
+	if (tc_it == this->game_entities.end() or not tc_it->second->has_component(component::component_t::POSITION)) {
+		return;
+	}
+
+	player_id_t owner_id = 0;
+	if (tc_it->second->has_component(component::component_t::OWNERSHIP)) {
+		auto tc_own = std::dynamic_pointer_cast<component::Ownership>(
+			tc_it->second->get_component(component::component_t::OWNERSHIP));
+		owner_id = tc_own->get_owners().get(time);
+	}
+
+	auto tc_pos_comp = std::dynamic_pointer_cast<component::Position>(
+		tc_it->second->get_component(component::component_t::POSITION));
+	auto tc_pos = tc_pos_comp->get_positions().get(time);
+
+	std::vector<entity_id_t> candidate_garrisons;
+	for (const auto &[b_id, entity] : this->game_entities) {
+		if (entity->has_component(component::component_t::MOVE)
+		    or not entity->has_component(component::component_t::POSITION)
+		    or not entity->has_component(component::component_t::OWNERSHIP)) {
+			continue;
+		}
+		auto own = std::dynamic_pointer_cast<component::Ownership>(
+			entity->get_component(component::component_t::OWNERSHIP));
+		if (own->get_owners().get(time) != owner_id) {
+			continue;
+		}
+		auto pos_comp = std::dynamic_pointer_cast<component::Position>(
+			entity->get_component(component::component_t::POSITION));
+		double d = (pos_comp->get_positions().get(time) - tc_pos).length();
+		if (d <= TOWN_BELL_RANGE_TILES) {
+			candidate_garrisons.push_back(b_id);
+		}
+	}
+
+	if (std::find(candidate_garrisons.begin(), candidate_garrisons.end(), tc_id) == candidate_garrisons.end()) {
+		candidate_garrisons.push_back(tc_id);
+	}
+
+	for (const auto &[u_id, entity] : this->game_entities) {
+		if (u_id == tc_id
+		    or not entity->has_component(component::component_t::MOVE)
+		    or not entity->has_component(component::component_t::POSITION)
+		    or not entity->has_component(component::component_t::OWNERSHIP)
+		    or not entity->has_component(component::component_t::COMMANDQUEUE)
+		    or this->is_garrisoned(u_id)) {
+			continue;
+		}
+		auto own = std::dynamic_pointer_cast<component::Ownership>(
+			entity->get_component(component::component_t::OWNERSHIP));
+		if (own->get_owners().get(time) != owner_id) {
+			continue;
+		}
+
+		auto pos_comp = std::dynamic_pointer_cast<component::Position>(
+			entity->get_component(component::component_t::POSITION));
+		auto u_pos = pos_comp->get_positions().get(time);
+		double dist_to_tc = (u_pos - tc_pos).length();
+		if (dist_to_tc > TOWN_BELL_RANGE_TILES) {
+			continue;
+		}
+
+		entity_id_t best_garrison = 0;
+		double best_dist = std::numeric_limits<double>::max();
+		for (entity_id_t g_id : candidate_garrisons) {
+			if (not this->can_garrison(u_id, g_id)) {
+				continue;
+			}
+			auto g_it = this->game_entities.find(g_id);
+			if (g_it == this->game_entities.end()) {
+				continue;
+			}
+			auto g_pos_comp = std::dynamic_pointer_cast<component::Position>(
+				g_it->second->get_component(component::component_t::POSITION));
+			double d = (g_pos_comp->get_positions().get(time) - u_pos).length();
+			if (d <= TOWN_BELL_RANGE_TILES and d < best_dist) {
+				best_dist = d;
+				best_garrison = g_id;
+			}
+		}
+
+		if (best_garrison != 0) {
+			auto cmd_q = std::dynamic_pointer_cast<component::CommandQueue>(
+				entity->get_component(component::component_t::COMMANDQUEUE));
+			if (not cmd_q->get_queue().empty(time)) {
+				this->saved_tasks[u_id] = cmd_q->get_queue().front(time);
+				cmd_q->pop_command(time);
+			}
+			cmd_q->add_command(
+				time,
+				std::make_shared<component::command::GarrisonCommand>(best_garrison));
+		}
+	}
+}
+
+void GameState::back_to_work(entity_id_t tc_id, const time::time_t &time) {
+	auto tc_it = this->game_entities.find(tc_id);
+	if (tc_it == this->game_entities.end() or not tc_it->second->has_component(component::component_t::POSITION)) {
+		return;
+	}
+
+	auto tc_pos_comp = std::dynamic_pointer_cast<component::Position>(
+		tc_it->second->get_component(component::component_t::POSITION));
+	auto tc_pos = tc_pos_comp->get_positions().get(time);
+
+	std::vector<entity_id_t> garrisons_to_empty;
+	for (const auto &[b_id, units] : this->building_garrisons) {
+		(void) units;
+		auto b_it = this->game_entities.find(b_id);
+		if (b_it != this->game_entities.end() and b_it->second->has_component(component::component_t::POSITION)) {
+			auto b_pos = std::dynamic_pointer_cast<component::Position>(
+				b_it->second->get_component(component::component_t::POSITION))->get_positions().get(time);
+			if ((b_pos - tc_pos).length() <= TOWN_BELL_RANGE_TILES) {
+				garrisons_to_empty.push_back(b_id);
+			}
+		}
+	}
+
+	for (entity_id_t g_id : garrisons_to_empty) {
+		this->ungarrison_entities(g_id, time);
+	}
+}
+
+void GameState::tick_garrison_heal(const time::time_t &time, double dt_sec) {
+	if (dt_sec <= 0.0) {
+		return;
+	}
+	int64_t hp_heal = static_cast<int64_t>(std::ceil(GARRISON_HEAL_HP_PER_SEC * dt_sec));
+	if (hp_heal <= 0) {
+		hp_heal = 1;
+	}
+
+	for (const auto &[b_id, units] : this->building_garrisons) {
+		(void) b_id;
+		for (entity_id_t unit_id : units) {
+			auto u_it = this->game_entities.find(unit_id);
+			if (u_it != this->game_entities.end() and u_it->second->has_component(component::component_t::LIVE)) {
+				auto live = std::dynamic_pointer_cast<component::Live>(
+					u_it->second->get_component(component::component_t::LIVE));
+				constexpr const char *HP_ATTR = "engine.ability.type.Live.AttributeAmount";
+				int64_t cur_hp = live->get_attribute(time, HP_ATTR);
+				int64_t max_hp = this->get_entity_max_hp(unit_id);
+				if (cur_hp < max_hp) {
+					int64_t next_hp = std::min(cur_hp + hp_heal, max_hp);
+					live->set_attribute(time, HP_ATTR, next_hp);
+				}
+			}
+		}
+	}
 }
 
 entity_id_t GameState::allocate_entity_id() const {
@@ -1596,6 +2225,407 @@ std::optional<entity_id_t> GameState::get_tile_occupant(coord::tile tile) const 
 		return std::nullopt;
 	}
 	return it->second;
+}
+
+int64_t GameState::get_market_base_price(market_resource_t res) const {
+	auto it = this->market_base_prices.find(res);
+	if (it != this->market_base_prices.end()) {
+		return it->second;
+	}
+	if (res == market_resource_t::STONE) {
+		return MARKET_DEFAULT_BASE_PRICE_STONE;
+	}
+	return MARKET_DEFAULT_BASE_PRICE_WOOD;
+}
+
+void GameState::set_market_base_price(market_resource_t res, int64_t price) {
+	this->market_base_prices[res] = std::clamp(price, MARKET_MIN_BASE_PRICE, MARKET_MAX_BASE_PRICE);
+}
+
+double GameState::get_market_fee(player_id_t player_id) const {
+	auto it = this->market_fees.find(player_id);
+	if (it != this->market_fees.end()) {
+		return it->second;
+	}
+	return MARKET_DEFAULT_FEE;
+}
+
+void GameState::set_market_fee(player_id_t player_id, double fee) {
+	this->market_fees[player_id] = std::max(0.0, fee);
+}
+
+int64_t GameState::get_market_buy_price(player_id_t player_id, market_resource_t res) const {
+	int64_t base = this->get_market_base_price(res);
+	double fee = this->get_market_fee(player_id);
+	return static_cast<int64_t>(std::floor(static_cast<double>(base) * (1.0 + fee) + 0.5));
+}
+
+int64_t GameState::get_market_sell_price(player_id_t player_id, market_resource_t res) const {
+	int64_t base = this->get_market_base_price(res);
+	double fee = this->get_market_fee(player_id);
+	return static_cast<int64_t>(std::floor(static_cast<double>(base) * (1.0 - fee) + 0.5));
+}
+
+std::string GameState::get_market_resource_fqon(market_resource_t res) const {
+	auto it = this->market_resource_fqons.find(res);
+	if (it != this->market_resource_fqons.end()) {
+		return it->second;
+	}
+	switch (res) {
+	case market_resource_t::FOOD:
+		return "test.resource.Food";
+	case market_resource_t::WOOD:
+		return "test.resource.Wood";
+	case market_resource_t::STONE:
+		return "test.resource.Stone";
+	case market_resource_t::GOLD:
+	default:
+		return "test.resource.Gold";
+	}
+}
+
+void GameState::set_market_resource_fqon(market_resource_t res, const std::string &fqon) {
+	this->market_resource_fqons[res] = fqon;
+}
+
+bool GameState::market_buy(player_id_t player_id,
+                           market_resource_t res,
+                           int64_t hundreds_batch,
+                           const time::time_t &time) {
+	if (hundreds_batch <= 0 || not this->has_player(player_id)) {
+		return false;
+	}
+
+	auto &player = this->get_player(player_id);
+	double fee = this->get_market_fee(player_id);
+	std::string gold_fqon = this->get_market_resource_fqon(market_resource_t::GOLD);
+	std::string comm_fqon = this->get_market_resource_fqon(res);
+
+	int64_t current_base = this->get_market_base_price(res);
+	int64_t total_gold_cost = 0;
+	int64_t temp_base = current_base;
+
+	for (int64_t i = 0; i < hundreds_batch; ++i) {
+		int64_t step_cost = static_cast<int64_t>(std::floor(static_cast<double>(temp_base) * (1.0 + fee) + 0.5));
+		total_gold_cost += step_cost;
+		temp_base = std::min(MARKET_MAX_BASE_PRICE, temp_base + MARKET_PRICE_SHIFT_PER_100);
+	}
+
+	if (player->get_resource(time, gold_fqon) < total_gold_cost) {
+		return false;
+	}
+
+	player->add_resource(time, gold_fqon, -total_gold_cost);
+	player->add_resource(time, comm_fqon, hundreds_batch * MARKET_UNIT_BATCH);
+	this->set_market_base_price(res, temp_base);
+	return true;
+}
+
+bool GameState::market_sell(player_id_t player_id,
+                            market_resource_t res,
+                            int64_t hundreds_batch,
+                            const time::time_t &time) {
+	if (hundreds_batch <= 0 || not this->has_player(player_id)) {
+		return false;
+	}
+
+	auto &player = this->get_player(player_id);
+	double fee = this->get_market_fee(player_id);
+	std::string gold_fqon = this->get_market_resource_fqon(market_resource_t::GOLD);
+	std::string comm_fqon = this->get_market_resource_fqon(res);
+
+	int64_t comm_needed = hundreds_batch * MARKET_UNIT_BATCH;
+	if (player->get_resource(time, comm_fqon) < comm_needed) {
+		return false;
+	}
+
+	int64_t current_base = this->get_market_base_price(res);
+	int64_t total_gold_payout = 0;
+	int64_t temp_base = current_base;
+
+	for (int64_t i = 0; i < hundreds_batch; ++i) {
+		int64_t step_payout = static_cast<int64_t>(std::floor(static_cast<double>(temp_base) * (1.0 - fee) + 0.5));
+		total_gold_payout += step_payout;
+		temp_base = std::max(MARKET_MIN_BASE_PRICE, temp_base - MARKET_PRICE_SHIFT_PER_100);
+	}
+
+	player->add_resource(time, comm_fqon, -comm_needed);
+	player->add_resource(time, gold_fqon, total_gold_payout);
+	this->set_market_base_price(res, temp_base);
+	return true;
+}
+
+double GameState::get_tribute_fee(player_id_t player_id) const {
+	auto it = this->tribute_fees.find(player_id);
+	if (it != this->tribute_fees.end()) {
+		return it->second;
+	}
+	return TRIBUTE_DEFAULT_FEE;
+}
+
+void GameState::set_tribute_fee(player_id_t player_id, double fee) {
+	this->tribute_fees[player_id] = std::max(0.0, fee);
+}
+
+bool GameState::send_tribute(player_id_t sender,
+                             player_id_t recipient,
+                             const std::string &res_fqon,
+                             int64_t amount,
+                             const time::time_t &time) {
+	if (amount <= 0 || sender == recipient) {
+		return false;
+	}
+	if (not this->has_player(sender) || not this->has_player(recipient)) {
+		return false;
+	}
+
+	auto &sender_player = this->get_player(sender);
+	auto &recipient_player = this->get_player(recipient);
+
+	double fee = this->get_tribute_fee(sender);
+	int64_t tax = static_cast<int64_t>(std::floor(static_cast<double>(amount) * fee));
+	int64_t total_cost = amount + tax;
+
+	if (sender_player->get_resource(time, res_fqon) < total_cost) {
+		return false;
+	}
+
+	sender_player->add_resource(time, res_fqon, -total_cost);
+	sender_player->record_tribute_sent(time, res_fqon, amount);
+
+	recipient_player->add_resource(time, res_fqon, amount);
+	recipient_player->record_tribute_received(time, res_fqon, amount);
+
+	return true;
+}
+
+void GameState::register_market_entity(entity_id_t id) {
+	this->market_entities.insert(id);
+}
+
+void GameState::unregister_market_entity(entity_id_t id) {
+	this->market_entities.erase(id);
+}
+
+bool GameState::is_market_entity(entity_id_t id) const {
+	return this->market_entities.contains(id);
+}
+
+std::vector<entity_id_t> GameState::get_friendly_markets(player_id_t player_id) const {
+	std::vector<entity_id_t> result;
+	for (entity_id_t id : this->market_entities) {
+		auto it = this->game_entities.find(id);
+		if (it == this->game_entities.end()) {
+			continue;
+		}
+		auto &entity = it->second;
+		if (entity->has_component(component::component_t::OWNERSHIP)) {
+			auto own = std::dynamic_pointer_cast<component::Ownership>(
+				entity->get_component(component::component_t::OWNERSHIP));
+			if (own && own->get_owners().get(time::TIME_MIN) == player_id) {
+				result.push_back(id);
+			}
+		}
+	}
+	return result;
+}
+
+int64_t GameState::calculate_trade_gold(const coord::phys3 &p1,
+                                        const coord::phys3 &p2,
+                                        double map_size) const {
+	double dx = std::abs(p1.ne - p2.ne);
+	double dy = std::abs(p1.se - p2.se);
+	double d = std::max(0.1, std::sqrt(std::pow(std::max(0.0, dx - 5.0), 2.0) +
+	                                  std::pow(std::max(0.0, dy - 5.0), 2.0)));
+	if (map_size <= 0.0) {
+		map_size = DEFAULT_MAP_SIZE_TILES;
+	}
+
+	// Canonical AoE2 Conquerors formula:
+	// gold = 2 * (d/size + 0.3) * d + 0.5
+	double gold_val = 2.0 * (d / map_size + 0.3) * d + 0.5;
+	return std::max<int64_t>(1, static_cast<int64_t>(std::floor(gold_val)));
+}
+
+void GameState::register_tech_definition(const TechDefinition &tech) {
+	this->tech_definitions[tech.tech_id] = tech;
+}
+
+const TechDefinition* GameState::get_tech_definition(int64_t tech_id) const {
+	auto it = this->tech_definitions.find(tech_id);
+	if (it != this->tech_definitions.end()) {
+		return &it->second;
+	}
+	return nullptr;
+}
+
+bool GameState::can_research(player_id_t player_id,
+                             entity_id_t building_id,
+                             int64_t tech_id,
+                             const time::time_t &time) const {
+	auto player = this->get_player(player_id);
+	if (!player) {
+		return false;
+	}
+
+	auto it_b = this->game_entities.find(building_id);
+	if (it_b == this->game_entities.end()) {
+		return false;
+	}
+
+	auto entity = it_b->second;
+	if (entity->has_component(component::component_t::OWNERSHIP)) {
+		auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+			entity->get_component(component::component_t::OWNERSHIP));
+		if (ownership && ownership->get_owners().get(time) != player_id) {
+			return false;
+		}
+	}
+
+	if (this->is_researching(building_id)) {
+		return false;
+	}
+
+	const auto *tech_def = this->get_tech_definition(tech_id);
+	if (!tech_def) {
+		return false;
+	}
+
+	if (player->has_researched(tech_id)) {
+		return false;
+	}
+
+	if (this->is_tech_in_progress(player_id, tech_id)) {
+		return false;
+	}
+
+	if (static_cast<uint8_t>(player->get_age(time)) < static_cast<uint8_t>(tech_def->required_age)) {
+		return false;
+	}
+
+	for (const auto &cost_entry : tech_def->cost) {
+		if (player->get_resource(time, cost_entry.resource_fqon) < cost_entry.amount) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool GameState::start_research(player_id_t player_id,
+                              entity_id_t building_id,
+                              int64_t tech_id,
+                              const time::time_t &time) {
+	if (!this->can_research(player_id, building_id, tech_id, time)) {
+		return false;
+	}
+
+	auto player = this->get_player(player_id);
+	const auto *tech_def = this->get_tech_definition(tech_id);
+
+	for (const auto &cost_entry : tech_def->cost) {
+		player->add_resource(time, cost_entry.resource_fqon, -cost_entry.amount);
+	}
+
+	this->active_techs_in_progress[player_id].insert(tech_id);
+
+	time::time_t completion_time = time + tech_def->research_time_sec;
+
+	this->building_research[building_id] = ActiveResearch{
+		.building_id = building_id,
+		.player_id = player_id,
+		.tech_id = tech_id,
+		.start_time = time,
+		.completion_time = completion_time,
+		.cost = tech_def->cost
+	};
+
+	return true;
+}
+
+bool GameState::cancel_research(entity_id_t building_id, const time::time_t &time) {
+	auto it = this->building_research.find(building_id);
+	if (it == this->building_research.end()) {
+		return false;
+	}
+
+	player_id_t p_id = it->second.player_id;
+	int64_t t_id = it->second.tech_id;
+
+	if (auto player = this->get_player(p_id)) {
+		for (const auto &cost_entry : it->second.cost) {
+			player->add_resource(time, cost_entry.resource_fqon, cost_entry.amount);
+		}
+	}
+
+	this->active_techs_in_progress[p_id].erase(t_id);
+	this->building_research.erase(it);
+
+	return true;
+}
+
+bool GameState::complete_research(entity_id_t building_id, const time::time_t &time) {
+	auto it = this->building_research.find(building_id);
+	if (it == this->building_research.end()) {
+		return false;
+	}
+
+	ActiveResearch research = it->second;
+	this->active_techs_in_progress[research.player_id].erase(research.tech_id);
+	this->building_research.erase(it);
+
+	if (auto player = this->get_player(research.player_id)) {
+		player->mark_researched(research.tech_id);
+	}
+
+	const auto *tech_def = this->get_tech_definition(research.tech_id);
+	if (tech_def && tech_def->effect) {
+		tech_def->effect(this, research.player_id, time);
+	}
+
+	return true;
+}
+
+bool GameState::is_researching(entity_id_t building_id) const {
+	return this->building_research.contains(building_id);
+}
+
+bool GameState::is_tech_in_progress(player_id_t player_id, int64_t tech_id) const {
+	auto it = this->active_techs_in_progress.find(player_id);
+	if (it != this->active_techs_in_progress.end()) {
+		return it->second.contains(tech_id);
+	}
+	return false;
+}
+
+std::optional<ActiveResearch> GameState::get_active_research(entity_id_t building_id) const {
+	auto it = this->building_research.find(building_id);
+	if (it != this->building_research.end()) {
+		return it->second;
+	}
+	return std::nullopt;
+}
+
+std::vector<ActiveResearch> GameState::take_completed_researches(const time::time_t &time) {
+	std::vector<ActiveResearch> completed;
+	std::vector<entity_id_t> to_complete;
+
+	for (const auto &[b_id, research] : this->building_research) {
+		if (research.completion_time <= time) {
+			completed.push_back(research);
+			to_complete.push_back(b_id);
+		}
+	}
+
+	for (entity_id_t b_id : to_complete) {
+		this->complete_research(b_id, time);
+	}
+
+	return completed;
+}
+
+void GameState::tick_research(const time::time_t &time) {
+	this->take_completed_researches(time);
 }
 
 } // namespace openage::gamestate

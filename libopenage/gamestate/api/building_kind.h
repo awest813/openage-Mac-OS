@@ -22,4 +22,14 @@ bool is_street_building(const std::string &fqon);
  */
 bool is_bridge_building(const std::string &fqon);
 
+/**
+ * @return true if \p fqon looks like a market building.
+ */
+bool is_market_building(const std::string &fqon);
+
+/**
+ * @return true if \p fqon looks like a dock building.
+ */
+bool is_dock_building(const std::string &fqon);
+
 } // namespace openage::gamestate::api

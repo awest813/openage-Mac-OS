@@ -13,11 +13,15 @@
 #include "gamestate/component/internal/commands/build.h"
 #include "gamestate/component/internal/commands/deconstruct.h"
 #include "gamestate/component/internal/commands/formation_move.h"
+#include "gamestate/component/internal/commands/garrison.h"
 #include "gamestate/component/internal/commands/gather.h"
 #include "gamestate/component/internal/commands/guard.h"
 #include "gamestate/component/internal/commands/idle.h"
 #include "gamestate/component/internal/commands/move.h"
 #include "gamestate/component/internal/commands/patrol.h"
+#include "gamestate/component/internal/commands/repair.h"
+#include "gamestate/component/internal/commands/research.h"
+#include "gamestate/component/internal/commands/trade.h"
 #include "gamestate/component/internal/commands/train.h"
 #include "gamestate/component/internal/ownership.h"
 #include "gamestate/component/internal/position.h"
@@ -242,6 +246,45 @@ void SendCommandHandler::invoke(openage::event::EventLoop & /* loop */,
 			// the game state. Units produced by this entity are sent there on
 			// spawn (see SpawnProductionHandler).
 			gstate->set_rally_point(id, params.get("target", coord::phys3{0, 0, 0}));
+		} break;
+		case component::command::command_t::REPAIR:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::RepairCommand>(
+					params.get("target_entity_id",
+					           gamestate::entity_id_t{})));
+			break;
+		case component::command::command_t::GARRISON:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::GarrisonCommand>(
+					params.get("target_entity_id",
+					           gamestate::entity_id_t{})));
+			break;
+		case component::command::command_t::UNGARRISON:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::UngarrisonCommand>());
+			break;
+		case component::command::command_t::TRADE:
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::TradeCommand>(
+					params.get("target_entity_id",
+					           gamestate::entity_id_t{})));
+			break;
+		case component::command::command_t::RESEARCH: {
+			int64_t tech_id = params.get("tech_id", int64_t{0});
+			auto entity = gstate->get_game_entity(id);
+			if (entity && entity->has_component(component::component_t::OWNERSHIP)) {
+				auto ownership = std::dynamic_pointer_cast<component::Ownership>(
+					entity->get_component(component::component_t::OWNERSHIP));
+				auto owner = ownership->get_owners().get(time);
+				gstate->start_research(owner, id, tech_id, time);
+			}
+			command_queue->add_command(
+				time,
+				std::make_shared<component::command::ResearchCommand>(tech_id));
 		} break;
 		default:
 			break;

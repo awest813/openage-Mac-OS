@@ -1,6 +1,7 @@
-// Copyright 2021-2023 the openage authors. See copying.md for legal info.
-
 #include "api_component.h"
+
+#include "error/error.h"
+#include "log/message.h"
 
 
 namespace openage::gamestate::component {
@@ -21,8 +22,17 @@ APIComponent::APIComponent(const std::shared_ptr<event::EventLoop> &loop,
 	enabled(loop, 0, "", nullptr, enabled) {
 }
 
+APIComponent::APIComponent(const std::shared_ptr<event::EventLoop> &loop,
+                           bool enabled) :
+	ability{std::nullopt},
+	enabled(loop, 0, "", nullptr, enabled) {
+}
+
 const nyan::Object &APIComponent::get_ability() const {
-	return this->ability;
+	if (not this->ability.has_value()) {
+		throw Error{ERR << "APIComponent has no nyan ability object."};
+	}
+	return this->ability.value();
 }
 
 } // namespace openage::gamestate::component

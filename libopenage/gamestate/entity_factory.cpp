@@ -107,6 +107,14 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	auto wait_for_guard = std::make_shared<activity::XorEventGate>(19);
 	auto formation_move = std::make_shared<activity::TaskSystemNode>(20, "FormationMove");
 	auto wait_for_formation_move = std::make_shared<activity::XorEventGate>(21);
+	auto repair = std::make_shared<activity::TaskSystemNode>(26, "Repair");
+	auto wait_for_repair = std::make_shared<activity::XorEventGate>(27);
+	auto garrison = std::make_shared<activity::TaskSystemNode>(28, "Garrison");
+	auto wait_for_garrison = std::make_shared<activity::XorEventGate>(29);
+	auto ungarrison = std::make_shared<activity::TaskSystemNode>(30, "Ungarrison");
+	auto wait_for_ungarrison = std::make_shared<activity::XorEventGate>(31);
+	auto trade = std::make_shared<activity::TaskSystemNode>(32, "Trade");
+	auto wait_for_trade = std::make_shared<activity::XorEventGate>(33);
 
 	start->add_output(idle);
 
@@ -142,6 +150,10 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 	condition_cmd_type->add_output(patrol, gamestate::activity::next_command_patrol);
 	condition_cmd_type->add_output(guard, gamestate::activity::next_command_guard);
 	condition_cmd_type->add_output(formation_move, gamestate::activity::next_command_formation_move);
+	condition_cmd_type->add_output(repair, gamestate::activity::next_command_repair);
+	condition_cmd_type->add_output(garrison, gamestate::activity::next_command_garrison);
+	condition_cmd_type->add_output(ungarrison, gamestate::activity::next_command_ungarrison);
+	condition_cmd_type->add_output(trade, gamestate::activity::next_command_trade);
 	condition_cmd_type->set_default(move);
 
 	// Move system node
@@ -215,6 +227,34 @@ std::shared_ptr<activity::Activity> create_test_activity() {
 
 	wait_for_formation_move->add_output(idle, gamestate::activity::primer_wait);
 	wait_for_formation_move->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Repair system node: repair building or unit, restoring HP over time
+	repair->add_output(wait_for_repair);
+	repair->set_system_id(system::system_id_t::REPAIR_COMMAND);
+
+	wait_for_repair->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_repair->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Garrison system node: unit enters building/vehicle
+	garrison->add_output(wait_for_garrison);
+	garrison->set_system_id(system::system_id_t::GARRISON_COMMAND);
+
+	wait_for_garrison->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_garrison->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Ungarrison system node: building/vehicle ejects garrisoned units
+	ungarrison->add_output(wait_for_ungarrison);
+	ungarrison->set_system_id(system::system_id_t::UNGARRISON_COMMAND);
+
+	wait_for_ungarrison->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_ungarrison->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
+
+	// Trade system node: trade unit runs trade route
+	trade->add_output(wait_for_trade);
+	trade->set_system_id(system::system_id_t::TRADE_COMMAND);
+
+	wait_for_trade->add_output(idle, gamestate::activity::primer_wait);
+	wait_for_trade->add_output(condition_cmd_type, gamestate::activity::primer_command_in_queue);
 
 	return std::make_shared<activity::Activity>(0, start, "test");
 }

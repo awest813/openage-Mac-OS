@@ -21,7 +21,9 @@ Player::Player(player_id_t id,
 	population_capacity{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
 	units_killed{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
 	units_lost{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
+	trade_profit{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
 	actions_issued{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, 0)},
+	current_age{std::make_shared<curve::Discrete<int64_t>>(loop, 0, "", nullptr, static_cast<int64_t>(age_t::DARK_AGE))},
 	loop{loop} {
 }
 
@@ -159,6 +161,59 @@ int64_t Player::get_total_resources_gathered(const time::time_t &time) const {
 	return total;
 }
 
+void Player::record_tribute_sent(const time::time_t &time,
+                                 const nyan::fqon_t &resource,
+                                 int64_t amount) {
+	auto it = this->tribute_sent.find(resource);
+	if (it == this->tribute_sent.end()) {
+		it = this->tribute_sent.emplace(
+			resource,
+			std::make_shared<curve::Discrete<int64_t>>(this->loop, 0, "", nullptr, 0)).first;
+	}
+	int64_t current = it->second->get(time);
+	it->second->set_last(time, current + amount);
+}
+
+int64_t Player::get_tribute_sent(const time::time_t &time,
+                                 const nyan::fqon_t &resource) const {
+	auto it = this->tribute_sent.find(resource);
+	if (it == this->tribute_sent.end()) {
+		return 0;
+	}
+	return it->second->get(time);
+}
+
+void Player::record_tribute_received(const time::time_t &time,
+                                     const nyan::fqon_t &resource,
+                                     int64_t amount) {
+	auto it = this->tribute_received.find(resource);
+	if (it == this->tribute_received.end()) {
+		it = this->tribute_received.emplace(
+			resource,
+			std::make_shared<curve::Discrete<int64_t>>(this->loop, 0, "", nullptr, 0)).first;
+	}
+	int64_t current = it->second->get(time);
+	it->second->set_last(time, current + amount);
+}
+
+int64_t Player::get_tribute_received(const time::time_t &time,
+                                     const nyan::fqon_t &resource) const {
+	auto it = this->tribute_received.find(resource);
+	if (it == this->tribute_received.end()) {
+		return 0;
+	}
+	return it->second->get(time);
+}
+
+void Player::record_trade_profit(const time::time_t &time, int64_t amount) {
+	int64_t current = this->trade_profit->get(time);
+	this->trade_profit->set_last(time, current + amount);
+}
+
+int64_t Player::get_trade_profit(const time::time_t &time) const {
+	return this->trade_profit->get(time);
+}
+
 void Player::record_action(const time::time_t &time, int64_t amount) {
 	int64_t current = this->actions_issued->get(time);
 	this->actions_issued->set_last(time, current + amount);
@@ -173,6 +228,26 @@ double Player::get_apm(const time::time_t &time, double elapsed_seconds) const {
 		return 0.0;
 	}
 	return static_cast<double>(this->get_actions_issued(time)) / (elapsed_seconds / 60.0);
+}
+
+age_t Player::get_age(const time::time_t &time) const {
+	return static_cast<age_t>(this->current_age->get(time));
+}
+
+void Player::set_age(const time::time_t &time, age_t age) {
+	this->current_age->set_last(time, static_cast<int64_t>(age));
+}
+
+bool Player::has_researched(int64_t tech_id) const {
+	return this->researched_techs.contains(tech_id);
+}
+
+void Player::mark_researched(int64_t tech_id) {
+	this->researched_techs.insert(tech_id);
+}
+
+int64_t Player::get_tech_count() const {
+	return static_cast<int64_t>(this->researched_techs.size());
 }
 
 void Player::set_id(entity_id_t id) {

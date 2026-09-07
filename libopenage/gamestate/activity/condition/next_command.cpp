@@ -151,4 +151,56 @@ bool next_command_formation_move(const time::time_t &time,
 	return command->get_type() == component::command::command_t::FORMATION_MOVE;
 }
 
+bool next_command_repair(const time::time_t &time,
+                         const std::shared_ptr<gamestate::GameEntity> &entity) {
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+
+	if (command_queue->get_queue().empty(time)) {
+		return false;
+	}
+
+	auto command = command_queue->get_queue().front(time);
+	return command->get_type() == component::command::command_t::REPAIR;
+}
+
+bool next_command_garrison(const time::time_t &time,
+                           const std::shared_ptr<gamestate::GameEntity> &entity) {
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+
+	if (command_queue->get_queue().empty(time)) {
+		return false;
+	}
+
+	auto command = command_queue->get_queue().front(time);
+	return command->get_type() == component::command::command_t::GARRISON;
+}
+
+bool next_command_ungarrison(const time::time_t &time,
+                             const std::shared_ptr<gamestate::GameEntity> &entity) {
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+
+	if (command_queue->get_queue().empty(time)) {
+		return false;
+	}
+
+	auto command = command_queue->get_queue().front(time);
+	return command->get_type() == component::command::command_t::UNGARRISON;
+}
+
+bool next_command_trade(const time::time_t &time,
+                        const std::shared_ptr<gamestate::GameEntity> &entity) {
+	auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+		entity->get_component(component::component_t::COMMANDQUEUE));
+
+	if (command_queue->get_queue().empty(time)) {
+		return false;
+	}
+
+	auto command = command_queue->get_queue().front(time);
+	return command->get_type() == component::command::command_t::TRADE;
+}
+
 } // namespace openage::gamestate::activity

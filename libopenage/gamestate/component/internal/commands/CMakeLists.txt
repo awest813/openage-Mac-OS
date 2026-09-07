@@ -5,11 +5,15 @@ add_sources(libopenage
     build.cpp
     deconstruct.cpp
     custom.cpp
+    garrison.cpp
     gather.cpp
     guard.cpp
     idle.cpp
     move.cpp
     patrol.cpp
+    repair.cpp
+    research.cpp
+    trade.cpp
     train.cpp
     types.cpp
 )

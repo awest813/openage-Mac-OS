@@ -206,6 +206,10 @@ void SpawnProductionHandler::invoke(openage::event::EventLoop & /* loop */,
 				                   << " but tile is no longer placeable; skipping registration.");
 			}
 		}
+
+		if (api::is_market_building(nyan_entity) or api::is_dock_building(nyan_entity)) {
+			gstate->register_market_entity(entity->get_id());
+		}
 	}
 
 	log::log(MSG(info) << "Spawned produced unit " << nyan_entity

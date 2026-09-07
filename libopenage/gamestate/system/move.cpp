@@ -123,6 +123,10 @@ const time::time_t Move::move_default(const std::shared_ptr<gamestate::GameEntit
 
 	// Find path
 	auto map = state->get_map();
+	if (not map or not map->get_pathfinder()) [[unlikely]] {
+		log::log(MSG(warn) << "No map or pathfinder available for move.");
+		return time::time_t::from_int(0);
+	}
 	auto pathfinder = map->get_pathfinder();
 	auto grid_id = map->get_grid_id(move_path_grid->get_name());
 

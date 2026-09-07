@@ -164,6 +164,113 @@ model so it is deterministic and rewindable.
   *Note:* pre-placed starting units/buildings must still register demand/capacity
   at game setup via the `Player` API when they bypass the spawn handler.
 
+### 1.7 Building and Unit Repair
+
+**Status:** ✅ Complete
+
+Villagers and builders can repair damaged friendly buildings, siege weapons, and
+ships over time, restoring their hit points and deducting proportional resources,
+matching the Age of Empires II mechanic documented in
+`doc/reverse_engineering/game_mechanics/repair.md`.
+
+- [x] Add `REPAIR` command type (`command_t::REPAIR`) and `RepairCommand` (carrying target entity ID)
+- [x] Add `REPAIR_COMMAND` system ID and `next_command_repair` activity condition
+- [x] Entity max HP tracking on `GameState` (`set_entity_max_hp` / `get_entity_max_hp`), cleaned up on entity removal
+- [x] Create `Repair` system — verifies target exists, has `LIVE` and `POSITION`, and is friendly
+- [x] Range check and approach — if builder is farther than `REPAIR_INTERACTION_RANGE` (2 tiles) and has `MOVE`, steps toward target and re-enqueues `RepairCommand`
+- [x] Speed differentiation — buildings repair at `BUILDING_REPAIR_HP_PER_SEC` (12.5 HP/s = 750 HP/min); units/siege/ships repair at `UNIT_REPAIR_HP_PER_SEC` (3.133 HP/s = 188 HP/min)
+- [x] Cost deduction — `0.5 * (build_cost) / (max_hp) * (repaired_hp)` deducted from player resources; pauses if player cannot afford
+- [x] Integrated into entity factory activity graph and `SendCommandHandler`
+- [x] Tests: `repair_command_lifecycle`, `repair_approach_movement`, `entity_max_hp_tracking`
+
+### 1.8 Garrison and Town Bell System
+
+**Status:** ✅ Complete
+
+Units can garrison inside friendly buildings (Town Centers, Towers, Castles) and
+vehicles (Rams, Transports) for protection, healing, and projectile damage boosting,
+matching the Age of Empires II mechanic documented in
+`doc/reverse_engineering/game_mechanics/garrison.md` and
+`doc/reverse_engineering/game_mechanics/town_bell.md`.
+
+- [x] Add `GARRISON` and `UNGARRISON` command types (`command_t::GARRISON`, `command_t::UNGARRISON`)
+- [x] Create `GarrisonCommand(target_entity)` and `UngarrisonCommand()`
+- [x] Add `GARRISON_COMMAND` and `UNGARRISON_COMMAND` system IDs
+- [x] Add `next_command_garrison` and `next_command_ungarrison` activity conditions
+- [x] Building garrison container tracking on `GameState` (`building_garrisons`, `unit_garrison_parent`)
+- [x] Garrison capacities per entity type (`GARRISON_CAPACITY_TOWN_CENTER = 15`, `GARRISON_CAPACITY_CASTLE = 20`, `GARRISON_CAPACITY_TOWER = 5`, `GARRISON_CAPACITY_RAM = 4`), with custom overrides via `set_garrison_capacity`
+- [x] Range check and approach movement in `Garrison::garrison_command` via `Move::move_default` when unit is farther than `GARRISON_INTERACTION_RANGE` (2.0 tiles)
+- [x] Tile occupancy release and position locking while garrisoned
+- [x] Safe ejection / ungarrisoning in `GameState::ungarrison_entities`: placing units at rally point or adjacent tile, restoring tile occupancy, and re-enqueuing saved tasks
+- [x] Projectile boost formula: `additional_arrows = floor(sum(unit_dps_pierce) / building_dps)` applied in `Attack::attack_default`
+- [x] Town Bell and Back to Work: `ring_town_bell(tc_id)` scans workers within 25 tiles, saves current tasks, and routes to nearest garrison; `back_to_work(tc_id)` ungarrisons workers and restores their prior tasks
+- [x] Passive garrison healing: `tick_garrison_heal` restores `GARRISON_HEAL_HP_PER_SEC` (0.1 HP/s) to biological units
+- [x] Automatic ejection on building destruction in `GameState::remove_game_entity`
+- [x] Tests: `garrison_lifecycle`, `garrison_capacity_and_ownership`, `garrison_arrow_bonus_and_damage`, `town_bell_and_back_to_work`, `garrison_passive_heal`
+
+### 1.9 Advanced Combat & Damage Parity
+
+**Status:** ✅ Complete
+
+Complete Age of Empires II damage calculation, armor class resistance matrix, elevation modifiers,
+minimum range enforcement, and siege splash/area damage conforming to `doc/reverse_engineering/game_mechanics/damage.md`.
+
+- [x] Defined `armor_class_t` enum with 15 AoE2 canonical armor classes (MELEE, PIERCE, INFANTRY, SPEARMAN, CAVALRY, ARCHER, SIEGE_WEAPON, BUILDING, WALL_GATE, SHIP, RAM, WAR_ELEPHANT, EAGLE_WARRIOR, MONK, CAMEL)
+- [x] Default unpossessed armor set to `DEFAULT_UNPOSSESSED_ARMOR = 1000` to prevent unintended bonus damage leakage
+- [x] Curve-backed getters/setters on `component::Attack` (`get_damage`, `set_damage`, `get_reload_time`, `set_reload_time`, `get_max_range`, `set_max_range`, `get_min_range`, `set_min_range`, `get_blast_radius`, `set_blast_radius`, `get_attack_type`, `set_attack_type`) with dynamic nyan query fallbacks
+- [x] GameState combat records: `set_entity_armor`, `get_entity_armor`, `has_entity_armor`, `set_entity_attack_bonus`, `get_entity_attack_bonus`, `get_entity_attack_bonuses`, with automatic cleanup on entity removal
+- [x] Minimum range check: aborts attack and returns 0 damage if `dist < min_range`
+- [x] Primary armor mitigation: `max(0, base_damage - primary_armor)` for MELEE and PIERCE attacks
+- [x] Class bonus summation: `sum(max(0, attack_bonus - target_class_armor))` for all bonuses
+- [x] Elevation scaling: `ELEVATION_DAMAGE_BONUS = 1.25` (+25% downhill) and `ELEVATION_DAMAGE_MALUS = 0.75` (-25% uphill) for elevation differential $\ge 0.25$
+- [x] Guaranteed minimum 1 damage floor on all connecting attacks
+- [x] Siege blast radius & area damage: secondary targets within `blast_radius` take distance-falloff splash damage `damage * (1 - dist / (2 * radius))`
+- [x] Tests: `combat_melee_and_pierce_armor`, `combat_attack_bonuses`, `combat_elevation_modifier`, `combat_minimum_range`, `combat_siege_splash_damage`
+
+### 1.10 Market Economy, Trading & Tribute System
+
+**Status:** ✅ Complete
+
+Complete Age of Empires II market trading (buying/selling commodities), dynamic price fluctuation,
+tribute transfers with tax rates, and Trade Cart / Cog continuous distance-based gold routes conforming
+to `doc/reverse_engineering/game_mechanics/market.md` and `doc/reverse_engineering/networking/12-market.md`.
+
+- [x] Defined `market_resource_t` enum with 4 AoE2 resources (FOOD, WOOD, STONE, GOLD)
+- [x] Global base pricing: initial Wood 100, Food 100, Stone 130
+- [x] Standard market transaction fee `MARKET_DEFAULT_FEE = 0.30` (buy price $= \lfloor \text{base} \times 1.30 \rfloor$, sell price $= \lfloor \text{base} \times 0.70 \rfloor$)
+- [x] Per-player fee customization (`set_market_fee`) to support Guilds tech (15%) and Saracen civ bonus (5%)
+- [x] Dynamic price shifts: buying increments base price by 3 gold per 100 units; selling decrements base price by 3 gold per 100 units
+- [x] Hard bounds: base price clamped within `[MARKET_MIN_BASE_PRICE = 20, MARKET_MAX_BASE_PRICE = 9999]`
+- [x] Tribute system on `GameState` (`send_tribute`): sender pays `amount + floor(amount * fee)`, recipient receives `amount`
+- [x] Configurable tribute fee (`set_tribute_fee`) to support Coinage (20%) and Banking (10%)
+- [x] After-game statistics on `Player`: time-indexed curves for `tribute_sent`, `tribute_received`, and `trade_profit`
+- [x] Added `command_t::TRADE` and `TradeCommand(target_market, home_market, state)`
+- [x] Added `system_id_t::TRADE_COMMAND` and `Trade::trade_command` system
+- [x] Distance gold formula: canonical Conquerors formula $2.0 \times (d/\text{size} + 0.3) \times d + 0.5$ based on Euclidean distance between markets
+- [x] Continuous trade loop: approaches target market $\rightarrow$ loads gold payload into `CarriedResource` $\rightarrow$ returns home $\rightarrow$ deposits gold to player stockpile and records profit $\rightarrow$ reverses back to target
+- [x] Market destruction edge cases: if target market is destroyed, trade cart with cargo returns home to deposit and stops; if home market is destroyed, auto-rebinding to closest alternative friendly market
+- [x] Building detection: `is_market_building` and `is_dock_building` helpers in `building_kind.h`
+- [x] Tests: `market_commodity_buy_and_sell`, `market_dynamic_price_fluctuations`, `market_fee_customization`, `market_tribute_system_and_fees`, `trade_cart_gold_distance_formula`, `trade_cart_continuous_trading_loop_and_market_destruction`
+
+### 1.11 Technology Trees, Research Queues & Age Progression
+
+**Status:** ✅ Complete
+
+Complete Age of Empires II research and technology tree framework, age progression (Dark Age $\rightarrow$ Feudal Age $\rightarrow$ Castle Age $\rightarrow$ Imperial Age), building research queues, duplicate-research locks, cancellation refunds, and immediate effect callbacks. Conforms to `doc/reverse_engineering/game_mechanics/tech_tree.md` and `doc/reverse_engineering/networking/technology_ids.md`.
+
+- [x] Defined `age_t` enum with 4 AoE2 ages (`DARK_AGE`, `FEUDAL_AGE`, `CASTLE_AGE`, `IMPERIAL_AGE`)
+- [x] Time-indexed `current_age` curve (`Discrete<int64_t>`) on `Player` with historical time queries (`get_age(time)`, `set_age(time, age)`)
+- [x] Researched technology set on `Player` (`has_researched`, `mark_researched`, `get_tech_count`)
+- [x] Canonical technology definitions (`TechDefinition` catalog in `GameState`): standard tech IDs, age requirements, research times, resource costs, and effect callbacks
+- [x] Default technology catalog: Feudal Age (101), Castle Age (102), Imperial Age (103), Loom (22), Coinage (23), Banking (17), Guilds (15), Forging (67)
+- [x] Active research tracking on `GameState` (`building_research`, `ActiveResearch`), per-player lock to prevent duplicate concurrent research across multiple buildings (`active_techs_in_progress`)
+- [x] 100% cost refund on manual cancellation (`cancel_research`)
+- [x] Building destruction handling: research cancelled, lock released so player can research at another building, but resources lost (AoE2 parity)
+- [x] Dynamic effect dispatch: tech completion invokes callback (e.g. `set_age`, adjusting tribute fees via Coinage/Banking, adjusting market fee via Guilds)
+- [x] Added `command_t::RESEARCH` and `ResearchCommand(tech_id)`
+- [x] Added `ResearchCompleteHandler` for `"game.complete_research"` and `GameState::tick_research` integrated into simulation loop
+- [x] Unit tests: `player_age_progression_lifecycle`, `research_queue_cost_and_prerequisites`, `research_cancellation_and_full_refund`, `research_completion_and_age_advancement`, `technology_effect_application`, `research_building_destruction_handling`
+
 ---
 
 ## Phase 2 — Quality-of-Life Improvements
@@ -395,6 +502,15 @@ A correctness pass over Phase 1–3 fixed several leaks and combat/placement hol
   `remove_game_entity` overloads. Test: `fog_last_known_cleared_on_remove`.
 - [x] **Placement vs occupancy** — `can_place_street` / `can_place_bridge` reject
   tiles already occupied by mobile units.
+- [x] **Approach movement on out-of-range attack** — When attacking a target beyond
+  `max_range`, mobile units now step toward the target via `Move::move_default` and
+  re-enqueue `AttackCommand` instead of dropping the order and staying idle.
+- [x] **Approach movement and drop-off pathing on gather** — Mobile gatherers now step
+  toward distant resources rather than dropping the command, and gatherers carrying cargo
+  now navigate to the nearest friendly drop-off building rather than freezing in place.
+- [x] **Null map/pathfinder protection in Move** — `Move::move_default` guards against
+  null `map` / `pathfinder` before dereferencing, preventing crashes in minimal or
+  headless simulations.
 
 ## Implementation Notes
 

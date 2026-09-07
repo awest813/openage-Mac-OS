@@ -25,6 +25,11 @@ enum class command_t {
 	SET_STANCE,
 	FORMATION_MOVE,
 	SET_RALLY_POINT,
+	REPAIR,
+	GARRISON,
+	UNGARRISON,
+	TRADE,
+	RESEARCH,
 };
 
 } // namespace openage::gamestate::component::command

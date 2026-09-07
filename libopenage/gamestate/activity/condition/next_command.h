@@ -126,5 +126,49 @@ bool next_command_guard(const time::time_t &time,
 bool next_command_formation_move(const time::time_t &time,
                                  const std::shared_ptr<gamestate::GameEntity> &entity);
 
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
+ * @return true if the entity has a repair command next in the queue, false otherwise.
+ */
+bool next_command_repair(const time::time_t &time,
+                         const std::shared_ptr<gamestate::GameEntity> &entity);
+
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
+ * @return true if the entity has a garrison command next in the queue, false otherwise.
+ */
+bool next_command_garrison(const time::time_t &time,
+                           const std::shared_ptr<gamestate::GameEntity> &entity);
+
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
+ * @return true if the entity has an ungarrison command next in the queue, false otherwise.
+ */
+bool next_command_ungarrison(const time::time_t &time,
+                             const std::shared_ptr<gamestate::GameEntity> &entity);
+
+/**
+ * Condition for next command check in the activity system.
+ *
+ * @param time Time when the condition is checked.
+ * @param entity Game entity.
+ *
+ * @return true if the entity has a trade command next in the queue, false otherwise.
+ */
+bool next_command_trade(const time::time_t &time,
+                        const std::shared_ptr<gamestate::GameEntity> &entity);
+
 } // namespace activity
 } // namespace openage::gamestate

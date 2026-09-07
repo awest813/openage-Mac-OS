@@ -2,6 +2,7 @@
 
 #include "gather.h"
 
+#include <limits>
 #include <optional>
 
 #include <nyan/nyan.h>
@@ -24,6 +25,7 @@
 #include "gamestate/game_entity.h"
 #include "gamestate/game_state.h"
 #include "gamestate/player.h"
+#include "gamestate/system/move.h"
 
 
 namespace openage::gamestate::system {
@@ -137,7 +139,63 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 	// Gatherers carrying resources must first return to a drop-off building.
 	if (state->is_carrying_resources(entity->get_id())) {
 		if (try_drop_off(entity, state, start_time)) {
+			// Cargo was deposited; return to gathering the resource.
+			command_queue->add_command(
+				start_time,
+				std::make_shared<component::command::GatherCommand>(command->get_target()));
 			return time::time_t::from_int(0);
+		}
+
+		// Not close enough to drop off — step toward the nearest friendly drop-off building.
+		if (entity->has_component(component::component_t::POSITION)
+		    and entity->has_component(component::component_t::MOVE)
+		    and entity->has_component(component::component_t::OWNERSHIP)) {
+			auto own_comp = std::dynamic_pointer_cast<component::Ownership>(
+				entity->get_component(component::component_t::OWNERSHIP));
+			auto owner_id = own_comp->get_owners().get(start_time);
+			auto pos_comp = std::dynamic_pointer_cast<component::Position>(
+				entity->get_component(component::component_t::POSITION));
+			auto own_pos = pos_comp->get_positions().get(start_time);
+
+			double best_dist = std::numeric_limits<double>::max();
+			coord::phys3 best_dropoff_pos;
+			bool found_dropoff = false;
+
+			for (const auto &[cand_id, cand] : state->get_game_entities()) {
+				if (cand_id == entity->get_id()) {
+					continue;
+				}
+				if (not cand->has_component(component::component_t::POSITION)
+				    or not cand->has_component(component::component_t::OWNERSHIP)
+				    or cand->has_component(component::component_t::MOVE)
+				    or cand->has_component(component::component_t::GATHER)) {
+					continue;
+				}
+				auto cand_own = std::dynamic_pointer_cast<component::Ownership>(
+					cand->get_component(component::component_t::OWNERSHIP));
+				if (cand_own->get_owners().get(start_time) != owner_id) {
+					continue;
+				}
+				auto cand_pos_comp = std::dynamic_pointer_cast<component::Position>(
+					cand->get_component(component::component_t::POSITION));
+				auto cand_pos = cand_pos_comp->get_positions().get(start_time);
+				double d = (cand_pos - own_pos).length();
+				if (d < best_dist) {
+					best_dist = d;
+					best_dropoff_pos = cand_pos;
+					found_dropoff = true;
+				}
+			}
+
+			if (found_dropoff) {
+				time::time_t move_time = Move::move_default(entity, state, best_dropoff_pos, start_time);
+				if (move_time > time::time_t::from_int(0)) {
+					command_queue->add_command(
+						start_time,
+						std::make_shared<component::command::GatherCommand>(command->get_target()));
+					return move_time;
+				}
+			}
 		}
 
 		log::log(MSG(dbg) << "Entity " << entity->get_id()
@@ -185,6 +243,17 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 		double dist = delta.length();
 
 		if (dist > max_range->get()) {
+			if (entity->has_component(component::component_t::MOVE)
+			    and entity->has_component(component::component_t::COMMANDQUEUE)) {
+				time::time_t move_time = Move::move_default(entity, state, resource_pos, start_time);
+				if (move_time > time::time_t::from_int(0)) {
+					command_queue->add_command(
+						start_time,
+						std::make_shared<component::command::GatherCommand>(target_id));
+					return move_time;
+				}
+			}
+
 			log::log(MSG(dbg) << "Entity " << entity->get_id()
 			                  << " is out of gather range of resource " << target_id
 			                  << " (dist=" << dist << ", range=" << max_range->get() << ").");
@@ -267,6 +336,17 @@ const time::time_t Gather::gather_command(const std::shared_ptr<gamestate::GameE
 
 		if (animation_paths.size() > 0) [[likely]] {
 			entity->render_update(start_time, animation_paths[0]);
+		}
+	}
+
+	// If resource remains and no other command was queued, continue gathering.
+	if (new_amount > 0 and entity->has_component(component::component_t::COMMANDQUEUE)) {
+		auto command_queue = std::dynamic_pointer_cast<component::CommandQueue>(
+			entity->get_component(component::component_t::COMMANDQUEUE));
+		if (command_queue->get_queue().empty(start_time)) {
+			command_queue->add_command(
+				start_time,
+				std::make_shared<component::command::GatherCommand>(target_id));
 		}
 	}
 

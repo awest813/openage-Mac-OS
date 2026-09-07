@@ -29,8 +29,11 @@
 #include "gamestate/system/move.h"
 #include "gamestate/system/attack.h"
 #include "gamestate/system/gather.h"
+#include "gamestate/system/garrison.h"
 #include "gamestate/system/patrol.h"
 #include "gamestate/system/production.h"
+#include "gamestate/system/repair.h"
+#include "gamestate/system/trade.h"
 #include "util/fixed_point.h"
 
 
@@ -176,6 +179,18 @@ const time::time_t Activity::handle_subsystem(const time::time_t &start_time,
 		break;
 	case system_id_t::FORMATION_MOVE_COMMAND:
 		return FormationMove::formation_move_command(entity, state, start_time);
+		break;
+	case system_id_t::REPAIR_COMMAND:
+		return Repair::repair_command(entity, state, start_time);
+		break;
+	case system_id_t::GARRISON_COMMAND:
+		return Garrison::garrison_command(entity, state, start_time);
+		break;
+	case system_id_t::UNGARRISON_COMMAND:
+		return Garrison::ungarrison_command(entity, state, start_time);
+		break;
+	case system_id_t::TRADE_COMMAND:
+		return Trade::trade_command(entity, state, start_time);
 		break;
 	default:
 		throw Error{ERR << "Unhandled subsystem " << static_cast<int>(system_id)};

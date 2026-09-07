@@ -43,4 +43,12 @@ bool is_bridge_building(const std::string &fqon) {
 	return name_contains_ci(fqon, "bridge");
 }
 
+bool is_market_building(const std::string &fqon) {
+	return name_contains_ci(fqon, "market");
+}
+
+bool is_dock_building(const std::string &fqon) {
+	return name_contains_ci(fqon, "dock") or name_contains_ci(fqon, "harbor");
+}
+
 } // namespace openage::gamestate::api

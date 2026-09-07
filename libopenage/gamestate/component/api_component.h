@@ -3,6 +3,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include <nyan/nyan.h>
 
@@ -50,6 +51,15 @@ public:
 	             bool enabled = true);
 
 	/**
+	 * Creates an APIComponent without a nyan ability object (e.g. for testing).
+	 *
+	 * @param loop Event loop that all events from the component are registered on.
+	 * @param enabled If true, enable the component at creation time.
+	 */
+	APIComponent(const std::shared_ptr<openage::event::EventLoop> &loop,
+	             bool enabled = true);
+
+	/**
 	 * Get the ability object from the nyan dataset.
 	 *
 	 * @return Ability object.
@@ -60,7 +70,7 @@ private:
 	/**
 	 * nyan object holding the data for the component.
 	 */
-	nyan::Object ability;
+	std::optional<nyan::Object> ability;
 
 	/**
 	 * Determines if the component is available to its game entity.

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <shared_mutex>
@@ -40,6 +41,10 @@ class EventLoop;
 namespace gamestate {
 class GameEntity;
 class Map;
+
+namespace component::command {
+class Command;
+}
 
 /**
  * A pending unit production request created by the Production system.
@@ -120,6 +125,14 @@ struct ResourceCostEntry {
 };
 
 /**
+ * Attack bonus damage vs a specific armor class (e.g. Spearman vs Cavalry).
+ */
+struct AttackBonus {
+	armor_class_t armor_class;
+	int64_t bonus_damage = 0;
+};
+
+/**
  * Construction cost recorded for a completed building (used for salvage).
  */
 struct BuildingCostRecord {
@@ -143,6 +156,32 @@ struct GameResult {
 	bool finished = false;
 	bool has_winner = false;
 	player_id_t winner_id = 0;
+};
+
+class GameState;
+
+/**
+ * Definition of a researchable technology.
+ */
+struct TechDefinition {
+	int64_t tech_id = 0;
+	std::string name;
+	age_t required_age = age_t::DARK_AGE;
+	double research_time_sec = 0.0;
+	std::vector<ResourceCostEntry> cost;
+	std::function<void(GameState*, player_id_t, const time::time_t&)> effect;
+};
+
+/**
+ * Active research currently in progress in a building.
+ */
+struct ActiveResearch {
+	entity_id_t building_id = 0;
+	player_id_t player_id = 0;
+	int64_t tech_id = 0;
+	time::time_t start_time;
+	time::time_t completion_time;
+	std::vector<ResourceCostEntry> cost;
 };
 
 /**
@@ -426,9 +465,352 @@ public:
 	std::optional<int64_t> get_entity_population_provision(entity_id_t id) const;
 
 	/**
+	 * Record an entity's maximum hit points (used for repair and health clamping).
+	 */
+	void set_entity_max_hp(entity_id_t id, int64_t max_hp);
+
+	/**
+	 * @return Recorded maximum HP, or fallback based on Live attribute / entity type.
+	 */
+	int64_t get_entity_max_hp(entity_id_t id) const;
+
+	/**
+	 * @return true if an explicit maximum HP was recorded for \p id.
+	 */
+	bool has_entity_max_hp(entity_id_t id) const;
+
+	void clear_entity_max_hp(entity_id_t id);
+
+	// -----------------------------------------------------------------------
+	// Combat: Armor Classes & Attack Bonuses
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Set armor value for an entity in a specific armor class (e.g. MELEE, PIERCE, CAVALRY).
+	 */
+	void set_entity_armor(entity_id_t id, armor_class_t armor_class, int64_t armor_value);
+
+	/**
+	 * @return Armor value for \p id in \p armor_class, or DEFAULT_UNPOSSESSED_ARMOR (1000)
+	 *         if the entity does not possess this armor class (or 0 for unrecorded MELEE/PIERCE).
+	 */
+	int64_t get_entity_armor(entity_id_t id, armor_class_t armor_class) const;
+
+	/**
+	 * @return true if \p id has an explicit armor value recorded for \p armor_class.
+	 */
+	bool has_entity_armor(entity_id_t id, armor_class_t armor_class) const;
+
+	/**
+	 * Set bonus damage an attacker inflicts against a specific armor class.
+	 */
+	void set_entity_attack_bonus(entity_id_t id, armor_class_t armor_class, int64_t bonus);
+
+	/**
+	 * @return Bonus damage \p id deals against \p armor_class, or 0.
+	 */
+	int64_t get_entity_attack_bonus(entity_id_t id, armor_class_t armor_class) const;
+
+	/**
+	 * @return All attack bonuses defined for entity \p id.
+	 */
+	std::vector<AttackBonus> get_entity_attack_bonuses(entity_id_t id) const;
+
+	/**
+	 * Clear all armor and attack bonuses recorded for \p id.
+	 */
+	void clear_entity_combat_stats(entity_id_t id);
+
+	// -----------------------------------------------------------------------
+	// Garrison & Town Bell mechanics
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Set custom garrison capacity for a building or vehicle.
+	 */
+	void set_garrison_capacity(entity_id_t building_id, int64_t capacity);
+
+	/**
+	 * @return Maximum units that can be garrisoned in \p building_id.
+	 */
+	int64_t get_garrison_capacity(entity_id_t building_id) const;
+
+	/**
+	 * @return true if \p unit_id can garrison into \p building_id right now.
+	 */
+	bool can_garrison(entity_id_t unit_id, entity_id_t building_id) const;
+
+	/**
+	 * Garrisons \p unit_id into \p building_id.
+	 *
+	 * Releases \p unit_id's tile occupancy, tracks garrison parent, and updates
+	 * the building's garrison list.
+	 *
+	 * @return true on success.
+	 */
+	bool garrison_entity(entity_id_t unit_id, entity_id_t building_id, const time::time_t &time);
+
+	/**
+	 * Ejects all units currently garrisoned inside \p building_id.
+	 *
+	 * Ejected units are placed at the building's rally point (if set) or adjacent
+	 * to the building, reoccupy tiles, and resume any saved tasks.
+	 *
+	 * @return List of entity IDs that were ungarrisoned.
+	 */
+	std::vector<entity_id_t> ungarrison_entities(entity_id_t building_id, const time::time_t &time);
+
+	/**
+	 * @return true if \p unit_id is currently inside a garrison.
+	 */
+	bool is_garrisoned(entity_id_t unit_id) const;
+
+	/**
+	 * @return Building or transport ID containing \p unit_id, or std::nullopt.
+	 */
+	std::optional<entity_id_t> get_garrison_parent(entity_id_t unit_id) const;
+
+	/**
+	 * @return List of units garrisoned inside \p building_id.
+	 */
+	std::vector<entity_id_t> get_garrisoned_units(entity_id_t building_id) const;
+
+	/**
+	 * Calculate additional arrows/projectiles fired by \p building_id from its garrisoned units.
+	 *
+	 * Formula (AoE2): additional_arrows = floor(sum(unit_dps_pierce) / building_dps).
+	 */
+	int64_t get_building_additional_arrows(entity_id_t building_id, const time::time_t &time) const;
+
+	/**
+	 * Sound the Town Bell at \p tc_id.
+	 *
+	 * Scans friendly workers/villagers within TOWN_BELL_RANGE_TILES (25 tiles), saves
+	 * their active tasks, and orders them to garrison into the nearest available building.
+	 */
+	void ring_town_bell(entity_id_t tc_id, const time::time_t &time);
+
+	/**
+	 * Ring Town Bell a second time ("Back to Work") at \p tc_id.
+	 *
+	 * Ungarrisons villagers in nearby garrison buildings and restores their saved tasks.
+	 */
+	void back_to_work(entity_id_t tc_id, const time::time_t &time);
+
+	/**
+	 * Heal all garrisoned biological units by GARRISON_HEAL_HP_PER_SEC.
+	 */
+	void tick_garrison_heal(const time::time_t &time, double dt_sec);
+
+	/**
 	 * Decay salvage piles and remove depleted ones. Call once per simulation tick.
 	 */
 	void tick_salvage_decay(const time::time_t &time);
+
+	// -----------------------------------------------------------------------
+	// Market economy, trading & tributes
+	// -----------------------------------------------------------------------
+
+	/**
+	 * @return Global market base price for \p res (e.g. 100 for Wood/Food, 130 for Stone).
+	 */
+	int64_t get_market_base_price(market_resource_t res) const;
+
+	/**
+	 * Set global market base price for \p res (clamped to [MARKET_MIN_BASE_PRICE, MARKET_MAX_BASE_PRICE]).
+	 */
+	void set_market_base_price(market_resource_t res, int64_t price);
+
+	/**
+	 * @return Market transaction fee for \p player_id (defaults to MARKET_DEFAULT_FEE = 0.30).
+	 */
+	double get_market_fee(player_id_t player_id) const;
+
+	/**
+	 * Set market transaction fee for \p player_id (e.g. 0.15 with Guilds, 0.05 for Saracens).
+	 */
+	void set_market_fee(player_id_t player_id, double fee);
+
+	/**
+	 * @return Cost in gold to buy 100 units of \p res for \p player_id: floor(base * (1 + fee) + 0.5).
+	 */
+	int64_t get_market_buy_price(player_id_t player_id, market_resource_t res) const;
+
+	/**
+	 * @return Gold received when selling 100 units of \p res for \p player_id: floor(base * (1 - fee) + 0.5).
+	 */
+	int64_t get_market_sell_price(player_id_t player_id, market_resource_t res) const;
+
+	/**
+	 * Buy commodity resources with gold at the market.
+	 *
+	 * @param player_id      Buyer player ID.
+	 * @param res            Commodity resource to purchase.
+	 * @param hundreds_batch Number of 100-unit batches to buy.
+	 * @param time           Simulation time.
+	 * @return true on success (sufficient gold available).
+	 */
+	bool market_buy(player_id_t player_id,
+	                market_resource_t res,
+	                int64_t hundreds_batch,
+	                const time::time_t &time);
+
+	/**
+	 * Sell commodity resources for gold at the market.
+	 *
+	 * @param player_id      Seller player ID.
+	 * @param res            Commodity resource to sell.
+	 * @param hundreds_batch Number of 100-unit batches to sell.
+	 * @param time           Simulation time.
+	 * @return true on success (sufficient commodity available).
+	 */
+	bool market_sell(player_id_t player_id,
+	                 market_resource_t res,
+	                 int64_t hundreds_batch,
+	                 const time::time_t &time);
+
+	/**
+	 * @return Tribute tax fee for \p player_id (defaults to TRIBUTE_DEFAULT_FEE = 0.30).
+	 */
+	double get_tribute_fee(player_id_t player_id) const;
+
+	/**
+	 * Set tribute tax fee for \p player_id (e.g. 0.20 with Coinage, 0.10 with Banking).
+	 */
+	void set_tribute_fee(player_id_t player_id, double fee);
+
+	/**
+	 * Send resources from \p sender to \p recipient with tribute tax deduction.
+	 *
+	 * Sender pays amount + floor(amount * fee). Recipient receives amount.
+	 *
+	 * @return true on success.
+	 */
+	bool send_tribute(player_id_t sender,
+	                  player_id_t recipient,
+	                  const std::string &res_fqon,
+	                  int64_t amount,
+	                  const time::time_t &time);
+
+	/**
+	 * Register an entity as a market/dock.
+	 */
+	void register_market_entity(entity_id_t id);
+
+	/**
+	 * Unregister an entity as a market/dock.
+	 */
+	void unregister_market_entity(entity_id_t id);
+
+	/**
+	 * @return true if \p id is registered as a market or dock.
+	 */
+	bool is_market_entity(entity_id_t id) const;
+
+	/**
+	 * @return All friendly market entities owned by \p player_id.
+	 */
+	std::vector<entity_id_t> get_friendly_markets(player_id_t player_id) const;
+
+	/**
+	 * Map nyan resource fqon for a given commodity enum.
+	 */
+	std::string get_market_resource_fqon(market_resource_t res) const;
+
+	/**
+	 * Set nyan resource fqon for a given commodity enum.
+	 */
+	void set_market_resource_fqon(market_resource_t res, const std::string &fqon);
+
+	/**
+	 * Calculate gold payload generated for trading between \p p1 and \p p2 using AoE2 formula.
+	 */
+	int64_t calculate_trade_gold(const coord::phys3 &p1,
+	                             const coord::phys3 &p2,
+	                             double map_size = DEFAULT_MAP_SIZE_TILES) const;
+
+	// -----------------------------------------------------------------------
+	// Technology tree, research queues & age progression
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Register a researchable technology in the technology repository.
+	 */
+	void register_tech_definition(TechDefinition def);
+
+	/**
+	 * @return Tech definition for \p tech_id, or nullptr if not registered.
+	 */
+	const TechDefinition* get_tech_definition(int64_t tech_id) const;
+
+	/**
+	 * Check if \p player_id can start research of \p tech_id at \p building_id.
+	 */
+	bool can_research(player_id_t player_id,
+	                  entity_id_t building_id,
+	                  int64_t tech_id,
+	                  const time::time_t &time) const;
+
+	/**
+	 * Begin researching \p tech_id at \p building_id.
+	 *
+	 * Deducts resource cost, locks the tech from duplicate research, schedules
+	 * completion event, and records active research in the building queue.
+	 *
+	 * @return true on success.
+	 */
+	bool start_research(player_id_t player_id,
+	                    entity_id_t building_id,
+	                    int64_t tech_id,
+	                    const time::time_t &time);
+
+	/**
+	 * Cancel active research in \p building_id.
+	 *
+	 * Refunds 100% of the resource cost to the owning player and unlocks the tech.
+	 *
+	 * @return true on success.
+	 */
+	bool cancel_research(entity_id_t building_id, const time::time_t &time);
+
+	/**
+	 * Complete active research in \p building_id.
+	 *
+	 * Marks the technology as researched for the owning player, executes its
+	 * effect callback (e.g. upgrades age, stat bonus), and clears the queue.
+	 *
+	 * @return true on success.
+	 */
+	bool complete_research(entity_id_t building_id, const time::time_t &time);
+
+	/**
+	 * @return true if \p building_id currently has an active research in progress.
+	 */
+	bool is_researching(entity_id_t building_id) const;
+
+	/**
+	 * @return true if \p player_id is currently researching \p tech_id anywhere.
+	 */
+	bool is_tech_in_progress(player_id_t player_id, int64_t tech_id) const;
+
+	/**
+	 * @return Active research record for \p building_id, or std::nullopt.
+	 */
+	std::optional<ActiveResearch> get_active_research(entity_id_t building_id) const;
+
+	/**
+	 * Drain and return all active research jobs whose completion time <= \p time.
+	 */
+	std::vector<ActiveResearch> take_completed_researches(const time::time_t &time);
+
+	/**
+	 * Advance active researches and complete any that reached completion time.
+	 *
+	 * Call once per simulation tick.
+	 *
+	 * @param time Current simulation time.
+	 */
+	void tick_research(const time::time_t &time);
 
 	// -----------------------------------------------------------------------
 	// Resource node regeneration (e.g. forests)
@@ -964,6 +1346,41 @@ private:
 	std::unordered_map<entity_id_t, int64_t> entity_population_provision;
 
 	/**
+	 * Maximum hit points of entities, keyed by entity ID.
+	 */
+	std::unordered_map<entity_id_t, int64_t> entity_max_hp;
+
+	/**
+	 * Building entity ID -> list of garrisoned unit entity IDs.
+	 */
+	std::unordered_map<entity_id_t, std::vector<entity_id_t>> building_garrisons;
+
+	/**
+	 * Garrisoned unit ID -> parent building or vehicle entity ID.
+	 */
+	std::unordered_map<entity_id_t, entity_id_t> unit_garrison_parent;
+
+	/**
+	 * Custom garrison capacities by building ID.
+	 */
+	std::unordered_map<entity_id_t, int64_t> garrison_capacities;
+
+	/**
+	 * Saved tasks for villagers during Town Bell, restored on Back to Work.
+	 */
+	std::unordered_map<entity_id_t, std::shared_ptr<component::command::Command>> saved_tasks;
+
+	/**
+	 * Armor values per armor class, keyed by entity ID.
+	 */
+	std::unordered_map<entity_id_t, std::unordered_map<armor_class_t, int64_t>> entity_armors;
+
+	/**
+	 * Attack bonuses against specific armor classes, keyed by entity ID.
+	 */
+	std::unordered_map<entity_id_t, std::unordered_map<armor_class_t, int64_t>> entity_attack_bonuses;
+
+	/**
 	 * Entity IDs of active salvage piles (for periodic decay).
 	 */
 	std::unordered_set<entity_id_t> salvage_pile_ids;
@@ -1133,6 +1550,46 @@ private:
 	 * Reverse map: entity → the tile it currently occupies.
 	 */
 	std::unordered_map<entity_id_t, coord::tile> entity_tiles;
+
+	/**
+	 * Global market base prices for commodities.
+	 */
+	std::unordered_map<market_resource_t, int64_t> market_base_prices;
+
+	/**
+	 * Per-player market transaction fee fraction (e.g. 0.30 standard, 0.15 Guilds).
+	 */
+	std::unordered_map<player_id_t, double> market_fees;
+
+	/**
+	 * Per-player tribute tax fee fraction (e.g. 0.30 standard, 0.20 Coinage, 0.10 Banking).
+	 */
+	std::unordered_map<player_id_t, double> tribute_fees;
+
+	/**
+	 * Market entity IDs registered in the game world.
+	 */
+	std::unordered_set<entity_id_t> market_entities;
+
+	/**
+	 * Mapping from commodity enum to nyan resource fqon.
+	 */
+	std::unordered_map<market_resource_t, std::string> market_resource_fqons;
+
+	/**
+	 * Technology definitions catalog.
+	 */
+	std::unordered_map<int64_t, TechDefinition> tech_definitions;
+
+	/**
+	 * Active research jobs currently queued in buildings (keyed by building entity ID).
+	 */
+	std::unordered_map<entity_id_t, ActiveResearch> building_research;
+
+	/**
+	 * Tech IDs currently in progress per player (to prevent duplicate research).
+	 */
+	std::unordered_map<player_id_t, std::unordered_set<int64_t>> active_techs_in_progress;
 
 	/**
 	 * TODO: Only for testing
